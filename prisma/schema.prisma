@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,20 +7,408 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// TRIMEDCAST - Seasonal Demand & Inventory
+// Forecasting System for Motorcycle Parts (BD)
+// ============================================
+
+// --- Tenant & Users ---
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  domain      String?
+  plan        String   @default("starter") // starter, professional, enterprise
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  products    Product[]
+  suppliers   Supplier[]
+  motorcycleModels MotorcycleModel[]
+  inventory   Inventory[]
+  salesHistory SalesHistory[]
+  purchaseHistory PurchaseHistory[]
+  promoEvents PromoEvent[]
+  forecastSettings ForecastSetting[]
+  sopCycles  SopCycle[]
+  forecasts   Forecast[]
+  salesOrders SalesOrder[]
+  purchaseOrders PurchaseOrder[]
+  recommendedOrders RecommendedOrder[]
+  dataImports DataImport[]
+  auditLogs   AuditLog[]
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
-  name      String?
+  name      String
+  role      String   @default("warehouse_manager") // warehouse_manager, sales_manager, marketing_manager, finance, executive
+  tenantId  String
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  dataImports DataImport[] @relation("ImportCreator")
+  auditLogs AuditLog[] @relation("AuditUser")
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// --- Master Data ---
+
+model MotorcycleModel {
+  id          String   @id @default(cuid())
+  tenantId    String
+  brand       String
+  model       String
+  yearStart   Int?
+  yearEnd     Int?
+  ccRating    Int?
+  segment     String?  // commuter, premium, scooter
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  products    Product[]
+
+  @@unique([tenantId, brand, model])
+  @@index([tenantId])
+}
+
+model Supplier {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  code          String?
+  country       String   @default("China")
+  leadTimeDays  Int      @default(90)
+  reliability   Float?   // 0-1 score
+  isCnyAffected Boolean  @default(true)
+  contactEmail  String?
+  contactPhone  String?
+  notes         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  products  Product[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  tenantId          String
+  sku               String
+  name              String
+  category          String   // piston, gasket, chain, filter, etc.
+  subcategory       String?
+  motorcycleModelId String?
+  supplierId        String?
+  unitCost          Float?
+  sellingPrice      Float?
+  unit              String   @default("piece") // piece, set, pair
+  minOrderQty       Int      @default(1)
+  leadTimeDays      Int?     // override supplier lead time
+  isSeasonal        Boolean  @default(false)
+  seasonalityType   String?  // winter_peak, monsoon_dip, etc.
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  motorcycleModel MotorcycleModel? @relation(fields: [motorcycleModelId], references: [id])
+  supplier        Supplier?       @relation(fields: [supplierId], references: [id])
+  inventory       Inventory[]
+  salesHistory    SalesHistory[]
+  purchaseHistory PurchaseHistory[]
+  forecasts       Forecast[]
+  recommendedOrders RecommendedOrder[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, category])
+}
+
+// --- Inventory ---
+
+model Inventory {
+  id              String   @id @default(cuid())
+  tenantId        String
+  productId       String
+  currentStock    Int      @default(0)
+  reservedStock   Int      @default(0)
+  availableStock  Int      @default(0)
+  reorderPoint    Int?
+  safetyStock     Int?
+  maxStockLevel   Int?
+  lastCountDate   DateTime?
+  warehouseLoc    String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, productId])
+  @@index([tenantId])
+}
+
+// --- Sales & Purchase History ---
+
+model SalesHistory {
+  id            String   @id @default(cuid())
+  tenantId      String
+  productId     String
+  date          DateTime
+  quantity      Int
+  revenue       Float?
+  channel       String?  // retail, wholesale, online
+  region        String?  // dhaka, chittagong, etc.
+  customerId    String?
+  invoiceNo     String?
+  season        String?  // winter, summer, monsoon, pre_winter
+  createdAt     DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([tenantId, productId])
+  @@index([tenantId, date])
+  @@index([date])
+}
+
+model PurchaseHistory {
+  id            String   @id @default(cuid())
+  tenantId      String
+  productId     String
+  date          DateTime
+  quantity      Int
+  unitCost      Float?
+  totalCost     Float?
+  supplierId    String?
+  poNumber      String?
+  leadTimeActual Int?    // actual lead time in days
+  season        String?
+  createdAt     DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([tenantId, productId])
+  @@index([tenantId, date])
+  @@index([date])
+}
+
+// --- Promo & Forecasting ---
+
+model PromoEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  type        String   // eid_discount, seasonal_sale, clearance, flash_sale
+  startDate   DateTime
+  endDate     DateTime
+  discountPct Float?
+  affectedCategories String? // JSON array of category IDs
+  expectedUplift Float?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model ForecastSetting {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  productId           String?
+  model               String   @default("prophet") // prophet, arima, ets, ensemble
+  horizonDays         Int      @default(90)
+  confidenceLevel     Float    @default(0.95)
+  seasonalityMode     String   @default("multiplicative")
+  includeHolidays     Boolean  @default(true)
+  includePromos       Boolean  @default(true)
+  cnyAdjustment       Boolean  @default(true)
+  autoRecalibration   Boolean  @default(true)
+  recalibrationThreshold Float @default(0.15) // MAPE threshold
+  lastCalibrationDate DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model SopCycle {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  periodStart DateTime
+  periodEnd   DateTime
+  stage       String   @default("validation") // validation, approval, operationalization, governance
+  status      String   @default("draft") // draft, active, completed, archived
+  participants String? // JSON array of user IDs
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model Forecast {
+  id              String   @id @default(cuid())
+  tenantId        String
+  productId       String
+  forecastDate    DateTime
+  predictedQty    Float
+  lowerBound      Float?
+  upperBound      Float?
+  model           String
+  confidence      Float
+  mape            Float?   // Mean Absolute Percentage Error
+  isRecalibrated  Boolean  @default(false)
+  seasonDetected  String?
+  cnyRiskFlag     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([tenantId, productId])
+  @@index([forecastDate])
+}
+
+// --- Orders ---
+
+model SalesOrder {
+  id          String   @id @default(cuid())
+  tenantId    String
+  orderNo     String
+  date        DateTime
+  customerId  String?
+  channel     String?
+  region      String?
+  totalAmount Float?
+  status      String   @default("pending") // pending, confirmed, shipped, delivered, cancelled
+  items       String?  // JSON array of {productId, quantity, price}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  tenantId    String
+  poNumber    String
+  supplierId  String?
+  orderDate   DateTime
+  expectedDelivery DateTime?
+  status      String   @default("draft") // draft, submitted, confirmed, in_transit, received, cancelled
+  totalAmount Float?
+  items       String?  // JSON array of {productId, quantity, unitCost}
+  cnyRisk     Boolean  @default(false)
+  leadTimeDays Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model RecommendedOrder {
+  id              String   @id @default(cuid())
+  tenantId        String
+  productId       String
+  orderDate       DateTime
+  quantity        Int
+  orderTrigger    String?  // reorder_point, seasonal_uplift, cny_urgency, stockout_risk
+  totalLeadTime   Int?     // days
+  reorderHitDate  DateTime?
+  priority        String   @default("normal") // urgent, high, normal, low
+  status          String   @default("pending") // pending, approved, converted, rejected
+  justification   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([orderDate])
+}
+
+// --- ETL / Data Import ---
+
+model DataImport {
+  id              String   @id @default(cuid())
+  tenantId        String
+  importType      String   // sales_history, purchase_history, inventory, products, suppliers, promo_events, motorcycle_models
+  fileName        String
+  fileSize        Int
+  rowsTotal       Int      @default(0)
+  rowsValid       Int      @default(0)
+  rowsInvalid     Int      @default(0)
+  rowsSkipped     Int      @default(0)
+  rowsInserted    Int      @default(0)
+  rowsDuplicate   Int      @default(0)
+  status          String   @default("uploading") // uploading, parsing, mapping, validating, harmonizing, inserting, completed, failed, cancelled
+  qualityScore    Float?   // 0-100
+  columnMapping   String?  // JSON: {sourceCol: targetField}
+  validationErrors String? // JSON: [{row, field, error, severity}]
+  harmonizationLog String? // JSON: [{step, input, output, changes}]
+  rawPreview      String?  // JSON: first 5 rows for preview
+  mappedPreview   String?  // JSON: first 5 rows after mapping
+  errorDetails    String?  // JSON: detailed error info per row
+  startedAt       DateTime?
+  completedAt     DateTime?
+  durationMs      Int?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  creator  User?    @relation("ImportCreator", fields: [createdBy], references: [id])
+
+  @@index([tenantId])
+  @@index([importType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// --- Audit Log ---
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String?
+  action      String   // create, update, delete, import, export, approve, reject
+  entity      String   // product, inventory, forecast, order, import
+  entityId    String?
+  changes     String?  // JSON: {before, after}
+  metadata    String?  // JSON: additional context
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?   @relation("AuditUser", fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([entity, entityId])
+  @@index([createdAt])
 }

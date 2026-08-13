@@ -14,24 +14,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
+  title: "TrimedCast - Excel Import & ETL Pipeline",
+  description: "Excel Import & ETL Pipeline for Bangladesh Motorcycle Parts Seasonal Demand Forecasting. Upload, map, validate, harmonize, and insert data with quality scoring.",
+  keywords: ["TrimedCast", "ETL", "Excel Import", "Bangladesh", "Motorcycle Parts", "Forecasting", "Data Pipeline"],
+  authors: [{ name: "TrimedCast Team" }],
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "TrimedCast - Excel Import & ETL Pipeline",
+    description: "Excel Import & ETL Pipeline for BD Motorcycle Parts Forecasting",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
+    title: "TrimedCast - Excel Import & ETL Pipeline",
+    description: "Excel Import & ETL Pipeline for BD Motorcycle Parts Forecasting",
   },
 };
 
