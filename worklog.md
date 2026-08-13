@@ -97,3 +97,28 @@ Stage Summary:
 - Quality score formula validated
 - Lint passes with zero errors
 - Browser UI verified with agent-browser
+
+---
+Task ID: 7
+Agent: Forecast Dashboard UI Builder
+Task: Build forecast dashboard UI with tab-based layout
+
+Work Log:
+- Created /src/lib/forecasting/store.ts: Zustand store with ProductForSelection, ForecastResultClient, OrderTriggerClient, EOQResultClient, SafetyStockResultClient, LeadTimeResultClient types and full state management (selectedProductId, forecastResult, shippingMethod, serviceLevel, activeTab)
+- Created /src/app/api/forecast/products/route.ts: GET endpoint listing products with inventory for forecast product selector (sku, name, category, currentStock, availableStock, safetyStock, reorderPoint, salesCount)
+- Created /src/components/forecast/forecast-chart.tsx: Recharts AreaChart with historical data line, predicted area, confidence interval (upper/lower bounds), custom tooltip with season info, season color coding (winter=emerald, summer=amber, monsoon=blue, pre_winter=orange), data sampling for readability
+- Created /src/components/forecast/order-trigger-card.tsx: Compact card showing product SKU/name, stock status badge (healthy/low/critical/stockout), 3 key dates (Order Trigger, Expected Delivery, Reorder Hit), lead time breakdown bar (MFG+Shipping+Customs+Internal), CNY risk indicator, suggested order qty with priority badge, season note
+- Created /src/components/forecast/seasonal-pattern.tsx: 4 BD season cards (Winter, Summer, Monsoon, Pre-Winter) with English+Bengali labels, months, demand multiplier bar visualization, descriptions, current season highlighting with ring
+- Created /src/components/forecast/lead-time-viz.tsx: Stacked horizontal bar showing Manufacturing(90d)+Shipping(52d/8d)+Customs(10d/3d)+Internal(3d), Sea/Air toggle switch, total lead time prominently displayed, CNY delay overlay, color-coded segments, route info
+- Created /src/components/forecast/model-comparison.tsx: Table comparing all 4 models (Moving Average, ETS, Seasonal Decomp, Prophet-like) with MAPE, MAE, RMSE, Bias columns, best model highlighted in emerald, ensemble weights shown
+- Replaced /src/app/page.tsx: Tab-based dashboard with "Import Data" and "Forecast Dashboard" tabs, gradient header with TrimedCast branding, Import tab reuses existing ETL workflow, Forecast tab has product selector, generate forecast button, 4 stat cards, main chart, order trigger card, seasonal pattern, lead time viz, EOQ card, safety stock card, model comparison table, sticky footer
+- Fixed lint errors: Moved CustomTooltip outside ForecastChart component (react-hooks/static-components), replaced StatSkeleton inline component with direct JSX
+
+Stage Summary:
+- Complete tab-based dashboard with Import Data and Forecast Dashboard
+- 5 new forecast components: forecast-chart, order-trigger-card, seasonal-pattern, lead-time-viz, model-comparison
+- New API route: /api/forecast/products for product selection
+- New Zustand store: /src/lib/forecasting/store.ts for forecast state
+- All TypeScript, properly typed, responsive, framer-motion transitions
+- Lint passes with zero errors
+- Dev server running successfully
