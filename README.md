@@ -1,1 +1,1 @@
-"# TrimedCast" 
+# TrimedCast\n\nIntegrated Seasonal Demand & Inventory Forecasting System\n\n## Quick Start\n\n```bash\ncd trimedcast\ncp .env.example .env\ncp src/.env.example src/.env\nmake setup\n```\n\n## Documentation\n\nSee `Session-wise Implementation Roadmap.md` for the development plan.\n

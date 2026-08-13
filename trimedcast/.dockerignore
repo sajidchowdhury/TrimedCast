@@ -1,0 +1,13 @@
+node_modules
+vendor
+.git
+.gitignore
+.github
+storage/logs/*
+*.md
+.env
+.idea
+.vscode
+*.swp
+*.swo
+docker-compose.override.yml

@@ -1,0 +1,146 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trimedcast-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=trimedcast
+      - DB_USERNAME=trimedcast
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+      - CACHE_DRIVER=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - trimedcast
+
+  web:
+    image: nginx:alpine
+    container_name: trimedcast-web
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./src:/var/www/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - trimedcast
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: trimedcast-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: trimedcast
+      POSTGRES_USER: trimedcast
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trimedcast -d trimedcast"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trimedcast
+
+  redis:
+    image: redis:7-alpine
+    container_name: trimedcast-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trimedcast
+
+  horizon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trimedcast-horizon
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan horizon
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=trimedcast
+      - DB_USERNAME=trimedcast
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+      - CACHE_DRIVER=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - trimedcast
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trimedcast-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: >
+      sh -c "
+        echo '* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>&1' > /etc/crontabs/root &&
+        crond -f
+      "
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=trimedcast
+      - DB_USERNAME=trimedcast
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+      - CACHE_DRIVER=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - trimedcast
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  trimedcast:
+    driver: bridge
