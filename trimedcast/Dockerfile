@@ -12,14 +12,14 @@ RUN apk add --no-cache \
     curl \
     git \
     linux-headers \
+    bash \
     $PHPIZE_DEPS
 
-# Install PHP extensions
+# Install PHP extensions (redis via PECL, not docker-php-ext-install)
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo_pgsql \
         pgsql \
-        redis \
         gd \
         zip \
         bcmath \
@@ -27,7 +27,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         xml \
         curl \
         pcntl \
-        opcache
+        opcache \
+    && pecl install redis \
+    && docker-php-ext-enable redis
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -38,17 +40,22 @@ RUN apk add --no-cache nodejs npm
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy composer files first for caching
-COPY src/composer.json src/composer.lock* ./
-
-# Install composer dependencies (skip if no lock file yet)
-RUN if [ -f composer.lock ]; then composer install --no-dev --no-scripts --no-autoloader --prefer-dist; fi
-
-# Copy full application source
+# Copy application source
 COPY src/ .
 
+# Install composer dependencies (if composer.json exists)
+RUN if [ -f composer.json ]; then composer install --no-dev --no-scripts --no-autoloader --prefer-dist || true; fi
+
 # Install composer autoloader
-RUN composer dump-autoload --optimize
+RUN if [ -f vendor/autoload.php ]; then composer dump-autoload --optimize; fi
+
+# Create required directories if they don't exist
+RUN mkdir -p storage/logs \
+    && mkdir -p storage/framework/sessions \
+    && mkdir -p storage/framework/views \
+    && mkdir -p storage/framework/cache \
+    && mkdir -p storage/app/public \
+    && mkdir -p bootstrap/cache
 
 # Set permissions for Laravel
 RUN chown -R www-data:www-data /var/www/html \
