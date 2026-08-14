@@ -306,3 +306,48 @@ Stage Summary:
 - Tenant ID resolution fixed across all routes
 - Zero lint errors, all APIs tested and verified
 - Browser verified: all tabs, data, interactions working
+---
+Task ID: 6
+Agent: Main Developer
+Task: Session 6 - Order Trigger & Lead Time Logic — Complete all 12 sections
+
+Work Log:
+- Fixed Prisma schema: Added eoq, moq, maxStock, seasonWeight to Product; Added suggestedQty, expectedDeliveryDate, urgency, cnyRisk, cnyStrategy, cnyDelayDays, shipmentMode, unitCost, totalCost, constraintsApplied, timeline, pipelineSessionId to RecommendedOrder
+- Created /src/lib/forecasting/cache.ts: TTL-based in-memory cache layer with 5 specialized caches (order triggers 5min, CNY calendar 24h, pipeline 10min, lead time 30min, seasonal weights 1h), cache stats, invalidation patterns
+- Created /src/lib/forecasting/webhooks.ts: Event emitter system with 8 event types (order_trigger.critical, cny_risk.detected, pipeline.completed, order.acknowledged, order.converted, order.deferred, forecast.drift, stockout.warning), typed payloads, listener subscription
+- Enhanced safeCalculateOrderTrigger: Comprehensive validation (10 input checks), overflow protection, lead time validation, immediate stockout handling, better error messages
+- Added calculateBatchOrderTriggersParallel: Chunked Promise.all concurrency for 500+ SKU catalogs
+- Created /api/system/cache (GET stats, DELETE invalidate) and /api/webhooks/events (GET recent events)
+- Pushed schema to DB, lint passes, browser verified
+
+Stage Summary:
+- All 12 sections of Order Trigger & Lead Time Logic.md now fully implemented
+- Performance: Caching layer + parallel batch processing
+- Webhook system for order/CNY/forecast notifications
+- Enhanced edge case handling (10 validation checks)
+- Pushed to GitHub: Session 6: Order Trigger & Lead Time Logic — COMPLETE
+
+---
+Task ID: 7
+Agent: Main Developer + Full-Stack Developer Agent
+Task: Session 7 - Prophet + Seasonal Forecasting — Advanced Models
+
+Work Log:
+- Created /src/lib/forecasting/advanced-models.ts (580+ lines):
+  - prophetBD(): Fourier series (yearly order=3) + 3 BD custom seasonalities with conditional activation (bd_winter Nov-Feb, bd_monsoon Jun-Sep, bd_pre_winter Oct), holiday effects, multiplicative/additive mode
+  - BD_HOLIDAY_CALENDAR: Exact dates 2024-2027 for 5 holidays with demand effects, 3-day proximity decay
+  - exponentialSmoothingAutoTune(): Auto-tunes alpha/beta/gamma via backtest, supports SES/Holt/Holt-Winters
+  - regressionModel(): OLS fit for D(F) = β₀ + β₁(Price) + β₂(PromoIndex), R²/p-values/confidence
+  - consensusForecast(): 4-stage pipeline (Baseline → Seasonal → Marketing → Sales Override) with governance notes
+- Created /api/forecast/advanced: POST runs all models, builds consensus, ranks by MAPE
+- Created /components/forecast/advanced-forecast-panel.tsx: Model selection, horizon controls, comparison table, expandable detail cards, consensus pipeline, BD holiday calendar
+- Updated page.tsx: 4-tab dashboard (Import Data | Forecast | Advanced | Order Triggers)
+- Browser verified: Advanced tab renders, Prophet BD ranked #1, ETS Auto-Tune MAPE 14.78%
+
+Stage Summary:
+- 5 advanced models implemented in TypeScript
+- Prophet BD with BD-specific custom seasonalities + holiday effects
+- ETS with auto-tuned alpha/beta/gamma via backtest
+- Multi-linear regression with statistical validation
+- Consensus forecast with 4-stage documented pipeline
+- Pushed to GitHub: Session 7: Prophet + Seasonal Forecasting — ADVANCED MODELS
