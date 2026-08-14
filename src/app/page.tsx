@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +24,8 @@ import { OrderTriggerCard } from '@/components/forecast/order-trigger-card';
 import { SeasonalPattern } from '@/components/forecast/seasonal-pattern';
 import { LeadTimeViz } from '@/components/forecast/lead-time-viz';
 import { ModelComparison } from '@/components/forecast/model-comparison';
+import { ForecastVsActual } from '@/components/forecast/forecast-vs-actual';
+import { RecommendedOrdersTable } from '@/components/forecast/recommended-orders-table';
 import {
   Loader2,
   AlertCircle,
@@ -46,6 +48,8 @@ import {
   Calculator,
   Zap,
   Search,
+  ShoppingCart,
+  Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -656,8 +660,135 @@ function ForecastDashboardTab() {
             individualResults={forecastResult.forecast.individualResults}
             ensembleModel={forecastResult.forecast.model}
           />
+
+          {/* Forecast vs Actual Comparison */}
+          <ForecastVsActual
+            productId={selectedProductId}
+            productName={forecastResult.product.name || 'Unknown Product'}
+            tenantId="demo-bd-motors"
+          />
         </motion.div>
       )}
+    </div>
+  );
+}
+
+// ============================================
+// Order Triggers Tab (THE CORE IP - THE PRIMARY OUTPUT)
+// ============================================
+
+function OrderTriggersTab() {
+  const [seasonalBest, setSeasonalBest] = useState<{ products: Array<{ productId: string; productSku: string; productName: string; category: string; predictedDemand: number; currentStock: number; stockGap: number; season: string }> } | null>(null);
+  const [seasonalBestLoading, setSeasonalBestLoading] = useState(false);
+
+  // Fetch seasonal best products on mount
+  useEffect(() => {
+    const fetchSeasonalBest = async () => {
+      setSeasonalBestLoading(true);
+      try {
+        const res = await fetch('/api/forecast/seasonal-best?tenantId=demo-bd-motors');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success) setSeasonalBest(json.data);
+        }
+      } catch { /* ignore */ }
+      finally { setSeasonalBestLoading(false); }
+    };
+    fetchSeasonalBest();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* Hero Banner */}
+      <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg flex-shrink-0">
+              <ShoppingCart className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-emerald-900">Recommended Orders</h2>
+              <p className="text-sm text-emerald-700">
+                THE CORE IP — TrimedCast answers: &ldquo;Order <strong>what</strong>, <strong>how many</strong>, on <strong>what date</strong>?&rdquo;
+              </p>
+              <p className="text-xs text-emerald-600 mt-1">
+                Calculated from: Lead time decomposition + CNY risk + BD seasonal demand + EOQ + Safety stock
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recommended Orders Table - THE PRIMARY OUTPUT */}
+      <RecommendedOrdersTable />
+
+      {/* Seasonal Best Products */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-amber-500" />
+            <CardTitle className="text-base">Seasonal Best Products</CardTitle>
+          </div>
+          <CardDescription>Top products predicted to sell best in the upcoming season</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {seasonalBestLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-sm text-gray-500">Analyzing seasonal patterns...</span>
+            </div>
+          ) : seasonalBest && seasonalBest.products && seasonalBest.products.length > 0 ? (
+            <div className="space-y-3">
+              {seasonalBest.products.slice(0, 5).map((product, idx) => (
+                <motion.div
+                  key={product.productId}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-100"
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                    idx === 0 ? 'bg-amber-100 text-amber-700' :
+                    idx === 1 ? 'bg-gray-100 text-gray-600' :
+                    idx === 2 ? 'bg-orange-100 text-orange-700' :
+                    'bg-slate-50 text-slate-500'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm text-gray-800 truncate">{product.productName}</span>
+                      <Badge variant="outline" className="text-[9px] h-4">{product.productSku}</Badge>
+                    </div>
+                    <p className="text-xs text-gray-500">{product.category}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold text-emerald-700">{Math.round(product.predictedDemand)} units</p>
+                    <p className="text-[10px] text-gray-400">predicted demand</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {product.stockGap > 0 ? (
+                      <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">
+                        Gap: {Math.round(product.stockGap)} units
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">
+                        Stock OK
+                      </Badge>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Package className="h-10 w-10 mx-auto text-gray-300 mb-2" />
+              <p className="text-sm">No seasonal predictions available yet</p>
+              <p className="text-xs text-gray-400">Import sales history data first to enable seasonal analysis</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -702,15 +833,22 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast')} className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto mb-6 grid-cols-2">
+        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'orders')} className="w-full">
+          <TabsList className="grid w-full max-w-lg mx-auto mb-6 grid-cols-3">
             <TabsTrigger value="import" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
-              <span>Import Data</span>
+              <span className="hidden sm:inline">Import Data</span>
+              <span className="sm:hidden">Import</span>
             </TabsTrigger>
             <TabsTrigger value="forecast" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
-              <span>Forecast Dashboard</span>
+              <span className="hidden sm:inline">Forecast</span>
+              <span className="sm:hidden">Forecast</span>
+            </TabsTrigger>
+            <TabsTrigger value="orders" className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Order Triggers</span>
+              <span className="sm:hidden">Orders</span>
             </TabsTrigger>
           </TabsList>
 
@@ -738,6 +876,20 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
               >
                 <ForecastDashboardTab />
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="orders">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="orders-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <OrderTriggersTab />
               </motion.div>
             </AnimatePresence>
           </TabsContent>

@@ -138,13 +138,13 @@ export interface ForecastStore {
   horizonDays: number;
 
   // Active tab
-  activeTab: 'import' | 'forecast';
+  activeTab: 'import' | 'forecast' | 'orders';
 
   // Error
   error: string | null;
 
   // Actions
-  setActiveTab: (tab: 'import' | 'forecast') => void;
+  setActiveTab: (tab: 'import' | 'forecast' | 'orders') => void;
   setSelectedProductId: (id: string | null) => void;
   setShippingMethod: (method: 'sea' | 'air') => void;
   fetchProducts: () => Promise<void>;

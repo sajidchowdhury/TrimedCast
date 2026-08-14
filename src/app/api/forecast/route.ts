@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { resolveTenantId } from '@/lib/tenant-resolver';
 import {
   movingAverage,
   exponentialSmoothing,
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      tenantId = 'default',
+      tenantId: tenantIdRaw = 'default',
       productId,
       model = 'ensemble',
       horizonDays = 90,
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       shippingMethod = 'sea',
       weights,
     } = body;
+    const tenantId = await resolveTenantId(tenantIdRaw);
 
     if (!productId) {
       return NextResponse.json({ success: false, error: 'productId is required' }, { status: 400 });

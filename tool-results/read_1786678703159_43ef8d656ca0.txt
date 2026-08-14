@@ -1,0 +1,823 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import { AnimatePresence, motion } from 'framer-motion';
+     5→import {
+     6→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+     7→} from '@/components/ui/table';
+     8→import { Badge } from '@/components/ui/badge';
+     9→import { Button } from '@/components/ui/button';
+    10→import { Input } from '@/components/ui/input';
+    11→import { Card, CardContent } from '@/components/ui/card';
+    12→import {
+    13→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    14→} from '@/components/ui/select';
+    15→import {
+    16→  Pagination, PaginationContent, PaginationItem,
+    17→  PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis,
+    18→} from '@/components/ui/pagination';
+    19→import { OrderTimeline } from './order-timeline';
+    20→import {
+    21→  ShieldAlert,
+    22→  ShoppingCart,
+    23→  AlertTriangle,
+    24→  Search,
+    25→  ArrowUpDown,
+    26→  ChevronDown,
+    27→  ChevronRight,
+    28→  Loader2,
+    29→  Package,
+    30→  TrendingUp,
+    31→  Flame,
+    32→} from 'lucide-react';
+    33→
+    34→// ============================================
+    35→// Types
+    36→// ============================================
+    37→
+    38→export interface RecommendedOrderRow {
+    39→  id: string;
+    40→  productId: string;
+    41→  productSku: string;
+    42→  productName: string;
+    43→  category: string;
+    44→  currentStock: number;
+    45→  reorderPoint: number;
+    46→  suggestedQty: number;
+    47→  orderTriggerDate: string;
+    48→  expectedDeliveryDate: string;
+    49→  totalLeadTime: number;
+    50→  priority: 'urgent' | 'high' | 'normal' | 'low';
+    51→  cnyRisk: boolean;
+    52→  season: string;
+    53→  status: 'pending' | 'approved' | 'converted' | 'rejected';
+    54→  orderTrigger: string;
+    55→}
+    56→
+    57→interface SummaryStats {
+    58→  totalProducts: number;
+    59→  totalUrgent: number;
+    60→  totalHigh: number;
+    61→  totalNormal: number;
+    62→  totalLow: number;
+    63→  cnyRiskCount: number;
+    64→  totalSuggestedSpend: number;
+    65→}
+    66→
+    67→// ============================================
+    68→// Constants
+    69→// ============================================
+    70→
+    71→const TENANT_ID = 'demo-bd-motors';
+    72→const PAGE_SIZE = 15;
+    73→
+    74→const PRIORITY_CONFIG: Record<string, { label: string; bg: string; border: string; order: number }> = {
+    75→  urgent: { label: 'URGENT', bg: 'bg-red-500 text-white', border: 'border-l-4 border-l-red-500', order: 0 },
+    76→  high: { label: 'HIGH', bg: 'bg-orange-500 text-white', border: 'border-l-4 border-l-orange-500', order: 1 },
+    77→  normal: { label: 'NORMAL', bg: 'bg-blue-500 text-white', border: '', order: 2 },
+    78→  low: { label: 'LOW', bg: 'bg-slate-400 text-white', border: '', order: 3 },
+    79→};
+    80→
+    81→const SEASON_COLORS: Record<string, string> = {
+    82→  winter: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    83→  summer: 'bg-amber-100 text-amber-700 border-amber-200',
+    84→  monsoon: 'bg-blue-100 text-blue-700 border-blue-200',
+    85→  pre_winter: 'bg-orange-100 text-orange-700 border-orange-200',
+    86→};
+    87→
+    88→const SEASON_LABELS: Record<string, string> = {
+    89→  winter: 'Winter',
+    90→  summer: 'Summer',
+    91→  monsoon: 'Monsoon',
+    92→  pre_winter: 'Pre-Winter',
+    93→};
+    94→
+    95→const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+    96→  pending: { label: 'Pending', className: 'bg-amber-100 text-amber-700 border-amber-200' },
+    97→  approved: { label: 'Approved', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    98→  converted: { label: 'Converted', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    99→  rejected: { label: 'Rejected', className: 'bg-red-100 text-red-700 border-red-200' },
+   100→};
+   101→
+   102→type SortField = 'priority' | 'orderTriggerDate' | 'suggestedQty' | 'totalLeadTime';
+   103→type SortDir = 'asc' | 'desc';
+   104→
+   105→// ============================================
+   106→// Helpers
+   107→// ============================================
+   108→
+   109→function formatDate(dateStr: string): string {
+   110→  try {
+   111→    const d = new Date(dateStr);
+   112→    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+   113→  } catch {
+   114→    return dateStr;
+   115→  }
+   116→}
+   117→
+   118→function formatBDT(amount: number): string {
+   119→  return '৳' + amount.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+   120→}
+   121→
+   122→function stockColor(current: number, reorder: number): string {
+   123→  if (current <= 0) return 'text-red-600';
+   124→  if (current < reorder * 0.5) return 'text-red-500';
+   125→  if (current < reorder) return 'text-amber-500';
+   126→  return 'text-emerald-500';
+   127→}
+   128→
+   129→// ============================================
+   130→// Component
+   131→// ============================================
+   132→
+   133→export function RecommendedOrdersTable() {
+   134→  // State
+   135→  const [orders, setOrders] = useState<RecommendedOrderRow[]>([]);
+   136→  const [summary, setSummary] = useState<SummaryStats | null>(null);
+   137→  const [loading, setLoading] = useState(true);
+   138→  const [convertingId, setConvertingId] = useState<string | null>(null);
+   139→  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+   140→  const [page, setPage] = useState(1);
+   141→
+   142→  // Filters
+   143→  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+   144→  const [seasonFilter, setSeasonFilter] = useState<string>('all');
+   145→  const [cnyFilter, setCnyFilter] = useState<string>('all');
+   146→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   147→  const [search, setSearch] = useState<string>('');
+   148→
+   149→  // Sort
+   150→  const [sortField, setSortField] = useState<SortField>('priority');
+   151→  const [sortDir, setSortDir] = useState<SortDir>('asc');
+   152→
+   153→  // Fetch orders
+   154→  const fetchOrders = useCallback(async () => {
+   155→    setLoading(true);
+   156→    try {
+   157→      const res = await fetch(`/api/orders/triggers?tenantId=${TENANT_ID}`, {
+   158→        method: 'POST',
+   159→        headers: { 'Content-Type': 'application/json' },
+   160→        body: JSON.stringify({ tenantId: TENANT_ID, shippingMethod: 'sea', serviceLevel: 0.95 }),
+   161→      });
+   162→      if (res.ok) {
+   163→        const json = await res.json();
+   164→        if (json.success && json.data) {
+   165→          const triggers = json.data.triggers || [];
+   166→          // Map OrderTriggerClient → RecommendedOrderRow
+   167→          const mapped: RecommendedOrderRow[] = triggers.map((t: Record<string, unknown>) => ({
+   168→            id: (t.productId as string) + '-' + (t.productSku as string),
+   169→            productId: t.productId as string,
+   170→            productSku: (t.productSku as string) || '',
+   171→            productName: (t.productName as string) || '',
+   172→            category: '',
+   173→            currentStock: (t.currentStock as number) || 0,
+   174→            reorderPoint: (t.reorderPoint as number) || 0,
+   175→            suggestedQty: (t.suggestedOrderQty as number) || 0,
+   176→            orderTriggerDate: (t.orderTriggerDate as string) || '',
+   177→            expectedDeliveryDate: (t.expectedDeliveryDate as string) || '',
+   178→            totalLeadTime: (t.totalLeadTimeDays as number) || 0,
+   179→            priority: (t.priority as string) || 'normal',
+   180→            cnyRisk: (t.cnyRisk as boolean) || false,
+   181→            season: (t.currentSeason as string) || '',
+   182→            status: 'pending' as const,
+   183→            orderTrigger: (t.orderTrigger as string) || '',
+   184→          }));
+   185→          setOrders(mapped);
+   186→          if (json.data.summary) {
+   187→            setSummary(json.data.summary as SummaryStats);
+   188→          }
+   189→        }
+   190→      }
+   191→    } catch {
+   192→      // Silently fail - empty state will show
+   193→    } finally {
+   194→      setLoading(false);
+   195→    }
+   196→  }, []);
+   197→
+   198→  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+   199→
+   200→  // Convert to PO
+   201→  const handleConvert = useCallback(async (order: RecommendedOrderRow) => {
+   202→    setConvertingId(order.id);
+   203→    try {
+   204→      const res = await fetch('/api/orders/convert', {
+   205→        method: 'POST',
+   206→        headers: { 'Content-Type': 'application/json' },
+   207→        body: JSON.stringify({
+   208→          tenantId: TENANT_ID,
+   209→          recommendedOrderId: order.id,
+   210→        }),
+   211→      });
+   212→      if (res.ok) {
+   213→        const json = await res.json();
+   214→        if (json.success) {
+   215→          // Update the row status locally
+   216→          setOrders(prev =>
+   217→            prev.map(o => o.id === order.id ? { ...o, status: 'converted' as const } : o)
+   218→          );
+   219→        }
+   220→      }
+   221→    } catch {
+   222→      // Silently fail
+   223→    } finally {
+   224→      setConvertingId(null);
+   225→    }
+   226→  }, []);
+   227→
+   228→  // Toggle sort
+   229→  const handleSort = useCallback((field: SortField) => {
+   230→    setSortField(prev => {
+   231→      if (prev === field) {
+   232→        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+   233→        return prev;
+   234→      }
+   235→      setSortDir('asc');
+   236→      return field;
+   237→    });
+   238→  }, []);
+   239→
+   240→  // Filtered + sorted data
+   241→  const filtered = useMemo(() => {
+   242→    let data = [...orders];
+   243→
+   244→    // Priority filter
+   245→    if (priorityFilter !== 'all') {
+   246→      data = data.filter(o => o.priority === priorityFilter);
+   247→    }
+   248→    // Season filter
+   249→    if (seasonFilter !== 'all') {
+   250→      data = data.filter(o => o.season === seasonFilter);
+   251→    }
+   252→    // CNY Risk filter
+   253→    if (cnyFilter === 'risk') {
+   254→      data = data.filter(o => o.cnyRisk);
+   255→    } else if (cnyFilter === 'no_risk') {
+   256→      data = data.filter(o => !o.cnyRisk);
+   257→    }
+   258→    // Status filter
+   259→    if (statusFilter !== 'all') {
+   260→      data = data.filter(o => o.status === statusFilter);
+   261→    }
+   262→    // Search
+   263→    if (search.trim()) {
+   264→      const q = search.toLowerCase();
+   265→      data = data.filter(o =>
+   266→        o.productSku.toLowerCase().includes(q) ||
+   267→        o.productName.toLowerCase().includes(q)
+   268→      );
+   269→    }
+   270→
+   271→    // Sort
+   272→    data.sort((a, b) => {
+   273→      let cmp = 0;
+   274→      switch (sortField) {
+   275→        case 'priority':
+   276→          cmp = (PRIORITY_CONFIG[a.priority]?.order ?? 2) - (PRIORITY_CONFIG[b.priority]?.order ?? 2);
+   277→          break;
+   278→        case 'orderTriggerDate':
+   279→          cmp = a.orderTriggerDate.localeCompare(b.orderTriggerDate);
+   280→          break;
+   281→        case 'suggestedQty':
+   282→          cmp = a.suggestedQty - b.suggestedQty;
+   283→          break;
+   284→        case 'totalLeadTime':
+   285→          cmp = a.totalLeadTime - b.totalLeadTime;
+   286→          break;
+   287→      }
+   288→      return sortDir === 'asc' ? cmp : -cmp;
+   289→    });
+   290→
+   291→    return data;
+   292→  }, [orders, priorityFilter, seasonFilter, cnyFilter, statusFilter, search, sortField, sortDir]);
+   293→
+   294→  // Pagination
+   295→  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+   296→  const safePage = Math.min(page, totalPages);
+   297→  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+   298→
+   299→  // Pagination range
+   300→  const paginationRange = useMemo(() => {
+   301→    const range: (number | 'ellipsis')[] = [];
+   302→    if (totalPages <= 7) {
+   303→      for (let i = 1; i <= totalPages; i++) range.push(i);
+   304→    } else {
+   305→      range.push(1);
+   306→      if (safePage > 3) range.push('ellipsis');
+   307→      const start = Math.max(2, safePage - 1);
+   308→      const end = Math.min(totalPages - 1, safePage + 1);
+   309→      for (let i = start; i <= end; i++) range.push(i);
+   310→      if (safePage < totalPages - 2) range.push('ellipsis');
+   311→      range.push(totalPages);
+   312→    }
+   313→    return range;
+   314→  }, [totalPages, safePage]);
+   315→
+   316→  // Computed summary from filtered
+   317→  const filteredSummary = useMemo(() => {
+   318→    const totalUrgent = filtered.filter(o => o.priority === 'urgent').length;
+   319→    const totalHigh = filtered.filter(o => o.priority === 'high').length;
+   320→    const cnyRiskCount = filtered.filter(o => o.cnyRisk).length;
+   321→    return { total: filtered.length, totalUrgent, totalHigh, cnyRiskCount };
+   322→  }, [filtered]);
+   323→
+   324→  // Sort icon helper
+   325→  function SortIcon({ field }: { field: SortField }) {
+   326→    const isActive = sortField === field;
+   327→    return (
+   328→      <ArrowUpDown
+   329→        className={`h-3 w-3 inline ml-1 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`}
+   330→      />
+   331→    );
+   332→  }
+   333→
+   334→  // ============================================
+   335→  // Render
+   336→  // ============================================
+   337→
+   338→  return (
+   339→    <div className="space-y-4">
+   340→      {/* ========== Summary Stats Row ========== */}
+   341→      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+   342→        <Card className="bg-white shadow-sm">
+   343→          <CardContent className="p-3 flex items-center gap-3">
+   344→            <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+   345→              <Package className="h-4 w-4 text-slate-600" />
+   346→            </div>
+   347→            <div>
+   348→              <p className="text-[10px] uppercase tracking-wider text-slate-500">Total Orders</p>
+   349→              <p className="text-lg font-bold text-slate-800">{filteredSummary.total}</p>
+   350→            </div>
+   351→          </CardContent>
+   352→        </Card>
+   353→
+   354→        <Card className="bg-white shadow-sm">
+   355→          <CardContent className="p-3 flex items-center gap-3">
+   356→            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
+   357→              <Flame className="h-4 w-4 text-red-500" />
+   358→            </div>
+   359→            <div>
+   360→              <p className="text-[10px] uppercase tracking-wider text-slate-500">Urgent</p>
+   361→              <p className="text-lg font-bold text-red-600">{filteredSummary.totalUrgent}</p>
+   362→            </div>
+   363→          </CardContent>
+   364→        </Card>
+   365→
+   366→        <Card className="bg-white shadow-sm">
+   367→          <CardContent className="p-3 flex items-center gap-3">
+   368→            <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
+   369→              <AlertTriangle className="h-4 w-4 text-orange-500" />
+   370→            </div>
+   371→            <div>
+   372→              <p className="text-[10px] uppercase tracking-wider text-slate-500">High</p>
+   373→              <p className="text-lg font-bold text-orange-600">{filteredSummary.totalHigh}</p>
+   374→            </div>
+   375→          </CardContent>
+   376→        </Card>
+   377→
+   378→        <Card className="bg-white shadow-sm">
+   379→          <CardContent className="p-3 flex items-center gap-3">
+   380→            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+   381→              <TrendingUp className="h-4 w-4 text-emerald-500" />
+   382→            </div>
+   383→            <div>
+   384→              <p className="text-[10px] uppercase tracking-wider text-slate-500">Suggested Spend</p>
+   385→              <p className="text-lg font-bold text-emerald-700">
+   386→                {summary ? formatBDT(summary.totalSuggestedSpend) : '—'}
+   387→              </p>
+   388→            </div>
+   389→          </CardContent>
+   390→        </Card>
+   391→
+   392→        <Card className="bg-white shadow-sm">
+   393→          <CardContent className="p-3 flex items-center gap-3">
+   394→            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
+   395→              <ShieldAlert className="h-4 w-4 text-red-500" />
+   396→            </div>
+   397→            <div>
+   398→              <p className="text-[10px] uppercase tracking-wider text-slate-500">CNY Risk</p>
+   399→              <p className="text-lg font-bold text-red-600">{filteredSummary.cnyRiskCount}</p>
+   400→            </div>
+   401→          </CardContent>
+   402→        </Card>
+   403→      </div>
+   404→
+   405→      {/* ========== Filter Bar ========== */}
+   406→      <div className="flex flex-wrap items-center gap-2">
+   407→        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+   408→          <SelectTrigger size="sm" className="w-[130px]">
+   409→            <SelectValue placeholder="Priority" />
+   410→          </SelectTrigger>
+   411→          <SelectContent>
+   412→            <SelectItem value="all">All Priorities</SelectItem>
+   413→            <SelectItem value="urgent">Urgent</SelectItem>
+   414→            <SelectItem value="high">High</SelectItem>
+   415→            <SelectItem value="normal">Normal</SelectItem>
+   416→            <SelectItem value="low">Low</SelectItem>
+   417→          </SelectContent>
+   418→        </Select>
+   419→
+   420→        <Select value={seasonFilter} onValueChange={setSeasonFilter}>
+   421→          <SelectTrigger size="sm" className="w-[140px]">
+   422→            <SelectValue placeholder="Season" />
+   423→          </SelectTrigger>
+   424→          <SelectContent>
+   425→            <SelectItem value="all">All Seasons</SelectItem>
+   426→            <SelectItem value="winter">Winter</SelectItem>
+   427→            <SelectItem value="summer">Summer</SelectItem>
+   428→            <SelectItem value="monsoon">Monsoon</SelectItem>
+   429→            <SelectItem value="pre_winter">Pre-Winter</SelectItem>
+   430→          </SelectContent>
+   431→        </Select>
+   432→
+   433→        <Select value={cnyFilter} onValueChange={setCnyFilter}>
+   434→          <SelectTrigger size="sm" className="w-[140px]">
+   435→            <SelectValue placeholder="CNY Risk" />
+   436→          </SelectTrigger>
+   437→          <SelectContent>
+   438→            <SelectItem value="all">All CNY Risk</SelectItem>
+   439→            <SelectItem value="risk">CNY Risk Only</SelectItem>
+   440→            <SelectItem value="no_risk">No CNY Risk</SelectItem>
+   441→          </SelectContent>
+   442→        </Select>
+   443→
+   444→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   445→          <SelectTrigger size="sm" className="w-[130px]">
+   446→            <SelectValue placeholder="Status" />
+   447→          </SelectTrigger>
+   448→          <SelectContent>
+   449→            <SelectItem value="all">All Status</SelectItem>
+   450→            <SelectItem value="pending">Pending</SelectItem>
+   451→            <SelectItem value="approved">Approved</SelectItem>
+   452→            <SelectItem value="converted">Converted</SelectItem>
+   453→            <SelectItem value="rejected">Rejected</SelectItem>
+   454→          </SelectContent>
+   455→        </Select>
+   456→
+   457→        <div className="relative flex-1 min-w-[180px] max-w-[300px]">
+   458→          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+   459→          <Input
+   460→            placeholder="Search SKU or product..."
+   461→            value={search}
+   462→            onChange={e => { setSearch(e.target.value); setPage(1); }}
+   463→            className="h-8 pl-8 text-sm"
+   464→          />
+   465→        </div>
+   466→
+   467→        {filtered.length !== orders.length && (
+   468→          <Badge variant="outline" className="text-xs text-slate-500">
+   469→            {filtered.length} of {orders.length} orders
+   470→          </Badge>
+   471→        )}
+   472→      </div>
+   473→
+   474→      {/* ========== Loading State ========== */}
+   475→      {loading && (
+   476→        <div className="flex items-center justify-center py-16 gap-2 text-slate-500">
+   477→          <Loader2 className="h-5 w-5 animate-spin" />
+   478→          <span className="text-sm">Calculating order triggers for all products...</span>
+   479→        </div>
+   480→      )}
+   481→
+   482→      {/* ========== Empty State ========== */}
+   483→      {!loading && filtered.length === 0 && (
+   484→        <div className="text-center py-16">
+   485→          <Package className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+   486→          <p className="text-sm text-slate-500">
+   487→            {orders.length === 0
+   488→              ? 'No recommended orders found. Import sales data and generate forecasts first.'
+   489→              : 'No orders match the current filters.'}
+   490→          </p>
+   491→        </div>
+   492→      )}
+   493→
+   494→      {/* ========== Desktop Table View ========== */}
+   495→      {!loading && filtered.length > 0 && (
+   496→        <>
+   497→          {/* Desktop: Table */}
+   498→          <div className="hidden md:block rounded-lg border border-slate-200 bg-white overflow-hidden">
+   499→            <Table>
+   500→              <TableHeader>
+   501→                <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+   502→                  <TableHead className="w-8" /> {/* Expand toggle */}
+   503→                  <TableHead className="w-24">
+   504→                    <button className="inline-flex items-center" onClick={() => handleSort('priority')}>
+   505→                      Priority <SortIcon field="priority" />
+   506→                    </button>
+   507→                  </TableHead>
+   508→                  <TableHead>Product</TableHead>
+   509→                  <TableHead className="hidden lg:table-cell">Category</TableHead>
+   510→                  <TableHead>Stock / ROP</TableHead>
+   511→                  <TableHead>
+   512→                    <button className="inline-flex items-center" onClick={() => handleSort('suggestedQty')}>
+   513→                      Suggested Qty <SortIcon field="suggestedQty" />
+   514→                    </button>
+   515→                  </TableHead>
+   516→                  <TableHead className="hidden xl:table-cell">
+   517→                    <button className="inline-flex items-center" onClick={() => handleSort('orderTriggerDate')}>
+   518→                      Order Date <SortIcon field="orderTriggerDate" />
+   519→                    </button>
+   520→                  </TableHead>
+   521→                  <TableHead className="hidden xl:table-cell">Delivery</TableHead>
+   522→                  <TableHead className="hidden lg:table-cell">
+   523→                    <button className="inline-flex items-center" onClick={() => handleSort('totalLeadTime')}>
+   524→                      Lead Time <SortIcon field="totalLeadTime" />
+   525→                    </button>
+   526→                  </TableHead>
+   527→                  <TableHead className="hidden lg:table-cell">CNY</TableHead>
+   528→                  <TableHead className="hidden xl:table-cell">Season</TableHead>
+   529→                  <TableHead className="w-32">Actions</TableHead>
+   530→                </TableRow>
+   531→              </TableHeader>
+   532→              <TableBody>
+   533→                <AnimatePresence initial={false}>
+   534→                  {paged.map(order => {
+   535→                    const isExpanded = expandedRow === order.id;
+   536→                    const pCfg = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.normal;
+   537→                    const isConverting = convertingId === order.id;
+   538→
+   539→                    return (
+   540→                      <motion.tr
+   541→                        key={order.id}
+   542→                        initial={{ opacity: 0, y: -4 }}
+   543→                        animate={{ opacity: 1, y: 0 }}
+   544→                        exit={{ opacity: 0, y: 4 }}
+   545→                        transition={{ duration: 0.15 }}
+   546→                        className={`group cursor-pointer ${pCfg.border} ${
+   547→                          isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/50'
+   548→                        }`}
+   549→                        onClick={() => setExpandedRow(isExpanded ? null : order.id)}
+   550→                      >
+   551→                        {/* Expand toggle */}
+   552→                        <TableCell className="w-8" onClick={e => e.stopPropagation()}>
+   553→                          {isExpanded ? (
+   554→                            <ChevronDown className="h-4 w-4 text-slate-400" />
+   555→                          ) : (
+   556→                            <ChevronRight className="h-4 w-4 text-slate-400" />
+   557→                          )}
+   558→                        </TableCell>
+   559→
+   560→                        {/* Priority */}
+   561→                        <TableCell onClick={e => e.stopPropagation()}>
+   562→                          <Badge className={pCfg.bg}>{pCfg.label}</Badge>
+   563→                        </TableCell>
+   564→
+   565→                        {/* Product SKU + Name */}
+   566→                        <TableCell onClick={e => e.stopPropagation()}>
+   567→                          <div>
+   568→                            <p className="font-medium text-sm text-slate-800 truncate max-w-[200px]">{order.productName}</p>
+   569→                            <p className="text-xs text-slate-500">{order.productSku}</p>
+   570→                          </div>
+   571→                        </TableCell>
+   572→
+   573→                        {/* Category */}
+   574→                        <TableCell className="hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+   575→                          <span className="text-xs text-slate-600">{order.category || '—'}</span>
+   576→                        </TableCell>
+   577→
+   578→                        {/* Stock / ROP */}
+   579→                        <TableCell onClick={e => e.stopPropagation()}>
+   580→                          <div className="flex items-center gap-1.5">
+   581→                            <span className={`font-semibold text-sm ${stockColor(order.currentStock, order.reorderPoint)}`}>
+   582→                              {order.currentStock}
+   583→                            </span>
+   584→                            <span className="text-slate-400 text-xs">/</span>
+   585→                            <span className="text-xs text-slate-500">{order.reorderPoint}</span>
+   586→                          </div>
+   587→                        </TableCell>
+   588→
+   589→                        {/* Suggested Qty */}
+   590→                        <TableCell onClick={e => e.stopPropagation()}>
+   591→                          <span className="font-semibold text-sm text-slate-800">{order.suggestedQty}</span>
+   592→                        </TableCell>
+   593→
+   594→                        {/* Order Trigger Date */}
+   595→                        <TableCell className="hidden xl:table-cell" onClick={e => e.stopPropagation()}>
+   596→                          <span className="text-xs text-slate-600">{formatDate(order.orderTriggerDate)}</span>
+   597→                        </TableCell>
+   598→
+   599→                        {/* Expected Delivery Date */}
+   600→                        <TableCell className="hidden xl:table-cell" onClick={e => e.stopPropagation()}>
+   601→                          <span className="text-xs text-slate-600">{formatDate(order.expectedDeliveryDate)}</span>
+   602→                        </TableCell>
+   603→
+   604→                        {/* Lead Time */}
+   605→                        <TableCell className="hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+   606→                          <span className="text-xs text-slate-600">{order.totalLeadTime}d</span>
+   607→                        </TableCell>
+   608→
+   609→                        {/* CNY Risk */}
+   610→                        <TableCell className="hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+   611→                          {order.cnyRisk ? (
+   612→                            <ShieldAlert className="h-4 w-4 text-red-500" />
+   613→                          ) : (
+   614→                            <span className="text-slate-300">—</span>
+   615→                          )}
+   616→                        </TableCell>
+   617→
+   618→                        {/* Season */}
+   619→                        <TableCell className="hidden xl:table-cell" onClick={e => e.stopPropagation()}>
+   620→                          <Badge variant="outline" className={`text-[10px] ${SEASON_COLORS[order.season] || 'bg-slate-100 text-slate-600'}`}>
+   621→                            {SEASON_LABELS[order.season] || order.season}
+   622→                          </Badge>
+   623→                        </TableCell>
+   624→
+   625→                        {/* Actions */}
+   626→                        <TableCell onClick={e => e.stopPropagation()}>
+   627→                          {order.status === 'pending' ? (
+   628→                            <Button
+   629→                              size="sm"
+   630→                              variant="outline"
+   631→                              className="h-7 text-xs gap-1 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+   632→                              disabled={isConverting}
+   633→                              onClick={(e: React.MouseEvent) => {
+   634→                                e.stopPropagation();
+   635→                                handleConvert(order);
+   636→                              }}
+   637→                            >
+   638→                              {isConverting ? (
+   639→                                <Loader2 className="h-3 w-3 animate-spin" />
+   640→                              ) : (
+   641→                                <ShoppingCart className="h-3 w-3" />
+   642→                              )}
+   643→                              Convert to PO
+   644→                            </Button>
+   645→                          ) : (
+   646→                            <Badge variant="outline" className={`text-[10px] ${STATUS_BADGE[order.status]?.className || ''}`}>
+   647→                              {STATUS_BADGE[order.status]?.label || order.status}
+   648→                            </Badge>
+   649→                          )}
+   650→                        </TableCell>
+   651→                      </motion.tr>
+   652→                    );
+   653→                  })}
+   654→                </AnimatePresence>
+   655→              </TableBody>
+   656→            </Table>
+   657→          </div>
+   658→
+   659→          {/* Expanded row detail (shown below table for desktop, inline for mobile) */}
+   660→          <AnimatePresence>
+   661→            {expandedRow && (() => {
+   662→              const order = orders.find(o => o.id === expandedRow);
+   663→              if (!order) return null;
+   664→              return (
+   665→                <motion.div
+   666→                  key={`expanded-${order.id}`}
+   667→                  initial={{ opacity: 0, height: 0 }}
+   668→                  animate={{ opacity: 1, height: 'auto' }}
+   669→                  exit={{ opacity: 0, height: 0 }}
+   670→                  transition={{ duration: 0.2 }}
+   671→                  className="overflow-hidden"
+   672→                >
+   673→                  <OrderTimeline order={order} />
+   674→                </motion.div>
+   675→              );
+   676→            })()}
+   677→          </AnimatePresence>
+   678→
+   679→          {/* ========== Mobile Card View ========== */}
+   680→          <div className="md:hidden space-y-2">
+   681→            <AnimatePresence initial={false}>
+   682→              {paged.map(order => {
+   683→                const pCfg = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.normal;
+   684→                const isExpanded = expandedRow === order.id;
+   685→                const isConverting = convertingId === order.id;
+   686→
+   687→                return (
+   688→                  <motion.div
+   689→                    key={order.id}
+   690→                    initial={{ opacity: 0, y: -4 }}
+   691→                    animate={{ opacity: 1, y: 0 }}
+   692→                    exit={{ opacity: 0, y: 4 }}
+   693→                    transition={{ duration: 0.15 }}
+   694→                  >
+   695→                    <Card
+   696→                      className={`cursor-pointer shadow-sm ${pCfg.border} ${isExpanded ? 'ring-1 ring-slate-200' : ''}`}
+   697→                      onClick={() => setExpandedRow(isExpanded ? null : order.id)}
+   698→                    >
+   699→                      <CardContent className="p-3 space-y-2">
+   700→                        {/* Row 1: Priority + Product */}
+   701→                        <div className="flex items-start justify-between gap-2">
+   702→                          <div className="flex items-center gap-2 min-w-0">
+   703→                            <Badge className={`${pCfg.bg} text-[10px]`}>{pCfg.label}</Badge>
+   704→                            <div className="min-w-0">
+   705→                              <p className="text-sm font-medium text-slate-800 truncate">{order.productName}</p>
+   706→                              <p className="text-xs text-slate-500">{order.productSku}</p>
+   707→                            </div>
+   708→                          </div>
+   709→                          {order.cnyRisk && <ShieldAlert className="h-4 w-4 text-red-500 flex-shrink-0" />}
+   710→                        </div>
+   711→
+   712→                        {/* Row 2: Key numbers */}
+   713→                        <div className="grid grid-cols-3 gap-2 text-center">
+   714→                          <div className="p-1.5 rounded bg-slate-50">
+   715→                            <p className={`text-sm font-bold ${stockColor(order.currentStock, order.reorderPoint)}`}>
+   716→                              {order.currentStock}
+   717→                            </p>
+   718→                            <p className="text-[9px] text-slate-500">Stock</p>
+   719→                          </div>
+   720→                          <div className="p-1.5 rounded bg-slate-50">
+   721→                            <p className="text-sm font-bold text-slate-700">{order.suggestedQty}</p>
+   722→                            <p className="text-[9px] text-slate-500">Suggested</p>
+   723→                          </div>
+   724→                          <div className="p-1.5 rounded bg-slate-50">
+   725→                            <p className="text-sm font-bold text-slate-700">{order.totalLeadTime}d</p>
+   726→                            <p className="text-[9px] text-slate-500">Lead</p>
+   727→                          </div>
+   728→                        </div>
+   729→
+   730→                        {/* Row 3: Dates + Action */}
+   731→                        <div className="flex items-center justify-between text-xs text-slate-500">
+   732→                          <span>Order: {formatDate(order.orderTriggerDate)}</span>
+   733→                          <span>Deliver: {formatDate(order.expectedDeliveryDate)}</span>
+   734→                        </div>
+   735→
+   736→                        {order.status === 'pending' && (
+   737→                          <Button
+   738→                            size="sm"
+   739→                            variant="outline"
+   740→                            className="w-full h-7 text-xs gap-1 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+   741→                            disabled={isConverting}
+   742→                            onClick={e => { e.stopPropagation(); handleConvert(order); }}
+   743→                          >
+   744→                            {isConverting ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShoppingCart className="h-3 w-3" />}
+   745→                            Convert to PO
+   746→                          </Button>
+   747→                        )}
+   748→
+   749→                        {order.status !== 'pending' && (
+   750→                          <Badge variant="outline" className={`text-[10px] ${STATUS_BADGE[order.status]?.className || ''}`}>
+   751→                            {STATUS_BADGE[order.status]?.label || order.status}
+   752→                          </Badge>
+   753→                        )}
+   754→                      </CardContent>
+   755→                    </Card>
+   756→
+   757→                    {/* Expanded detail on mobile */}
+   758→                    <AnimatePresence>
+   759→                      {isExpanded && (
+   760→                        <motion.div
+   761→                          initial={{ opacity: 0, height: 0 }}
+   762→                          animate={{ opacity: 1, height: 'auto' }}
+   763→                          exit={{ opacity: 0, height: 0 }}
+   764→                          transition={{ duration: 0.2 }}
+   765→                          className="overflow-hidden"
+   766→                        >
+   767→                          <OrderTimeline order={order} />
+   768→                        </motion.div>
+   769→                      )}
+   770→                    </AnimatePresence>
+   771→                  </motion.div>
+   772→                );
+   773→              })}
+   774→            </AnimatePresence>
+   775→          </div>
+   776→
+   777→          {/* ========== Pagination ========== */}
+   778→          {totalPages > 1 && (
+   779→            <div className="flex items-center justify-between pt-2">
+   780→              <p className="text-xs text-slate-500">
+   781→                Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+   782→              </p>
+   783→              <Pagination>
+   784→                <PaginationContent>
+   785→                  <PaginationItem>
+   786→                    <PaginationPrevious
+   787→                      onClick={() => setPage(p => Math.max(1, p - 1))}
+   788→                      className={safePage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+   789→                    />
+   790→                  </PaginationItem>
+   791→                  {paginationRange.map((item, i) =>
+   792→                    item === 'ellipsis' ? (
+   793→                      <PaginationItem key={`ellipsis-${i}`}>
+   794→                        <PaginationEllipsis />
+   795→                      </PaginationItem>
+   796→                    ) : (
+   797→                      <PaginationItem key={item}>
+   798→                        <PaginationLink
+   799→                          isActive={safePage === item}
+   800→                          onClick={() => setPage(item)}
+   801→                          className="cursor-pointer"
+   802→                        >
+   803→                          {item}
+   804→                        </PaginationLink>
+   805→                      </PaginationItem>
+   806→                    )
+   807→                  )}
+   808→                  <PaginationItem>
+   809→                    <PaginationNext
+   810→                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+   811→                      className={safePage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+   812→                    />
+   813→                  </PaginationItem>
+   814→                </PaginationContent>
+   815→              </Pagination>
+   816→            </div>
+   817→          )}
+   818→        </>
+   819→      )}
+   820→    </div>
+   821→  );
+   822→}
+   823→

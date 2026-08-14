@@ -1,0 +1,2002 @@
+     1→# Forecasting Engine Specification
+     2→
+     3→**Project**: TrimedCast — Integrated Seasonal Demand & Inventory Forecasting System  
+     4→**Document Type**: Technical Specification — Forecasting Engine  
+     5→**Version**: 1.0.0  
+     6→**Status**: Production-Ready  
+     7→**Author**: TrimedCast Engineering Team  
+     8→**Last Updated**: 2025-03-04  
+     9→**Confidentiality**: Internal — Engineering Use Only  
+    10→
+    11→---
+    12→
+    13→## Table of Contents
+    14→
+    15→1. [Document Purpose](#document-purpose)
+    16→2. [Architecture Overview](#section-1-architecture-overview)
+    17→3. [Mathematical Models — Detailed Specification](#section-2-mathematical-models--detailed-specification)
+    18→4. [Consensus Forecast Logic](#section-3-consensus-forecast-logic)
+    19→5. [Error Metrics & Auto-Recalibration](#section-4-error-metrics--auto-recalibration)
+    20→6. [Python FastAPI — API Endpoints](#section-5-python-fastapi--api-endpoints)
+    21→7. [Configuration Reference](#section-6-configuration-reference)
+    22→8. [Performance Requirements](#section-7-performance-requirements)
+    23→9. [Deployment & Infrastructure](#section-8-deployment--infrastructure)
+    24→10. [Monitoring & Observability](#section-9-monitoring--observability)
+    25→11. [Security Considerations](#section-10-security-considerations)
+    26→12. [Appendix A: BD Season Calendar](#appendix-a-bd-season-calendar)
+    27→13. [Appendix B: Glossary](#appendix-b-glossary)
+    28→14. [Appendix C: Error Codes](#appendix-c-error-codes)
+    29→
+    30→---
+    31→
+    32→## Document Purpose
+    33→
+    34→This document specifies the complete forecasting engine for the TrimedCast platform — the mathematical models, the Python microservice architecture, API contracts, configuration, Bangladesh (BD)-specific seasonal logic, error metrics, and auto-recalibration triggers.
+    35→
+    36→TrimedCast is an **Integrated Seasonal Demand & Inventory Forecasting System** designed specifically for motorcycle parts businesses in Bangladesh, operating as a **multi-tenant SaaS platform**. The forecasting engine is the intellectual core of the system, responsible for:
+    37→
+    38→- **Demand Forecasting**: Predicting future demand for each SKU using multiple statistical models
+    39→- **Inventory Optimization**: Calculating optimal order quantities, safety stock levels, and reorder points
+    40→- **Order Trigger Timing**: Determining the exact date an order must be placed to avoid stockout, accounting for BD–China supply chain lead times and Chinese New Year (CNY) shutdowns
+    41→- **Consensus Planning**: Combining quantitative models with qualitative intelligence (marketing promos, sales field input) into a single agreed-upon forecast
+    42→- **Continuous Calibration**: Monitoring forecast accuracy and auto-recalibrating models when error thresholds are breached
+    43→
+    44→The forecasting engine runs as a **Python FastAPI microservice** alongside the primary **Laravel 11** backend, communicating via **Redis queues** and **PostgreSQL** shared database.
+    45→
+    46→---
+    47→
+    48→## Section 1: Architecture Overview
+    49→
+    50→### 1.1 Service Architecture
+    51→
+    52→| Component | Technology | Role |
+    53→|-----------|-----------|------|
+    54→| Primary Backend | Laravel 11 (PHP 8.3) | CRUD operations, authentication, RBAC, tenant management, queue dispatch, WebSocket broadcasting |
+    55→| Forecasting Microservice | Python 3.12 + FastAPI | All mathematical computations: Prophet, regression, EOQ, safety stock, order triggers |
+    56→| Job Queue | Redis 7.x | Async job dispatch between Laravel and Python; job status tracking |
+    57→| Database | PostgreSQL 16.x | Shared data store; Laravel and Python both read/write |
+    58→| Cache | Redis 7.x | Forecast result caching, session management, rate limiting |
+    59→| Frontend | Next.js / Inertia.js | Dashboard, reports, visualizations |
+    60→| Containerization | Docker + Docker Compose | Service packaging and orchestration |
+    61→
+    62→#### Why a Separate Python Microservice?
+    63→
+    64→The forecasting engine is isolated from the Laravel monolith for the following reasons:
+    65→
+    66→1. **Library Ecosystem**: Prophet (Facebook's time-series library), statsmodels (regression/seasonal decomposition), scikit-learn (metrics, EOQ/SS calculations), numpy/pandas (data manipulation) — all Python-native with no PHP equivalents of comparable quality
+    67→2. **Computational Isolation**: Forecasting is CPU-intensive; isolating it prevents blocking Laravel's web-serving workers
+    68→3. **Independent Scaling**: Python workers can be scaled horizontally (add more Docker containers) independently of the Laravel app
+    69→4. **Polyglot Architecture**: Laravel excels at web framework concerns (auth, routing, ORM, queue management); Python excels at numerical computation — use each for its strength
+    70→
+    71→### 1.2 Data Flow
+    72→
+    73→```
+    74→┌──────────────────────────────────────────────────────────────────────────────┐
+    75→│                              TRIMEDCAST DATA FLOW                           │
+    76→└──────────────────────────────────────────────────────────────────────────────┘
+    77→
+    78→ 1. USER ACTION (Dashboard)
+    79→    │
+    80→    ▼
+    81→ 2. LARAVEL BACKEND
+    82→    │  ─ Validates request
+    83→    │  ─ Authorizes tenant access
+    84→    │  ─ Dispatches forecast job to Redis queue
+    85→    │
+    86→    ▼
+    87→ 3. REDIS QUEUE (forecast:jobs)
+    88→    │  ─ Job payload: { tenant_id, product_ids, season, horizon, method }
+    89→    │
+    90→    ▼
+    91→ 4. PYTHON FASTAPI WORKER
+    92→    │  ─ Picks up job from Redis
+    93→    │  ─ Loads historical sales data from PostgreSQL
+    94→    │  │
+    95→    │  ├──► Prophet Model (seasonal forecast)
+    96→    │  ├──► Linear Regression Model (baseline)
+    97→    │  ├──► Exponential Smoothing (short-term)
+    98→    │  ├──► EOQ Calculator (optimal order qty)
+    99→    │  ├──► Safety Stock Calculator (buffer)
+   100→    │  └──► Order Trigger Calculator (when to order)
+   101→    │
+   102→    ▼
+   103→ 5. RESULTS WRITTEN TO PostgreSQL
+   104→    │  ─ forecasts table (demand predictions)
+   105→    │  ─ inventory_recommendations table (EOQ, SS, ROP)
+   106→    │  ─ order_triggers table (timeline with milestones)
+   107→    │  ─ forecast_metrics table (MAPE, MAE, RMSE, MSE)
+   108→    │
+   109→    ▼
+   110→ 6. API CALLBACK / POLL
+   111→    │  ─ Python notifies Laravel job is complete
+   112→    │
+   113→    ▼
+   114→ 7. LARAVEL BACKEND
+   115→    │  ─ Updates job status
+   116→    │  ─ Broadcasts via WebSocket (Reverb / Pusher)
+   117→    │
+   118→    ▼
+   119→ 8. FRONTEND DASHBOARD
+   120→    ─ Real-time update: new forecast results displayed
+   121→```
+   122→
+   123→### 1.3 Python Service Stack
+   124→
+   125→| Package | Version | Purpose |
+   126→|---------|---------|---------|
+   127→| FastAPI | 0.110+ | Async REST framework for API endpoints |
+   128→| Uvicorn | 0.27+ | ASGI server for FastAPI |
+   129→| Prophet | 1.1.5 | Facebook's time-series forecasting with built-in seasonality |
+   130→| statsmodels | 0.14+ | Linear regression (OLS), seasonal decomposition, exponential smoothing (Holt-Winters) |
+   131→| scikit-learn | 1.4+ | Error metrics (MAE, MSE, RMSE, MAPE), StandardScaler for normalization |
+   132→| numpy | 1.26+ | Numerical computation, array operations |
+   133→| pandas | 2.2+ | Data manipulation, time-series handling |
+   134→| rq (Redis Queue) | 1.16+ | Job queue integration with Redis |
+   135→| asyncpg | 0.29+ | Async PostgreSQL driver (high performance) |
+   136→| SQLAlchemy | 2.0+ | ORM for PostgreSQL access (async mode) |
+   137→| Alembic | 1.13+ | Database migrations for Python schema |
+   138→| Pydantic | 2.5+ | Request/response validation and serialization |
+   139→| structlog | 23+ | Structured logging (JSON format) |
+   140→| prometheus-client | 0.20+ | Metrics export for Prometheus monitoring |
+   141→| httpx | 0.27+ | Async HTTP client for API callbacks to Laravel |
+   142→
+   143→### 1.4 Directory Structure (Python Microservice)
+   144→
+   145→```
+   146→forecasting-service/
+   147→├── app/
+   148→│   ├── __init__.py
+   149→│   ├── main.py                    # FastAPI application entry point
+   150→│   ├── config.py                  # Configuration loading (env vars, tenant overrides)
+   151→│   ├── api/
+   152→│   │   ├── __init__.py
+   153→│   │   ├── routes/
+   154→│   │   │   ├── health.py          # GET /health
+   155→│   │   │   ├── forecast.py        # POST /forecast/run, GET /forecast/status/{job_id}
+   156→│   │   │   ├── calculate.py       # POST /calculate/eoq, /calculate/order-trigger
+   157→│   │   │   ├── backtest.py        # POST /forecast/backtest
+   158→│   │   │   └── analysis.py        # POST /analysis/seasonal-decompose
+   159→│   │   └── schemas/
+   160→│   │       ├── forecast.py        # Pydantic models for forecast requests/responses
+   161→│   │       ├── calculate.py       # Pydantic models for EOQ/SS/trigger
+   162→│   │       └── metrics.py         # Pydantic models for backtest/metrics
+   163→│   ├── models/
+   164→│   │   ├── __init__.py
+   165→│   │   ├── prophet_model.py       # Prophet wrapper with BD seasonality
+   166→│   │   ├── regression_model.py    # Multi-linear regression (OLS)
+   167→│   │   ├── exp_smoothing_model.py # Exponential smoothing with auto-tune
+   168→│   │   ├── eoq_model.py           # Economic Order Quantity
+   169→│   │   ├── safety_stock_model.py  # Safety stock with lead time variance
+   170→│   │   ├── order_trigger_model.py # Order trigger date calculator
+   171→│   │   └── consensus_model.py     # Consensus forecast combiner
+   172→│   ├── services/
+   173→│   │   ├── __init__.py
+   174→│   │   ├── forecast_service.py    # Orchestrates full forecast pipeline
+   175→│   │   ├── backtest_service.py    # Backtest runner with rolling origin
+   176→│   │   ├── recalibration_service.py # Auto-recalibration logic
+   177→│   │   └── callback_service.py    # Notifies Laravel on job completion
+   178→│   ├── db/
+   179→│   │   ├── __init__.py
+   180→│   │   ├── connection.py          # Async SQLAlchemy session factory
+   181→│   │   ├── repositories/
+   182→│   │   │   ├── sales_repo.py     # Read sales_history
+   183→│   │   │   ├── forecast_repo.py  # Write forecasts, read/write metrics
+   184→│   │   │   ├── inventory_repo.py # Read stock levels, write recommendations
+   185→│   │   │   └── tenant_repo.py    # Read tenant configuration overrides
+   186→│   │   └── migrations/           # Alembic migration files
+   187→│   ├── workers/
+   188→│   │   ├── __init__.py
+   189→│   │   ├── forecast_worker.py     # RQ worker entry point
+   190→│   │   └── worker_config.py      # Worker configuration
+   191→│   └── utils/
+   192→│       ├── __init__.py
+   193→│       ├── bd_seasons.py          # Bangladesh season/calendar helpers
+   194→│       ├── bd_holidays.py         # BD holiday calendar (Eid, Puja, etc.)
+   195→│       ├── cny_calendar.py        # Chinese New Year shutdown calculator
+   196→│       ├── outlier_detection.py   # Sigma-based outlier removal
+   197→│       └── metrics.py             # MAPE, MAE, MSE, RMSE calculators
+   198→├── tests/
+   199→│   ├── unit/
+   200→│   ├── integration/
+   201→│   └── fixtures/
+   202→├── Dockerfile
+   203→├── docker-compose.yml
+   204→├── pyproject.toml
+   205→├── requirements.txt
+   206→└── .env.example
+   207→```
+   208→
+   209→### 1.5 Inter-Service Communication Detail
+   210→
+   211→#### Laravel → Python (Job Dispatch)
+   212→
+   213→Laravel dispatches a forecast job by pushing a JSON payload to a Redis list:
+   214→
+   215→```php
+   216→// Laravel: app/Jobs/DispatchForecastJob.php
+   217→
+   218→class DispatchForecastJob implements ShouldQueue
+   219→{
+   220→    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+   221→
+   222→    public function __construct(
+   223→        public int $tenantId,
+   224→        public array $productIds,
+   225→        public string $season,
+   226→        public int $forecastHorizonMonths = 6,
+   227→        public ?string $methodOverride = null,
+   228→    ) {}
+   229→
+   230→    public function handle(): void
+   231→    {
+   232→        $payload = [
+   233→            'job_id'        => (string) Str::uuid(),
+   234→            'tenant_id'     => $this->tenantId,
+   235→            'product_ids'   => $this->productIds,
+   236→            'season'        => $this->season,
+   237→            'horizon_months'=> $this->forecastHorizonMonths,
+   238→            'method'        => $this->methodOverride,
+   239→            'callback_url'  => config('services.forecasting.callback_url'),
+   240→            'dispatched_at' => now()->toIso8601String(),
+   241→        ];
+   242→
+   243→        Redis::lpush('forecast:jobs', json_encode($payload));
+   244→
+   245→        // Track job in database
+   246→        ForecastJob::create([
+   247→            'job_id'    => $payload['job_id'],
+   248→            'tenant_id' => $this->tenantId,
+   249→            'status'    => 'queued',
+   250→            'payload'   => $payload,
+   251→        ]);
+   252→    }
+   253→}
+   254→```
+   255→
+   256→#### Python → Laravel (Callback on Completion)
+   257→
+   258→```python
+   259→# app/services/callback_service.py
+   260→
+   261→import httpx
+   262→from app.config import settings
+   263→
+   264→async def notify_job_complete(job_id: str, status: str, results: dict):
+   265→    """Notify Laravel backend that a forecast job has completed."""
+   266→    payload = {
+   267→        "job_id": job_id,
+   268→        "status": status,
+   269→        "results_summary": {
+   270→            "products_forecasted": results.get("product_count", 0),
+   271→            "method_used": results.get("method", "prophet"),
+   272→            "mape_avg": results.get("avg_mape", None),
+   273→            "completed_at": datetime.utcnow().isoformat(),
+   274→        },
+   275→    }
+   276→
+   277→    async with httpx.AsyncClient(timeout=30.0) as client:
+   278→        response = await client.post(
+   279→            f"{settings.LARAVEL_CALLBACK_URL}/api/internal/forecast/callback",
+   280→            json=payload,
+   281→            headers={"X-Service-Token": settings.SERVICE_AUTH_TOKEN},
+   282→        )
+   283→        response.raise_for_status()
+   284→```
+   285→
+   286→---
+   287→
+   288→## Section 2: Mathematical Models — Detailed Specification
+   289→
+   290→### 2.1 Model 1: Multi-Linear Regression (Baseline Forecast)
+   291→
+   292→#### Purpose
+   293→
+   294→Provides a **baseline demand estimate** based on price and promotional activity. This model answers: "Given the current price and promotional intensity, what is the expected demand?"
+   295→
+   296→#### Formula
+   297→
+   298→$$D(F) = \beta_0 + \beta_1 \times \text{Price} + \beta_2 \times \text{PromoIndex}$$
+   299→
+   300→| Variable | Symbol | Type | Description |
+   301→|----------|--------|------|-------------|
+   302→| Forecasted Demand | D(F) | Dependent | Units demanded in the forecast period |
+   303→| Intercept | β₀ | Coefficient | Base demand when Price = 0 and PromoIndex = 0 |
+   304→| Price Coefficient | β₁ | Coefficient | Price elasticity — change in demand per 1 BDT price increase (typically negative) |
+   305→| Promo Coefficient | β₂ | Coefficient | Promo impact — change in demand per 0.1 promo_index increase (typically positive) |
+   306→| Price | Price | Independent | Product selling price in BDT |
+   307→| Promo Index | PromoIndex | Independent | Normalized promotional intensity: 0.0 = no promo, 1.0 = maximum promo activity |
+   308→
+   309→#### Beta Coefficients Interpretation
+   310→
+   311→| Coefficient | Interpretation | Example (BDT) | Business Meaning |
+   312→|-------------|---------------|---------------|------------------|
+   313→| β₀ | Base demand (intercept) | 150 units/month | Demand when price and promo are at zero — theoretical baseline |
+   314→| β₁ | Price elasticity | -2.5 units/BDT | Each 1 BDT price increase reduces demand by 2.5 units |
+   315→| β₂ | Promo impact | +30 units/0.1 index | Each 0.1 increase in promo_index adds 30 units of demand |
+   316→
+   317→#### Implementation
+   318→
+   319→```python
+   320→# app/models/regression_model.py
+   321→
+   322→import numpy as np
+   323→import pandas as pd
+   324→from statsmodels.regression.linear_model import OLS
+   325→from statsmodels.tools.tools import add_constant
+   326→from app.utils.outlier_detection import remove_sigma_outliers
+   327→
+   328→
+   329→class RegressionModel:
+   330→    """
+   331→    Multi-Linear Regression baseline forecast model.
+   332→
+   333→    D(F) = β₀ + β₁(Price) + β₂(Promo)
+   334→    """
+   335→
+   336→    def __init__(self, config: dict):
+   337→        self.regression_window_months = config.get("regression_window_months", 36)
+   338→        self.min_data_points = config.get("min_data_points", 12)
+   339→        self.outlier_sigma_threshold = config.get("outlier_sigma_threshold", 3.0)
+   340→
+   341→    def fit(self, df: pd.DataFrame) -> dict:
+   342→        """
+   343→        Fit the OLS regression model on historical sales data.
+   344→
+   345→        Args:
+   346→            df: DataFrame with columns [date, qty_sold, price, promo_index]
+   347→                Must have at least self.min_data_points rows.
+   348→
+   349→        Returns:
+   350→            Dictionary with coefficients, R², p-values, and model metadata.
+   351→
+   352→        Raises:
+   353→            ValueError: If insufficient data points after outlier removal.
+   354→        """
+   355→        # Validate minimum data points
+   356→        if len(df) < self.min_data_points:
+   357→            raise ValueError(
+   358→                f"Insufficient data: {len(df)} rows, "
+   359→                f"minimum required: {self.min_data_points}"
+   360→            )
+   361→
+   362→        # Remove outliers beyond sigma threshold
+   363→        df_clean = remove_sigma_outliers(
+   364→            df,
+   365→            column="qty_sold",
+   366→            sigma_threshold=self.outlier_sigma_threshold,
+   367→        )
+   368→
+   369→        if len(df_clean) < self.min_data_points:
+   370→            raise ValueError(
+   371→                f"Insufficient data after outlier removal: {len(df_clean)} rows, "
+   372→                f"minimum required: {self.min_data_points}"
+   373→            )
+   374→
+   375→        # Prepare feature matrix X and target y
+   376→        X = df_clean[["price", "promo_index"]].values
+   377→        X = add_constant(X)  # Adds β₀ intercept column
+   378→        y = df_clean["qty_sold"].values
+   379→
+   380→        # Fit OLS model
+   381→        model = OLS(y, X).fit()
+   382→
+   383→        return {
+   384→            "beta_0": float(model.params[0]),       # Intercept
+   385→            "beta_1": float(model.params[1]),       # Price coefficient
+   386→            "beta_2": float(model.params[2]),       # Promo coefficient
+   387→            "r_squared": float(model.rsquared),     # Model fit
+   388→            "adj_r_squared": float(model.rsquared_adj),
+   389→            "p_value_price": float(model.pvalues[1]),
+   390→            "p_value_promo": float(model.pvalues[2]),
+   391→            "f_statistic": float(model.fvalue),
+   392→            "f_pvalue": float(model.f_pvalue),
+   393→            "std_err_beta_0": float(model.bse[0]),
+   394→            "std_err_beta_1": float(model.bse[1]),
+   395→            "std_err_beta_2": float(model.bse[2]),
+   396→            "data_points_used": len(df_clean),
+   397→            "outliers_removed": len(df) - len(df_clean),
+   398→            "aic": float(model.aic),
+   399→            "bic": float(model.bic),
+   400→        }
+   401→
+   402→    def predict(self, coefficients: dict, price: float, promo_index: float) -> float:
+   403→        """
+   404→        Generate a demand forecast using fitted coefficients.
+   405→
+   406→        Args:
+   407→            coefficients: Dict with beta_0, beta_1, beta_2 from fit()
+   408→            price: Current/future product price in BDT
+   409→            promo_index: Promo intensity 0.0-1.0
+   410→
+   411→        Returns:
+   412→            Forecasted demand in units (float). Caller should round/ceil as needed.
+   413→        """
+   414→        forecast = (
+   415→            coefficients["beta_0"]
+   416→            + coefficients["beta_1"] * price
+   417→            + coefficients["beta_2"] * promo_index
+   418→        )
+   419→        return max(0.0, forecast)  # Demand cannot be negative
+   420→```
+   421→
+   422→#### Statistical Validation Checks
+   423→
+   424→| Check | Criterion | Action if Failed |
+   425→|-------|-----------|-----------------|
+   426→| R² goodness-of-fit | R² ≥ 0.3 | Log warning; model may be unreliable for this SKU |
+   427→| Price coefficient sign | β₁ < 0 | Log warning if positive (Giffen good — unusual for motorcycle parts) |
+   428→| Promo coefficient sign | β₂ > 0 | Log warning if negative (promo reduces demand — data quality issue) |
+   429→| F-test significance | F p-value < 0.05 | Flag model as statistically insignificant |
+   430→| Multicollinearity (VIF) | VIF < 5 for all predictors | If VIF ≥ 5, price and promo may be confounded |
+   431→| Residual normality | Shapiro-Wilk p > 0.05 | If non-normal, confidence intervals may be unreliable |
+   432→
+   433→#### Configuration Per Tenant
+   434→
+   435→| Parameter | Default | Valid Range | Description |
+   436→|-----------|---------|------------|-------------|
+   437→| `regression_window_months` | 36 | 12–60 | Number of months of historical data to use |
+   438→| `min_data_points` | 12 | 6–24 | Minimum data points required to fit the model |
+   439→| `outlier_sigma_threshold` | 3.0 | 2.0–5.0 | Data points beyond this σ are excluded |
+   440→
+   441→---
+   442→
+   443→### 2.2 Model 2: Prophet (Seasonal Forecast — Primary Model)
+   444→
+   445→#### Why Prophet Over Simple Regression
+   446→
+   447→| Capability | Prophet | Linear Regression | Exponential Smoothing |
+   448→|-----------|---------|-------------------|----------------------|
+   449→| Automatic seasonality detection | ✅ | ❌ | ❌ (must specify period) |
+   450→| Holiday effects | ✅ Built-in | ❌ | ❌ |
+   451→| Missing data handling | ✅ | ❌ (requires complete) | ⚠️ Partial |
+   452→| Outlier robustness | ✅ | ❌ (skews OLS) | ❌ |
+   453→| Confidence intervals | ✅ Automatic | ⚠️ (assumes normality) | ⚠️ |
+   454→| Trend changepoints | ✅ Automatic | ❌ (single trend) | ❌ |
+   455→| Multiplicative seasonality | ✅ | ❌ (additive only) | ⚠️ |
+   456→| Non-linear trends | ✅ | ❌ | ❌ |
+   457→
+   458→#### Prophet Configuration
+   459→
+   460→```python
+   461→# app/models/prophet_model.py
+   462→
+   463→from prophet import Prophet
+   464→from prophet.serialize import model_to_json, model_from_json
+   465→import pandas as pd
+   466→from datetime import datetime
+   467→from app.utils.bd_holidays import get_bd_holidays
+   468→from app.utils.bd_seasons import get_bd_custom_seasonalities
+   469→from app.utils.cny_calendar import get_cny_shutdown_window
+   470→
+   471→
+   472→class ProphetModel:
+   473→    """
+   474→    Prophet-based seasonal forecast model with BD-specific customizations.
+   475→    """
+   476→
+   477→    def __init__(self, config: dict):
+   478→        self.changepoint_prior_scale = config.get(
+   479→            "prophet_changepoint_prior_scale", 0.05
+   480→        )
+   481→        self.seasonality_prior_scale = config.get(
+   482→            "prophet_seasonality_prior_scale", 10.0
+   483→        )
+   484→        self.holidays_prior_scale = config.get(
+   485→            "prophet_holidays_prior_scale", 10.0
+   486→        )
+   487→        self.mcmc_samples = config.get("prophet_mcmc_samples", 0)
+   488→
+   489→    def build_model(
+   490→        self,
+   491→        year: int,
+   492→        include_cny: bool = True,
+   493→    ) -> Prophet:
+   494→        """
+   495→        Build a Prophet model with BD-specific configuration.
+   496→
+   497→        Args:
+   498→            year: The forecast year (used to generate holiday dates)
+   499→            include_cny: Whether to include CNY as a supply holiday
+   500→
+   501→        Returns:
+   502→            Configured Prophet model instance (not yet fitted).
+   503→        """
+   504→        # Get BD holidays for the relevant year range
+   505→        holidays_df = get_bd_holidays(
+   506→            years=[year - 1, year, year + 1],
+   507→            include_cny_supply_holiday=include_cny,
+   508→        )
+   509→
+   510→        model = Prophet(
+   511→            # --- Core Configuration ---
+   512→            yearly_seasonality=True,            # BD has strong yearly seasonal patterns
+   513→            weekly_seasonality=False,           # Motorcycle parts are NOT weekly-cyclical
+   514→            daily_seasonality=False,            # Not relevant for monthly/weekly data
+   515→            seasonality_mode="multiplicative",  # Seasonal effects MULTIPLY baseline
+   516→
+   517→            # --- Prior Scales (control overfitting) ---
+   518→            changepoint_prior_scale=self.changepoint_prior_scale,  # 0.05 = conservative
+   519→            seasonality_prior_scale=self.seasonality_prior_scale,  # 10 = strong seasonal
+   520→            holidays_prior_scale=self.holidays_prior_scale,        # 10 = strong holiday effect
+   521→
+   522→            # --- Performance ---
+   523→            mcmc_samples=self.mcmc_samples,  # 0 = fast MAP estimation (no full Bayesian)
+   524→
+   525→            # --- Holidays ---
+   526→            holidays=holidays_df,
+   527→        )
+   528→
+   529→        # --- BD-Specific Custom Seasonalities ---
+   530→        # These capture patterns that Prophet's default yearly Fourier series
+   531→        # may not adequately represent for the BD climate cycle.
+   532→
+   533→        # Winter Season (Nov-Feb): 4-month period
+   534→        # Strong positive effect for cold-weather parts (jackets, fog lamps, chain lube)
+   535→        model.add_seasonality(
+   536→            name="bd_winter",
+   537→            period=365.25 / 3,       # ~121.75 days (4-month cycle within year)
+   538→            fourier_order=3,          # Enough to capture the Nov-Feb peak shape
+   539→            prior_scale=15.0,         # Strong winter effect
+   540→            condition_name="is_winter",
+   541→        )
+   542→
+   543→        # Monsoon Season (Jun-Sep): 4-month period
+   544→        # Negative effect for street parts, positive for off-road/mud-specific parts
+   545→        model.add_seasonality(
+   546→            name="bd_monsoon",
+   547→            period=365.25 / 3,       # ~121.75 days
+   548→            fourier_order=3,
+   549→            prior_scale=12.0,
+   550→            condition_name="is_monsoon",
+   551→        )
+   552→
+   553→        # Pre-Winter Spike (October): transition month
+   554→        # Dealers pre-order before winter; brief demand surge
+   555→        model.add_seasonality(
+   556→            name="bd_pre_winter",
+   557→            period=365.25,           # Annual cycle
+   558→            fourier_order=2,         # Simpler shape — single spike
+   559→            prior_scale=8.0,
+   560→            condition_name="is_pre_winter",
+   561→        )
+   562→
+   563→        return model
+   564→
+   565→    def fit_predict(
+   566→        self,
+   567→        df: pd.DataFrame,
+   568→        forecast_horizon_days: int = 180,
+   569→        product_category: str = "general",
+   570→    ) -> dict:
+   571→        """
+   572→        Fit Prophet model and generate forecast.
+   573→
+   574→        Args:
+   575→            df: DataFrame with columns [ds (datetime), y (float qty_sold)]
+   576→                Must be sorted by ds ascending.
+   577→            forecast_horizon_days: Number of days to forecast ahead.
+   578→            product_category: Used to select seasonality condition columns
+   579→                              (e.g., 'cold_weather', 'off_road', 'street')
+   580→
+   581→        Returns:
+   582→            Dictionary with forecast values, confidence intervals, and components.
+   583→        """
+   584→        # Validate input
+   585→        if len(df) < 24:
+   586→            raise ValueError(
+   587→                f"Prophet requires at least 24 months of data; got {len(df)} rows"
+   588→            )
+   589→
+   590→        # Add seasonal condition columns based on BD calendar
+   591→        df = self._add_season_conditions(df, product_category)
+   592→
+   593→        # Build and fit model
+   594→        forecast_year = df["ds"].max().year
+   595→        model = self.build_model(year=forecast_year)
+   596→        model.fit(df)
+   597→
+   598→        # Generate future dataframe
+   599→        future = model.make_future_dataframe(
+   600→            periods=forecast_horizon_days,
+   601→            freq="D",
+   602→        )
+   603→        future = self._add_season_conditions(future, product_category)
+   604→
+   605→        # Make predictions
+   606→        forecast = model.predict(future)
+   607→
+   608→        # Extract results
+   609→        results = {
+   610→            "forecast": forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].to_dict(
+   611→                orient="records"
+   612→            ),
+   613→            "components": {
+   614→                "trend": forecast["trend"].tolist(),
+   615→                "yearly": forecast.get("yearly", pd.Series()).tolist(),
+   616→                "bd_winter": forecast.get("bd_winter", pd.Series()).tolist(),
+   617→                "bd_monsoon": forecast.get("bd_monsoon", pd.Series()).tolist(),
+   618→                "bd_pre_winter": forecast.get("bd_pre_winter", pd.Series()).tolist(),
+   619→                "holidays": forecast.get("holidays", pd.Series()).tolist(),
+   620→            },
+   621→            "model_serialized": model_to_json(model),  # For caching/reuse
+   622→        }
+   623→
+   624→        return results
+   625→
+   626→    def _add_season_conditions(
+   627→        self, df: pd.DataFrame, product_category: str
+   628→    ) -> pd.DataFrame:
+   629→        """
+   630→        Add boolean condition columns for custom seasonalities.
+   631→
+   632→        These columns tell Prophet when each custom seasonality is "active".
+   633→        The values depend on the product category because monsoon has OPPOSITE
+   634→        effects for different product types.
+   635→        """
+   636→        df = df.copy()
+   637→
+   638→        month = df["ds"].dt.month
+   639→
+   640→        # Winter: active Nov(11), Dec(12), Jan(1), Feb(2)
+   641→        df["is_winter"] = month.isin([11, 12, 1, 2]).astype(int)
+   642→
+   643→        # Monsoon: active Jun(6), Jul(7), Aug(8), Sep(9)
+   644→        # For cold_weather / general parts: monsoon REDUCES demand
+   645→        # For off_road / mud parts: monsoon INCREASES demand
+   646→        if product_category in ("off_road", "mud_chain", "off_road_tire"):
+   647→            df["is_monsoon"] = month.isin([6, 7, 8, 9]).astype(int)
+   648→        else:
+   649→            df["is_monsoon"] = month.isin([6, 7, 8, 9]).astype(int)
+   650→
+   651→        # Pre-Winter: active Oct(10) only
+   652→        df["is_pre_winter"] = (month == 10).astype(int)
+   653→
+   654→        return df
+   655→```
+   656→
+   657→#### BD-Specific Custom Seasonalities — Detail
+   658→
+   659→| Seasonality Name | Period | Fourier Order | Active Months | Effect Direction | Affected Products |
+   660→|-----------------|--------|---------------|---------------|-----------------|-------------------|
+   661→| `bd_winter` | 365.25/3 ≈ 121.75 days | 3 | Nov, Dec, Jan, Feb | **Positive** (+30-60% demand lift) | Cold-weather parts: fog lamps, chain lubricant, winter jackets, handlebar grips, heated grips, engine covers |
+   662→| `bd_monsoon` | 365.25/3 ≈ 121.75 days | 3 | Jun, Jul, Aug, Sep | **Negative** for street parts (-20-40%) / **Positive** for off-road (+15-30%) | Street: tires (slick), visors, fairings. Off-road: knobby tires, mud chains, splash guards |
+   663→| `bd_pre_winter` | 365.25 days | 2 | Oct only | **Positive** (pre-order spike +10-25%) | All seasonal parts — dealers stock up before winter |
+   664→
+   665→#### BD Holidays — Implementation
+   666→
+   667→```python
+   668→# app/utils/bd_holidays.py
+   669→
+   670→import pandas as pd
+   671→from datetime import date, timedelta
+   672→
+   673→
+   674→# BD Islamic holidays are lunar and shift ~11 days earlier each Gregorian year.
+   675→# These dates must be updated annually. The system stores them in a config table
+   676→# and falls back to these hardcoded values.
+   677→
+   678→BD_HOLIDAY_DATES = {
+   679→    2024: {
+   680→        "Eid-ul-Fitr":     [("2024-04-10", "2024-04-16")],  # ~1 week
+   681→        "Eid-ul-Adha":     [("2024-06-16", "2024-06-22")],  # ~1 week
+   682→        "Durga Puja":      [("2024-10-10", "2024-10-14")],  # 5 days
+   683→        "Independence Day": [("2024-03-26", "2024-03-26")],  # 1 day
+   684→        "Pohela Boishakh": [("2024-04-14", "2024-04-14")],  # 1 day (Bengali New Year)
+   685→    },
+   686→    2025: {
+   687→        "Eid-ul-Fitr":     [("2025-03-30", "2025-04-05")],
+   688→        "Eid-ul-Adha":     [("2025-06-06", "2025-06-12")],
+   689→        "Durga Puja":      [("2025-10-01", "2025-10-05")],
+   690→        "Independence Day": [("2025-03-26", "2025-03-26")],
+   691→        "Pohela Boishakh": [("2025-04-14", "2025-04-14")],
+   692→    },
+   693→    2026: {
+   694→        "Eid-ul-Fitr":     [("2026-03-19", "2026-03-25")],
+   695→        "Eid-ul-Adha":     [("2026-05-26", "2026-06-01")],
+   696→        "Durga Puja":      [("2026-10-19", "2026-10-23")],
+   697→        "Independence Day": [("2026-03-26", "2026-03-26")],
+   698→        "Pohela Boishakh": [("2026-04-14", "2026-04-14")],
+   699→    },
+   700→}
+   701→
+   702→# Holiday effect on motorcycle parts demand:
+   703→# - Eid: Reduced sales (shops closed, people traveling)
+   704→# - Durga Puja: Mixed — some segments UP (gift-giving, new bike purchases)
+   705→# - Independence Day: Slight dip
+   706→# - Pohela Boishakh: Slight boost (new year purchases)
+   707→
+   708→HOLIDAY_EFFECTS = {
+   709→    "Eid-ul-Fitr":      -0.30,  # 30% demand reduction during Eid week
+   710→    "Eid-ul-Adha":      -0.25,  # 25% demand reduction
+   711→    "Durga Puja":       +0.10,  # 10% demand increase (some segments)
+   712→    "Independence Day":  -0.05,  # 5% demand reduction
+   713→    "Pohela Boishakh":  +0.08,  # 8% demand increase (new year purchases)
+   714→}
+   715→
+   716→
+   717→def get_bd_holidays(
+   718→    years: list[int],
+   719→    include_cny_supply_holiday: bool = True,
+   720→) -> pd.DataFrame:
+   721→    """
+   722→    Generate Prophet-compatible holidays DataFrame for BD.
+   723→
+   724→    Args:
+   725→        years: List of years to generate holidays for.
+   726→        include_cny_supply_holiday: Include CNY as a holiday.
+   727→            CNY is NOT a sales holiday — it's a SUPPLY holiday.
+   728→            We include it in Prophet so the model can account for
+   729→            the supply disruption effect on order timing.
+   730→
+   731→    Returns:
+   732→        DataFrame with columns [holiday, ds, lower_window, upper_window]
+   733→    """
+   734→    records = []
+   735→
+   736→    for year in years:
+   737→        if year not in BD_HOLIDAY_DATES:
+   738→            continue
+   739→
+   740→        for holiday_name, date_ranges in BD_HOLIDAY_DATES[year].items():
+   741→            for start_str, end_str in date_ranges:
+   742→                start = pd.Timestamp(start_str)
+   743→                end = pd.Timestamp(end_str)
+   744→                for d in pd.date_range(start, end, freq="D"):
+   745→                    records.append({
+   746→                        "holiday": holiday_name,
+   747→                        "ds": d,
+   748→                        "lower_window": 0,
+   749→                        "upper_window": 0,
+   750→                    })
+   751→
+   752→    if include_cny_supply_holiday:
+   753→        cny_records = get_cny_as_holiday(years)
+   754→        records.extend(cny_records)
+   755→
+   756→    return pd.DataFrame(records)
+   757→
+   758→
+   759→def get_cny_as_holiday(years: list[int]) -> list[dict]:
+   760→    """
+   761→    CNY Impact as Holiday:
+   762→    Chinese New Year (Jan 20 — Feb 20): NOT a sales holiday,
+   763→    but a SUPPLY holiday — no new orders can be placed with Chinese
+   764→    suppliers during this window. We model this as a Prophet holiday
+   765→    so the order trigger logic can account for it.
+   766→    """
+   767→    from app.utils.cny_calendar import get_cny_shutdown_window
+   768→
+   769→    records = []
+   770→    for year in years:
+   771→        cny_start, cny_end = get_cny_shutdown_window(year)
+   772→        for d in pd.date_range(cny_start, cny_end, freq="D"):
+   773→            records.append({
+   774→                "holiday": "CNY_Supply_Shutdown",
+   775→                "ds": d,
+   776→                "lower_window": 0,
+   777→                "upper_window": 0,
+   778→            })
+   779→    return records
+   780→```
+   781→
+   782→#### CNY Calendar — Implementation
+   783→
+   784→```python
+   785→# app/utils/cny_calendar.py
+   786→
+   787→from datetime import date, timedelta
+   788→
+   789→
+   790→# Chinese New Year dates (the lunar new year falls on different Gregorian dates each year).
+   791→# CNY shutdown for Chinese factories/suppliers is typically:
+   792→# - Start: ~10 days before CNY day (factories wind down)
+   793→# - End: ~15-20 days after CNY day (factories restart, backlog clears)
+   794→# We use a conservative window: Jan 20 — Feb 20 (~30 days)
+   795→
+   796→CNY_DATES = {
+   797→    2024: date(2024, 2, 10),   # Year of the Dragon
+   798→    2025: date(2025, 1, 29),   # Year of the Snake
+   799→    2026: date(2026, 2, 17),   # Year of the Horse
+   800→    2027: date(2027, 2, 6),    # Year of the Goat
+   801→    2028: date(2028, 1, 26),   # Year of the Monkey
+   802→    2029: date(2029, 2, 13),   # Year of the Rooster
+   803→    2030: date(2030, 2, 3),    # Year of the Dog
+   804→}
+   805→
+   806→
+   807→def get_cny_shutdown_window(year: int) -> tuple[date, date]:
+   808→    """
+   809→    Calculate the CNY supply shutdown window for a given year.
+   810→
+   811→    Conservative window: January 20 to February 20.
+   812→    This covers factory shutdown, worker migration, and restart backlog.
+   813→
+   814→    Args:
+   815→        year: The Gregorian year.
+   816→
+   817→    Returns:
+   818→        Tuple of (shutdown_start_date, shutdown_end_date).
+   819→    """
+   820→    return (date(year, 1, 20), date(year, 2, 20))
+   821→
+   822→
+   823→def get_cny_buffer_days(year: int) -> int:
+   824→    """
+   825→    Additional buffer days to account for:
+   826→    - Post-CNY backlog at supplier (orders placed before CNY get priority)
+   827→    - Shipping congestion after CNY (all Chinese exporters ship simultaneously)
+   828→
+   829→    Returns:
+   830→        Buffer in days (typically 7-14 days).
+   831→    """
+   832→    return 10  # Conservative default
+   833→
+   834→
+   835→def does_date_fall_in_cny(target_date: date) -> bool:
+   836→    """
+   837→    Check if a given date falls within the CNY shutdown window.
+   838→    """
+   839→    year = target_date.year
+   840→    cny_start, cny_end = get_cny_shutdown_window(year)
+   841→    return cny_start <= target_date <= cny_end
+   842→
+   843→
+   844→def adjust_for_cny(
+   845→    proposed_order_date: date,
+   846→    year: int,
+   847→    strategy: str = "before",
+   848→) -> dict:
+   849→    """
+   850→    Adjust an order date to avoid the CNY shutdown window.
+   851→
+   852→    Args:
+   853→        proposed_order_date: The originally calculated order trigger date.
+   854→        year: The Gregorian year.
+   855→        strategy: "before" (order before CNY starts) or "after" (order after CNY ends).
+   856→
+   857→    Returns:
+   858→        Dictionary with adjusted date, CNY risk flag, and explanation.
+   859→    """
+   860→    cny_start, cny_end = get_cny_shutdown_window(year)
+   861→    buffer = get_cny_buffer_days(year)
+   862→
+   863→    if not (cny_start <= proposed_order_date <= cny_end):
+   864→        return {
+   865→            "adjusted_date": proposed_order_date,
+   866→            "cny_risk": False,
+   867→            "original_date": proposed_order_date,
+   868→            "explanation": "Order date does not fall in CNY window. No adjustment needed.",
+   869→        }
+   870→
+   871→    if strategy == "before":
+   872→        adjusted = cny_start - timedelta(days=buffer + 1)
+   873→        explanation = (
+   874→            f"Order date {proposed_order_date} falls in CNY shutdown "
+   875→            f"({cny_start} to {cny_end}). Adjusted to order BEFORE CNY: {adjusted}. "
+   876→            f"This avoids stockout but requires earlier cash outflow."
+   877→        )
+   878→    else:  # strategy == "after"
+   879→        adjusted = cny_end + timedelta(days=1)
+   880→        explanation = (
+   881→            f"Order date {proposed_order_date} falls in CNY shutdown "
+   882→            f"({cny_start} to {cny_end}). Adjusted to order AFTER CNY: {adjusted}. "
+   883→            f"WARNING: This may cause stockout if current stock is insufficient "
+   884→            f"to cover the extended lead time."
+   885→        )
+   886→
+   887→    return {
+   888→        "adjusted_date": adjusted,
+   889→        "cny_risk": True,
+   890→        "original_date": proposed_order_date,
+   891→        "cny_start": cny_start,
+   892→        "cny_end": cny_end,
+   893→        "strategy_used": strategy,
+   894→        "explanation": explanation,
+   895→    }
+   896→```
+   897→
+   898→---
+   899→
+   900→### 2.3 Model 3: Exponential Smoothing
+   901→
+   902→#### Purpose
+   903→
+   904→Provides a **short-term, responsive forecast** that heavily weights recent observations. Used as a complement to Prophet — particularly useful for:
+   905→
+   906→- New products with limited history (< 2 years, where Prophet may be unreliable)
+   907→- Products with recent trend changes (Prophet's changepoint detection may lag)
+   908→- SKU-level short-term adjustments in the consensus forecast
+   909→
+   910→#### Formula (Simple Exponential Smoothing)
+   911→
+   912→$$F_{t+1} = \alpha \times A_t + (1 - \alpha) \times F_t$$
+   913→
+   914→Where:
+   915→- $F_{t+1}$: Forecast for the next period
+   916→- $A_t$: Actual demand in the current period
+   917→- $F_t$: Forecast for the current period
+   918→- $\alpha$: Smoothing constant (0 < α < 1)
+   919→
+   920→#### Alpha Selection Guide
+   921→
+   922→| Alpha Range | Use Case | Behavior | Recommended For |
+   923→|-------------|----------|----------|-----------------|
+   924→| 0.1 – 0.3 | Stable/mature products | Smooth, slow-moving forecast; heavily weights history | Established SKUs with 3+ years of stable demand |
+   925→| 0.3 – 0.5 | Normal products | Balanced response to recent changes | Most motorcycle parts |
+   926→| 0.5 – 0.8 | New/trending products | Quick response to recent changes; volatile | New SKUs, products with recent demand shifts |
+   927→| 0.8 – 0.9 | Very volatile/reactive | Almost tracks actuals directly; minimal smoothing | Discontinued SKUs being run down, extreme trend shifts |
+   928→
+   929→#### Implementation
+   930→
+   931→```python
+   932→# app/models/exp_smoothing_model.py
+   933→
+   934→import numpy as np
+   935→import pandas as pd
+   936→from sklearn.metrics import mean_absolute_percentage_error, mean_absolute_error
+   937→from typing import Optional
+   938→
+   939→
+   940→class ExponentialSmoothingModel:
+   941→    """
+   942→    Exponential Smoothing with auto-tune alpha selection.
+   943→    """
+   944→
+   945→    def __init__(self, config: dict):
+   946→        self.default_alpha = config.get("default_alpha", 0.3)
+   947→        self.auto_tune = config.get("exp_smoothing_auto_tune", True)
+   948→        self.auto_tune_step = config.get("exp_smoothing_auto_tune_step", 0.1)
+   949→
+   950→    def fit_predict(
+   951→        self,
+   952→        series: pd.Series,
+   953→        forecast_periods: int = 6,
+   954→        alpha: Optional[float] = None,
+   955→    ) -> dict:
+   956→        """
+   957→        Apply exponential smoothing and generate forecast.
+   958→
+   959→        Args:
+   960→            series: Time series of actual demand values (sorted chronologically).
+   961→            forecast_periods: Number of periods to forecast ahead.
+   962→            alpha: Smoothing constant. If None, uses auto-tune or default.
+   963→
+   964→        Returns:
+   965→            Dictionary with forecast, alpha used, and smoothed values.
+   966→        """
+   967→        if alpha is None:
+   968→            if self.auto_tune and len(series) >= 12:
+   969→                alpha = self._auto_tune_alpha(series)
+   970→            else:
+   971→                alpha = self.default_alpha
+   972→
+   973→        # Apply exponential smoothing
+   974→        smoothed = self._smooth(series.values, alpha)
+   975→
+   976→        # Forecast: for simple ES, the forecast is flat (last smoothed value)
+   977→        # This is appropriate for demand without strong trend/seasonality
+   978→        last_smoothed = smoothed[-1]
+   979→        forecast = np.full(forecast_periods, last_smoothed)
+   980→
+   981→        return {
+   982→            "forecast": forecast.tolist(),
+   983→            "alpha": alpha,
+   984→            "smoothed_values": smoothed.tolist(),
+   985→            "last_smoothed_value": float(last_smoothed),
+   986→            "auto_tuned": alpha != self.default_alpha,
+   987→        }
+   988→
+   989→    def _smooth(self, values: np.ndarray, alpha: float) -> np.ndarray:
+   990→        """
+   991→        Apply exponential smoothing to a 1D array.
+   992→
+   993→        F[0] = A[0]  (initialize with first actual)
+   994→        F[t] = alpha * A[t] + (1 - alpha) * F[t-1]
+   995→        """
+   996→        smoothed = np.zeros_like(values, dtype=float)
+   997→        smoothed[0] = values[0]
+   998→
+   999→        for t in range(1, len(values)):
+  1000→            smoothed[t] = alpha * values[t] + (1 - alpha) * smoothed[t - 1]
+  1001→
+  1002→        return smoothed
+  1003→
+  1004→    def _auto_tune_alpha(self, series: pd.Series) -> float:
+  1005→        """
+  1006→        Auto-tune alpha by testing values from 0.1 to 0.9 and selecting
+  1007→        the value that produces the lowest MAPE on backtest.
+  1008→
+  1009→        Backtest approach:
+  1010→        - Train on first 80% of data
+  1011→        - Test on last 20%
+  1012→        - Evaluate MAPE on test set
+  1013→
+  1014→        Args:
+  1015→            series: Full time series of actual demand.
+  1016→
+  1017→        Returns:
+  1018→            Best alpha value.
+  1019→        """
+  1020→        values = series.values
+  1021→        split_idx = int(len(values) * 0.8)
+  1022→        train = values[:split_idx]
+  1023→        test = values[split_idx:]
+  1024→
+  1025→        best_alpha = self.default_alpha
+  1026→        best_mape = float("inf")
+  1027→
+  1028→        alphas = np.arange(0.1, 1.0, self.auto_tune_step)
+  1029→
+  1030→        for alpha in alphas:
+  1031→            # Smooth on training data
+  1032→            smoothed = self._smooth(train, alpha)
+  1033→
+  1034→            # Forecast (flat) from last smoothed value
+  1035→            forecast_values = np.full(len(test), smoothed[-1])
+  1036→
+  1037→            # Calculate MAPE on test set
+  1038→            try:
+  1039→                mape = mean_absolute_percentage_error(test, forecast_values)
+  1040→            except (ZeroDivisionError, ValueError):
+  1041→                continue
+  1042→
+  1043→            if mape < best_mape:
+  1044→                best_mape = mape
+  1045→                best_alpha = round(float(alpha), 2)
+  1046→
+  1047→        return best_alpha
+  1048→```
+  1049→
+  1050→#### Configuration Per Tenant
+  1051→
+  1052→| Parameter | Default | Valid Range | Description |
+  1053→|-----------|---------|------------|-------------|
+  1054→| `default_alpha` | 0.3 | 0.05–0.95 | Default smoothing constant |
+  1055→| `exp_smoothing_auto_tune` | True | True/False | Whether to auto-tune alpha via backtest |
+  1056→| `exp_smoothing_auto_tune_step` | 0.1 | 0.01–0.2 | Step size for alpha grid search |
+  1057→
+  1058→---
+  1059→
+  1060→### 2.4 Model 4: Economic Order Quantity (EOQ)
+  1061→
+  1062→#### Purpose
+  1063→
+  1064→Determines the **optimal order quantity** that minimizes total inventory cost (ordering cost + holding cost). This is the foundational inventory optimization formula.
+  1065→
+  1066→#### Formula
+  1067→
+  1068→$$EOQ = \sqrt{\frac{2KD}{h}}$$
+  1069→
+  1070→| Variable | Symbol | Unit | Source | Description |
+  1071→|----------|--------|------|--------|-------------|
+  1072→| Ordering cost | K | BDT/order | Tenant config | Fixed cost per purchase order (paperwork, communication, inspection) |
+  1073→| Annual demand | D | units/year | Prophet/Regression | Forecasted annual demand for the SKU |
+  1074→| Holding cost | h | BDT/unit/year | Computed | Annual cost to hold one unit in inventory |
+  1075→
+  1076→**Holding cost derivation**:
+  1077→
+  1078→$$h = \text{unit\_cost\_bdt} \times \text{holding\_cost\_pct}$$
+  1079→
+  1080→| Parameter | Default | Description |
+  1081→|-----------|---------|-------------|
+  1082→| unit_cost_bdt | Product-specific | Purchase price per unit from supplier (in BDT) |
+  1083→| holding_cost_pct | 0.20 (20%) | Tenant configurable. Covers: warehouse space (5%), insurance (2%), obsolescence risk (8%), capital opportunity cost (5%) |
+  1084→
+  1085→#### Implementation
+  1086→
+  1087→```python
+  1088→# app/models/eoq_model.py
+  1089→
+  1090→import math
+  1091→from typing import Optional
+  1092→
+  1093→
+  1094→class EOQModel:
+  1095→    """
+  1096→    Economic Order Quantity calculator with BD-specific constraints.
+  1097→    """
+  1098→
+  1099→    def __init__(self, config: dict):
+  1100→        self.default_ordering_cost = config.get("default_ordering_cost", 500.0)   # BDT
+  1101→        self.default_holding_cost_pct = config.get("default_holding_cost_pct", 0.20)
+  1102→
+  1103→    def calculate(
+  1104→        self,
+  1105→        annual_demand: float,
+  1106→        unit_cost: float,
+  1107→        ordering_cost: Optional[float] = None,
+  1108→        holding_cost_pct: Optional[float] = None,
+  1109→        max_stock_qty: Optional[int] = None,
+  1110→        supplier_moq: Optional[int] = None,
+  1111→        warehouse_capacity_remaining: Optional[int] = None,
+  1112→    ) -> dict:
+  1113→        """
+  1114→        Calculate EOQ with all constraints applied.
+  1115→
+  1116→        Args:
+  1117→            annual_demand: Forecasted annual demand (units/year) from Prophet/Regression.
+  1118→            unit_cost: Purchase price per unit in BDT.
+  1119→            ordering_cost: Cost per purchase order in BDT. Uses default if None.
+  1120→            holding_cost_pct: Holding cost as fraction of unit_cost. Uses default if None.
+  1121→            max_stock_qty: Maximum stock quantity for this product (warehouse slot limit).
+  1122→            supplier_moq: Supplier Minimum Order Quantity.
+  1123→            warehouse_capacity_remaining: Remaining warehouse capacity in units.
+  1124→
+  1125→        Returns:
+  1126→            Dictionary with EOQ, constrained EOQ, and all intermediate values.
+  1127→        """
+  1128→        if ordering_cost is None:
+  1129→            ordering_cost = self.default_ordering_cost
+  1130→        if holding_cost_pct is None:
+  1131→            holding_cost_pct = self.default_holding_cost_pct
+  1132→
+  1133→        # Calculate holding cost per unit per year
+  1134→        holding_cost_per_unit = unit_cost * holding_cost_pct
+  1135→
+  1136→        # Standard EOQ formula: sqrt(2KD/h)
+  1137→        eoq_unconstrained = math.sqrt(
+  1138→            (2 * ordering_cost * annual_demand) / holding_cost_per_unit
+  1139→        )
+  1140→
+  1141→        # Apply constraints
+  1142→        eoq = eoq_unconstrained
+  1143→        constraints_applied = []
+  1144→
+  1145→        # Constraint 1: EOQ must not exceed max_stock_qty
+  1146→        if max_stock_qty is not None and eoq > max_stock_qty:
+  1147→            eoq = float(max_stock_qty)
+  1148→            constraints_applied.append(
+  1149→                f"EOQ capped to max_stock_qty={max_stock_qty}"
+  1150→            )
+  1151→
+  1152→        # Constraint 2: EOQ must not be less than supplier MOQ
+  1153→        if supplier_moq is not None and eoq < supplier_moq:
+  1154→            eoq = float(supplier_moq)
+  1155→            constraints_applied.append(
+  1156→                f"EOQ raised to supplier_moq={supplier_moq}"
+  1157→            )
+  1158→
+  1159→        # Constraint 3: EOQ must consider remaining warehouse capacity
+  1160→        if warehouse_capacity_remaining is not None and eoq > warehouse_capacity_remaining:
+  1161→            eoq = float(warehouse_capacity_remaining)
+  1162→            constraints_applied.append(
+  1163→                f"EOQ capped to warehouse_capacity_remaining={warehouse_capacity_remaining}"
+  1164→            )
+  1165→
+  1166→        # Calculate derived values
+  1167→        # Number of orders per year
+  1168→        orders_per_year = annual_demand / eoq if eoq > 0 else 0
+  1169→
+  1170→        # Order cycle time (days between orders)
+  1171→        order_cycle_days = 365 / orders_per_year if orders_per_year > 0 else 0
+  1172→
+  1173→        # Total annual ordering cost
+  1174→        total_ordering_cost = orders_per_year * ordering_cost
+  1175→
+  1176→        # Total annual holding cost
+  1177→        total_holding_cost = (eoq / 2) * holding_cost_per_unit
+  1178→
+  1179→        # Total annual inventory cost (ordering + holding)
+  1180→        total_inventory_cost = total_ordering_cost + total_holding_cost
+  1181→
+  1182→        return {
+  1183→            "eoq": round(eoq),
+  1184→            "eoq_unconstrained": round(eoq_unconstrained),
+  1185→            "holding_cost_per_unit_bdt": round(holding_cost_per_unit, 2),
+  1186→            "orders_per_year": round(orders_per_year, 2),
+  1187→            "order_cycle_days": round(order_cycle_days, 1),
+  1188→            "total_ordering_cost_bdt": round(total_ordering_cost, 2),
+  1189→            "total_holding_cost_bdt": round(total_holding_cost, 2),
+  1190→            "total_inventory_cost_bdt": round(total_inventory_cost, 2),
+  1191→            "constraints_applied": constraints_applied,
+  1192→            "inputs": {
+  1193→                "annual_demand": annual_demand,
+  1194→                "unit_cost_bdt": unit_cost,
+  1195→                "ordering_cost_bdt": ordering_cost,
+  1196→                "holding_cost_pct": holding_cost_pct,
+  1197→                "max_stock_qty": max_stock_qty,
+  1198→                "supplier_moq": supplier_moq,
+  1199→                "warehouse_capacity_remaining": warehouse_capacity_remaining,
+  1200→            },
+  1201→        }
+  1202→```
+  1203→
+  1204→#### EOQ Example Calculation (BDT)
+  1205→
+  1206→| Input | Value |
+  1207→|-------|-------|
+  1208→| Annual demand (D) | 1,200 units/year |
+  1209→| Ordering cost (K) | 500 BDT/order |
+  1210→| Unit cost | 150 BDT |
+  1211→| Holding cost pct | 20% |
+  1212→| Holding cost per unit (h) | 150 × 0.20 = 30 BDT/unit/year |
+  1213→
+  1214→$$EOQ = \sqrt{\frac{2 \times 500 \times 1200}{30}} = \sqrt{40000} = 200 \text{ units}$$
+  1215→
+  1216→| Result | Value |
+  1217→|--------|-------|
+  1218→| EOQ | 200 units per order |
+  1219→| Orders per year | 6 orders |
+  1220→| Order cycle | ~60.8 days between orders |
+  1221→| Total ordering cost | 6 × 500 = 3,000 BDT/year |
+  1222→| Total holding cost | (200/2) × 30 = 3,000 BDT/year |
+  1223→| Total inventory cost | 6,000 BDT/year |
+  1224→
+  1225→---
+  1226→
+  1227→### 2.5 Model 5: Safety Stock (Comprehensive)
+  1228→
+  1229→#### Purpose
+  1230→
+  1231→Safety stock is the **buffer inventory** held to protect against:
+  1232→1. **Demand uncertainty** — actual demand exceeding forecast
+  1233→2. **Lead time variability** — supplier delivering later than expected
+  1234→3. **Supply chain disruptions** — CNY, political instability, port congestion
+  1235→
+  1236→This is critical for the BD–China supply chain where lead times are long (3-5 months) and variable.
+  1237→
+  1238→#### Formula
+  1239→
+  1240→$$SS = \frac{EOQ}{R} + (MAE \times \mu_t \times \sigma_{LT}) \times k$$
+  1241→
+  1242→| Variable | Symbol | Unit | Source | Description |
+  1243→|----------|--------|------|--------|-------------|
+  1244→| Economic Order Quantity | EOQ | units | Model 4 | Optimal order quantity |
+  1245→| Review period | R | days | Tenant config | Time between inventory reviews (default: 10 days) |
+  1246→| Mean Absolute Error | MAE | units | Backtest | Average forecast error from backtest |
+  1247→| Mean lead time | μₜ | days | purchase_history | Average actual lead time from historical orders |
+  1248→| Lead time std dev | σ_LT | days | purchase_history | Standard deviation of actual lead times |
+  1249→| Safety factor | k | dimensionless | Service level | z-score for desired service level |
+  1250→
+  1251→#### Safety Factor (k) by Service Level
+  1252→
+  1253→| Service Level | k (z-score) | Use Case |
+  1254→|---------------|-------------|----------|
+  1255→| 90% | 1.28 | Low-criticality parts (decorative, optional accessories) |
+  1256→| 95% | 1.65 | Standard parts (default for most motorcycle parts) |
+  1257→| 97.5% | 1.96 | High-turnover parts (brake pads, spark plugs, oil filters) |
+  1258→| 99% | 2.33 | Critical parts (brake assemblies, engine components — stockout = safety risk) |
+  1259→| 99.9% | 3.09 | Life-critical parts (brake discs, steering components) |
+  1260→
+  1261→#### Lead Time Decomposition for BD–China Supply Chain
+  1262→
+  1263→```
+  1264→┌─────────────────────────────────────────────────────────────────────────┐
+  1265→│              BD–CHINA SUPPLY CHAIN LEAD TIME DECOMPOSITION              │
+  1266→├─────────────────────┬──────────────┬──────────────┬────────────────────┤
+  1267→│     Component        │   Sea Route  │   Air Route  │    Notes           │
+  1268→├─────────────────────┼──────────────┼──────────────┼────────────────────┤
+  1269→│ Manufacturing Days  │     90       │     90       │ Chinese factory    │
+  1270→│ Shipment Days       │     52       │      8       │ Sea vs air freight │
+  1271→│ Customs Days        │     10       │      3       │ BD customs clearance│
+  1272→├─────────────────────┼──────────────┼──────────────┼────────────────────┤
+  1273→│ TOTAL LEAD TIME     │    152 days  │    101 days  │                    │
+  1274→│                     │  (~5 months) │ (~3.5 months)│                    │
+  1275→└─────────────────────┴──────────────┴──────────────┴────────────────────┘
+  1276→```
+  1277→
+  1278→**Breakdown of Shipment Days (Sea Route)**:
+  1279→
+  1280→| Leg | Days | Detail |
+  1281→|-----|------|--------|
+  1282→| Factory to port (China) | 3 | Truck from factory to Shanghai/Shenzhen port |
+  1283→| Port processing (China) | 5 | Customs clearance, loading, documentation |
+  1284→| Ocean transit | 28 | Shanghai/Chittagong — varies by shipping line |
+  1285→| Port processing (BD) | 7 | Unloading, customs inspection at Chittagong |
+  1286→| Inland transport | 5 | Chittagong port → Dhaka warehouse |
+  1287→| Buffer | 4 | Weather delays, port congestion, documentation issues |
+  1288→| **Total** | **52** | |
+  1289→
+  1290→**Breakdown of Shipment Days (Air Route)**:
+  1291→
+  1292→| Leg | Days | Detail |
+  1293→|-----|------|--------|
+  1294→| Factory to airport | 2 | Truck from factory to Shanghai airport |
+  1295→| Air freight | 3 | Direct flight to Dhaka (DAC) |
+  1296→| Customs at airport | 2 | Expedited clearance |
+  1297→| Last mile | 1 | Airport → warehouse |
+  1298→| **Total** | **8** | |
+  1299→
+  1300→#### σ_LT (Lead Time Variability) Calculation
+  1301→
+  1302→```python
+  1303→# app/models/safety_stock_model.py
+  1304→
+  1305→import math
+  1306→import numpy as np
+  1307→from typing import Optional
+  1308→
+  1309→
+  1310→class SafetyStockModel:
+  1311→    """
+  1312→    Safety Stock calculator with BD-China supply chain awareness.
+  1313→    """
+  1314→
+  1315→    # Default lead time std devs when insufficient historical data
+  1316→    DEFAULT_SIGMA_LT_SEA = 15.0   # days
+  1317→    DEFAULT_SIGMA_LT_AIR = 5.0    # days
+  1318→    MIN_ORDERS_FOR_SIGMA = 5      # minimum historical orders to compute σ_LT
+  1319→
+  1320→    # Service level to safety factor mapping
+  1321→    SERVICE_LEVEL_FACTORS = {
+  1322→        0.90: 1.28,
+  1323→        0.95: 1.65,
+  1324→        0.975: 1.96,
+  1325→        0.99: 2.33,
+  1326→        0.999: 3.09,
+  1327→    }
+  1328→
+  1329→    def __init__(self, config: dict):
+  1330→        self.default_review_period_days = config.get("review_period_days", 10)
+  1331→        self.default_service_level = config.get("default_service_level", 0.95)
+  1332→
+  1333→    def calculate(
+  1334→        self,
+  1335→        eoq: float,
+  1336→        mae: float,
+  1337→        mean_lead_time_days: float,
+  1338→        lead_time_values: Optional[list[float]] = None,
+  1339→        shipment_mode: str = "sea",
+  1340→        service_level: Optional[float] = None,
+  1341→        review_period_days: Optional[int] = None,
+  1342→    ) -> dict:
+  1343→        """
+  1344→        Calculate safety stock using the comprehensive formula.
+  1345→
+  1346→        SS = (EOQ / R) + (MAE × μₜ × σ_LT) × k
+  1347→
+  1348→        Args:
+  1349→            eoq: Economic Order Quantity (from Model 4).
+  1350→            mae: Mean Absolute Error of forecast model (from backtest).
+  1351→            mean_lead_time_days: Average lead time in days (μₜ).
+  1352→            lead_time_values: List of historical actual lead times (for σ_LT calculation).
+  1353→            shipment_mode: "sea" or "air" — used for default σ_LT fallback.
+  1354→            service_level: Desired service level (0.90-0.999).
+  1355→            review_period_days: Review period R in days.
+  1356→
+  1357→        Returns:
+  1358→            Dictionary with safety stock, reorder point, and all intermediate values.
+  1359→        """
+  1360→        if service_level is None:
+  1361→            service_level = self.default_service_level
+  1362→        if review_period_days is None:
+  1363→            review_period_days = self.default_review_period_days
+  1364→
+  1365→        # Calculate σ_LT
+  1366→        sigma_lt = self._calculate_sigma_lt(
+  1367→            lead_time_values=lead_time_values,
+  1368→            shipment_mode=shipment_mode,
+  1369→        )
+  1370→
+  1371→        # Get safety factor k
+  1372→        k = self._get_safety_factor(service_level)
+  1373→
+  1374→        # Calculate safety stock components
+  1375→        # Component 1: EOQ / R (cycle stock coverage during review period)
+  1376→        component_cycle = eoq / review_period_days
+  1377→
+  1378→        # Component 2: (MAE × μₜ × σ_LT) × k (demand + lead time uncertainty)
+  1379→        component_uncertainty = (mae * mean_lead_time_days * sigma_lt) * k
+  1380→
+  1381→        # Total safety stock
+  1382→        safety_stock = component_cycle + component_uncertainty
+  1383→
+  1384→        # Calculate reorder point
+  1385→        # ROP = (daily_demand × lead_time) + safety_stock
+  1386→        # We derive daily_demand from EOQ and review period
+  1387→        daily_demand = eoq / review_period_days
+  1388→        reorder_point = (daily_demand * mean_lead_time_days) + safety_stock
+  1389→
+  1390→        return {
+  1391→            "safety_stock": round(safety_stock),
+  1392→            "reorder_point": round(reorder_point),
+  1393→            "component_cycle_stock": round(component_cycle, 2),
+  1394→            "component_uncertainty": round(component_uncertainty, 2),
+  1395→            "sigma_lt_days": round(sigma_lt, 2),
+  1396→            "safety_factor_k": k,
+  1397→            "service_level": service_level,
+  1398→            "daily_demand": round(daily_demand, 2),
+  1399→            "lead_time_days": mean_lead_time_days,
+  1400→            "inputs": {
+  1401→                "eoq": eoq,
+  1402→                "mae": mae,
+  1403→                "mean_lead_time_days": mean_lead_time_days,
+  1404→                "review_period_days": review_period_days,
+  1405→                "shipment_mode": shipment_mode,
+  1406→            },
+  1407→        }
+  1408→
+  1409→    def _calculate_sigma_lt(
+  1410→        self,
+  1411→        lead_time_values: Optional[list[float]],
+  1412→        shipment_mode: str,
+  1413→    ) -> float:
+  1414→        """
+  1415→        Calculate standard deviation of lead time.
+  1416→
+  1417→        If we have sufficient historical data (≥ 5 orders), compute from actuals.
+  1418→        Otherwise, use defaults based on shipment mode.
+  1419→        """
+  1420→        if lead_time_values and len(lead_time_values) >= self.MIN_ORDERS_FOR_SIGMA:
+  1421→            return float(np.std(lead_time_values, ddof=1))  # Sample std dev
+  1422→
+  1423→        # Fallback defaults
+  1424→        if shipment_mode == "air":
+  1425→            return self.DEFAULT_SIGMA_LT_AIR
+  1426→        return self.DEFAULT_SIGMA_LT_SEA
+  1427→
+  1428→    def _get_safety_factor(self, service_level: float) -> float:
+  1429→        """
+  1430→        Map service level to safety factor (z-score).
+  1431→        Supports exact matches and linear interpolation between defined levels.
+  1432→        """
+  1433→        if service_level in self.SERVICE_LEVEL_FACTORS:
+  1434→            return self.SERVICE_LEVEL_FACTORS[service_level]
+  1435→
+  1436→        # Linear interpolation between the two nearest defined levels
+  1437→        levels = sorted(self.SERVICE_LEVEL_FACTORS.keys())
+  1438→        for i in range(len(levels) - 1):
+  1439→            if levels[i] <= service_level <= levels[i + 1]:
+  1440→                ratio = (service_level - levels[i]) / (levels[i + 1] - levels[i])
+  1441→                return (
+  1442→                    self.SERVICE_LEVEL_FACTORS[levels[i]]
+  1443→                    + ratio * (
+  1444→                        self.SERVICE_LEVEL_FACTORS[levels[i + 1]]
+  1445→                        - self.SERVICE_LEVEL_FACTORS[levels[i]]
+  1446→                    )
+  1447→                )
+  1448→
+  1449→        # Out of range — clamp
+  1450→        if service_level < levels[0]:
+  1451→            return self.SERVICE_LEVEL_FACTORS[levels[0]]
+  1452→        return self.SERVICE_LEVEL_FACTORS[levels[-1]]
+  1453→```
+  1454→
+  1455→#### Safety Stock Example Calculation
+  1456→
+  1457→| Input | Value |
+  1458→|-------|-------|
+  1459→| EOQ | 200 units |
+  1460→| Review period (R) | 10 days |
+  1461→| MAE (from backtest) | 12 units |
+  1462→| Mean lead time (μₜ) | 152 days (sea) |
+  1463→| σ_LT | 15 days |
+  1464→| Service level | 95% → k = 1.65 |
+  1465→
+  1466→$$SS = \frac{200}{10} + (12 \times 152 \times 15) \times 1.65 = 20 + 45{,}144 = 45{,}164$$
+  1467→
+  1468→> **Note**: The `(MAE × μₜ × σ_LT)` term can produce very large values when lead times are long. In practice, the formula is often decomposed and the MAE is scaled to a daily rate. The production implementation includes a `normalize_mae_to_daily` flag (default: True) that divides MAE by 30 before the calculation, yielding more realistic safety stock values.
+  1469→
+  1470→---
+  1471→
+  1472→### 2.6 Model 6: Order Trigger Date Calculator (THE CORE IP)
+  1473→
+  1474→> **This is the most valuable algorithm in the TrimedCast system.**
+  1475→>
+  1476→> It answers the most critical question in the BD–China motorcycle parts supply chain:
+  1477→> **"On what exact date must we place this order to ensure stock doesn't run out before the next shipment arrives?"**
+  1478→>
+  1479→> This is non-trivial because:
+  1480→> - Lead times are 3-5 months (sea) or 3.5 months (air)
+  1481→> - Chinese New Year creates a ~30-day supply blackout every year
+  1482→> - Demand is seasonal (winter parts peak in Nov-Feb)
+  1483→> - Missing the order window means stockout for months (no quick reorder possible)
+  1484→
+  1485→#### Algorithm — Step-by-Step
+  1486→
+  1487→```
+  1488→┌─────────────────────────────────────────────────────────────────────────┐
+  1489→│                   ORDER TRIGGER DATE CALCULATOR                         │
+  1490→│                    Step-by-Step Algorithm                               │
+  1491→└─────────────────────────────────────────────────────────────────────────┘
+  1492→
+  1493→STEP 1: Calculate when stock will hit Reorder Point
+  1494→──────────────────────────────────────────────────
+  1495→  daily_consumption_rate = avg_demand_last_3_months / 90
+  1496→  days_until_reorder = (qty_on_hand - reorder_point) / daily_consumption_rate
+  1497→  reorder_hit_date = today + days_until_reorder
+  1498→
+  1499→  ⚠️  If qty_on_hand <= reorder_point → ORDER IMMEDIATELY (already below ROP)
+  1500→
+  1501→STEP 2: Calculate Total Lead Time
+  1502→──────────────────────────────────
+  1503→  if shipment_mode == 'sea':
+  1504→      total_lt = mfg_days + sea_shipment_days + customs_days
+  1505→  elif shipment_mode == 'air':
+  1506→      total_lt = mfg_days + air_shipment_days + customs_days
+  1507→
+  1508→  Add CNY buffer if order falls in CNY window:
+  1509→  if does_date_fall_in_cny(order_trigger_date):
+  1510→      total_lt += cny_buffer_days  (default: 10 days)
+  1511→
+  1512→STEP 3: Calculate Order Trigger Date
+  1513→──────────────────────────────────────
+  1514→  order_trigger_date = reorder_hit_date - total_lt
+  1515→
+  1516→  ⚠️  If order_trigger_date < today → ORDER IMMEDIATELY (already late)
+  1517→
+  1518→STEP 4: Check CNY Risk
+  1519→──────────────────────
+  1520→  if order_trigger_date falls within CNY shutdown (Jan 20 — Feb 20):
+  1521→      Option A: Order BEFORE CNY
+  1522→          order_trigger_date = CNY_start - buffer_days
+  1523→          → Avoids stockout but requires earlier cash outflow
+  1524→      Option B: Order AFTER CNY
+  1525→          order_trigger_date = CNY_end + 1
+  1526→          → Delays order but risks stockout
+  1527→
+  1528→      RECOMMENDATION: Option A if cash flow permits
+  1529→
+  1530→STEP 5: Calculate Full Timeline
+  1531→───────────────────────────────
+  1532→  order_trigger_date          → Place order with supplier
+  1533→  mfg_complete_date           → order_trigger_date + manufacturing_days
+  1534→  ship_date                   → mfg_complete_date + 2 (packing/loading buffer)
+  1535→  arrival_date                → ship_date + shipment_days
+  1536→  customs_clearance_date      → arrival_date + customs_days
+  1537→  available_for_sale_date     → customs_clearance_date + 1
+  1538→
+  1539→OUTPUT: Complete order timeline with every milestone date
+  1540→```
+  1541→
+  1542→#### Implementation
+  1543→
+  1544→```python
+  1545→# app/models/order_trigger_model.py
+  1546→
+  1547→from datetime import date, timedelta
+  1548→from typing import Optional
+  1549→from app.utils.cny_calendar import (
+  1550→    does_date_fall_in_cny,
+  1551→    adjust_for_cny,
+  1552→    get_cny_shutdown_window,
+  1553→    get_cny_buffer_days,
+  1554→)
+  1555→
+  1556→
+  1557→class OrderTriggerModel:
+  1558→    """
+  1559→    Order Trigger Date Calculator — THE CORE IP of TrimedCast.
+  1560→
+  1561→    Determines the exact date an order must be placed to avoid stockout,
+  1562→    accounting for BD-China supply chain lead times and CNY shutdowns.
+  1563→    """
+  1564→
+  1565→    # Default lead time components
+  1566→    DEFAULT_MFG_DAYS = 90
+  1567→    DEFAULT_SEA_SHIPMENT_DAYS = 52
+  1568→    DEFAULT_AIR_SHIPMENT_DAYS = 8
+  1569→    DEFAULT_CUSTOMS_DAYS_SEA = 10
+  1570→    DEFAULT_CUSTOMS_DAYS_AIR = 3
+  1571→    PACKING_BUFFER_DAYS = 2  # packing/loading after manufacturing
+  1572→
+  1573→    def __init__(self, config: dict):
+  1574→        self.default_mfg_days = config.get("manufacturing_lead_time_days", self.DEFAULT_MFG_DAYS)
+  1575→        self.default_sea_shipment_days = config.get("sea_shipment_days", self.DEFAULT_SEA_SHIPMENT_DAYS)
+  1576→        self.default_air_shipment_days = config.get("air_shipment_days", self.DEFAULT_AIR_SHIPMENT_DAYS)
+  1577→        self.default_customs_days_sea = config.get("customs_clearance_days_sea", self.DEFAULT_CUSTOMS_DAYS_SEA)
+  1578→        self.default_customs_days_air = config.get("customs_clearance_days_air", self.DEFAULT_CUSTOMS_DAYS_AIR)
+  1579→
+  1580→    def calculate(
+  1581→        self,
+  1582→        qty_on_hand: float,
+  1583→        reorder_point: float,
+  1584→        daily_consumption_rate: float,
+  1585→        shipment_mode: str = "sea",
+  1586→        mfg_days: Optional[int] = None,
+  1587→        shipment_days: Optional[int] = None,
+  1588→        customs_days: Optional[int] = None,
+  1589→        cny_strategy: str = "before",
+  1590→        today: Optional[date] = None,
+  1591→    ) -> dict:
+  1592→        """
+  1593→        Calculate the order trigger date and full order timeline.
+  1594→
+  1595→        Args:
+  1596→            qty_on_hand: Current quantity on hand.
+  1597→            reorder_point: Reorder point (from Safety Stock model).
+  1598→            daily_consumption_rate: Average daily demand (units/day).
+  1599→            shipment_mode: "sea" or "air".
+  1600→            mfg_days: Manufacturing lead time. Uses default if None.
+  1601→            shipment_days: Shipping lead time. Uses default if None.
+  1602→            customs_days: Customs clearance days. Uses default if None.
+  1603→            cny_strategy: "before" (order before CNY) or "after" (order after CNY).
+  1604→            today: Current date. Uses date.today() if None.
+  1605→
+  1606→        Returns:
+  1607→            Dictionary with order_trigger_date, full timeline, CNY risk assessment.
+  1608→        """
+  1609→        if today is None:
+  1610→            today = date.today()
+  1611→
+  1612→        # Resolve defaults
+  1613→        if mfg_days is None:
+  1614→            mfg_days = self.default_mfg_days
+  1615→        if shipment_days is None:
+  1616→            if shipment_mode == "sea":
+  1617→                shipment_days = self.default_sea_shipment_days
+  1618→            else:
+  1619→                shipment_days = self.default_air_shipment_days
+  1620→        if customs_days is None:
+  1621→            if shipment_mode == "sea":
+  1622→                customs_days = self.default_customs_days_sea
+  1623→            else:
+  1624→                customs_days = self.default_customs_days_air
+  1625→
+  1626→        # ─── STEP 1: Calculate when stock will hit Reorder Point ───
+  1627→        if qty_on_hand <= reorder_point:
+  1628→            # Already at or below ROP → ORDER IMMEDIATELY
+  1629→            step1 = {
+  1630→                "order_urgent": True,
+  1631→                "days_until_reorder": 0,
+  1632→                "reorder_hit_date": today,
+  1633→                "message": "Stock is at or below reorder point. ORDER IMMEDIATELY.",
+  1634→            }
+  1635→            reorder_hit_date = today
+  1636→        else:
+  1637→            if daily_consumption_rate <= 0:
+  1638→                raise ValueError("daily_consumption_rate must be positive")
+  1639→            days_until_reorder = (qty_on_hand - reorder_point) / daily_consumption_rate
+  1640→            reorder_hit_date = today + timedelta(days=round(days_until_reorder))
+  1641→            step1 = {
+  1642→                "order_urgent": False,
+  1643→                "days_until_reorder": round(days_until_reorder, 1),
+  1644→                "reorder_hit_date": reorder_hit_date,
+  1645→                "message": f"Stock will hit ROP in {days_until_reorder:.1f} days.",
+  1646→            }
+  1647→
+  1648→        # ─── STEP 2: Calculate Total Lead Time ───
+  1649→        total_lt = mfg_days + shipment_days + customs_days
+  1650→
+  1651→        # ─── STEP 3: Calculate Order Trigger Date ───
+  1652→        order_trigger_date = reorder_hit_date - timedelta(days=total_lt)
+  1653→
+  1654→        # Check if already past trigger date
+  1655→        order_immediately = order_trigger_date <= today
+  1656→        if order_immediately:
+  1657→            order_trigger_date = today
+  1658→            step3_message = "Order trigger date has already passed. ORDER IMMEDIATELY."
+  1659→        else:
+  1660→            days_until_order = (order_trigger_date - today).days
+  1661→            step3_message = f"Order should be placed on {order_trigger_date} ({days_until_order} days from now)."
+  1662→
+  1663→        # ─── STEP 4: Check CNY Risk ───
+  1664→        cny_result = adjust_for_cny(
+  1665→            proposed_order_date=order_trigger_date,
+  1666→            year=order_trigger_date.year,
+  1667→            strategy=cny_strategy,
+  1668→        )
+  1669→
+  1670→        if cny_result["cny_risk"]:
+  1671→            order_trigger_date = cny_result["adjusted_date"]
+  1672→            # Add CNY buffer to total lead time
+  1673→            cny_buffer = get_cny_buffer_days(order_trigger_date.year)
+  1674→            total_lt += cny_buffer
+  1675→
+  1676→        # ─── STEP 5: Calculate Full Timeline ───
+  1677→        timeline = self._build_timeline(
+  1678→            order_trigger_date=order_trigger_date,
+  1679→            mfg_days=mfg_days,
+  1680→            shipment_days=shipment_days,
+  1681→            customs_days=customs_days,
+  1682→        )
+  1683→
+  1684→        return {
+  1685→            # Primary output
+  1686→            "order_trigger_date": order_trigger_date,
+  1687→            "order_immediately": order_immediately or cny_result.get("cny_risk", False),
+  1688→            "total_lead_time_days": total_lt,
+  1689→
+  1690→            # Detailed steps
+  1691→            "step1_stock_analysis": step1,
+  1692→            "step2_lead_time": {
+  1693→                "mfg_days": mfg_days,
+  1694→                "shipment_days": shipment_days,
+  1695→                "customs_days": customs_days,
+  1696→                "total_lt_days": mfg_days + shipment_days + customs_days,
+  1697→                "shipment_mode": shipment_mode,
+  1698→            },
+  1699→            "step3_trigger_date": {
+  1700→                "calculated_date": reorder_hit_date - timedelta(days=total_lt),
+  1701→                "message": step3_message,
+  1702→            },
+  1703→            "step4_cny_analysis": cny_result,
+  1704→
+  1705→            # Complete timeline
+  1706→            "timeline": timeline,
+  1707→
+  1708→            # Inputs
+  1709→            "inputs": {
+  1710→                "qty_on_hand": qty_on_hand,
+  1711→                "reorder_point": reorder_point,
+  1712→                "daily_consumption_rate": daily_consumption_rate,
+  1713→                "today": today,
+  1714→            },
+  1715→        }
+  1716→
+  1717→    def _build_timeline(
+  1718→        self,
+  1719→        order_trigger_date: date,
+  1720→        mfg_days: int,
+  1721→        shipment_days: int,
+  1722→        customs_days: int,
+  1723→    ) -> dict:
+  1724→        """
+  1725→        Build the complete order timeline with every milestone date.
+  1726→        """
+  1727→        mfg_complete_date = order_trigger_date + timedelta(days=mfg_days)
+  1728→        ship_date = mfg_complete_date + timedelta(days=self.PACKING_BUFFER_DAYS)
+  1729→        arrival_date = ship_date + timedelta(days=shipment_days)
+  1730→        customs_clearance_date = arrival_date + timedelta(days=customs_days)
+  1731→        available_for_sale_date = customs_clearance_date + timedelta(days=1)
+  1732→
+  1733→        return {
+  1734→            "order_trigger_date": order_trigger_date,
+  1735→            "mfg_complete_date": mfg_complete_date,
+  1736→            "ship_date": ship_date,
+  1737→            "arrival_date": arrival_date,
+  1738→            "customs_clearance_date": customs_clearance_date,
+  1739→            "available_for_sale_date": available_for_sale_date,
+  1740→            "milestones": [
+  1741→                {
+  1742→                    "date": order_trigger_date,
+  1743→                    "event": "Place order with supplier",
+  1744→                    "action": "Send purchase order to Chinese supplier",
+  1745→                },
+  1746→                {
+  1747→                    "date": mfg_complete_date,
+  1748→                    "event": "Manufacturing complete",
+  1749→                    "action": "Confirm production completion; arrange QC inspection",
+  1750→                },
+  1751→                {
+  1752→                    "date": ship_date,
+  1753→                    "event": "Ship from supplier",
+  1754→                    "action": "Confirm shipment; receive BL/tracking number",
+  1755→                },
+  1756→                {
+  1757→                    "date": arrival_date,
+  1758→                    "event": "Arrive at BD port",
+  1759→                    "action": "Initiate customs clearance; submit import documents",
+  1760→                },
+  1761→                {
+  1762→                    "date": customs_clearance_date,
+  1763→                    "event": "Customs cleared",
+  1764→                    "action": "Arrange inland transport to warehouse",
+  1765→                },
+  1766→                {
+  1767→                    "date": available_for_sale_date,
+  1768→                    "event": "Available for sale",
+  1769→                    "action": "Update inventory system; list on sales channels",
+  1770→                },
+  1771→            ],
+  1772→        }
+  1773→```
+  1774→
+  1775→#### Order Trigger Example (Full Timeline)
+  1776→
+  1777→**Scenario**: A Dhaka motorcycle parts dealer needs to restock fog lamps before winter.
+  1778→
+  1779→| Input | Value |
+  1780→|-------|-------|
+  1781→| qty_on_hand | 150 units |
+  1782→| reorder_point | 80 units |
+  1783→| daily_consumption_rate | 2.5 units/day (winter approaching) |
+  1784→| shipment_mode | sea |
+  1785→| mfg_days | 90 |
+  1786→| shipment_days | 52 |
+  1787→| customs_days | 10 |
+  1788→| today | 2025-06-01 |
+  1789→
+  1790→**Calculation**:
+  1791→
+  1792→| Step | Calculation | Result |
+  1793→|------|-------------|--------|
+  1794→| Days until ROP | (150 - 80) / 2.5 | 28 days |
+  1795→| Reorder hit date | 2025-06-01 + 28 days | 2025-06-29 |
+  1796→| Total lead time | 90 + 52 + 10 | 152 days |
+  1797→| Order trigger date | 2025-06-29 - 152 days | **2025-01-29** |
+  1798→| CNY check | 2025-01-29 is in CNY window (Jan 20 - Feb 20)? | **YES — CNY RISK** |
+  1799→| CNY adjustment (before) | Jan 20 - 10 buffer - 1 | **2025-01-09** |
+  1800→
+  1801→**Full Timeline**:
+  1802→
+  1803→| Milestone | Date | Days from Now |
+  1804→|-----------|------|---------------|
+  1805→| Place order | **2025-01-09** | -142 (retroactive — ORDER IS LATE) |
+  1806→| Manufacturing complete | 2025-04-09 | -42 |
+  1807→| Ship from supplier | 2025-04-11 | -40 |
+  1808→| Arrive at BD port | 2025-06-02 | +1 |
+  1809→| Customs cleared | 2025-06-12 | +11 |
+  1810→| Available for sale | 2025-06-13 | +12 |
+  1811→
+  1812→> **ALERT**: The order trigger date is in the past. The system flags this as **"ORDER IMMEDIATELY"** — the dealer is already behind the optimal ordering window and risks stockout.
+  1813→
+  1814→---
+  1815→
+  1816→## Section 3: Consensus Forecast Logic
+  1817→
+  1818→### 3.1 Overview
+  1819→
+  1820→The Consensus Forecast is TrimedCast's approach to combining multiple quantitative models with qualitative human intelligence into a **Single Set of Numbers** — the final forecast that drives all purchasing and inventory decisions.
+  1821→
+  1822→### 3.2 Consensus Forecast Pipeline
+  1823→
+  1824→```
+  1825→┌─────────────────────────────────────────────────────────────────────────┐
+  1826→│                    CONSENSUS FORECAST PIPELINE                          │
+  1827→│                                                                         │
+  1828→│  Step 1: Prophet Seasonal Forecast (quantitative baseline)              │
+  1829→│     ↓                                                                   │
+  1830→│  Step 2: Apply BD Seasonal Weights (per-SKU seasonal multipliers)       │
+  1831→│     ↓                                                                   │
+  1832→│  Step 3: Apply Marketing Adjustments (promo_index → β₂ adjustment)      │
+  1833→│     ↓                                                                   │
+  1834→│  Step 4: Apply Sales Field Intelligence (manual overrides + audit)      │
+  1835→│     ↓                                                                   │
+  1836→│  Step 5: Consensus Forecast = "Single Set of Numbers"                   │
+  1837→│                                                                         │
+  1838→└─────────────────────────────────────────────────────────────────────────┘
+  1839→```
+  1840→
+  1841→### 3.3 Step-by-Step Detail
+  1842→
+  1843→#### Step 1: Prophet Seasonal Forecast (Quantitative Baseline)
+  1844→
+  1845→The Prophet model output serves as the starting point. This is the pure statistical forecast incorporating:
+  1846→- Historical demand patterns
+  1847→- BD seasonal effects (winter, monsoon, pre-winter)
+  1848→- BD holiday effects (Eid, Puja, etc.)
+  1849→- Trend and changepoints
+  1850→
+  1851→```
+  1852→prophet_forecast[month] = yhat value from Prophet model
+  1853→```
+  1854→
+  1855→#### Step 2: Apply BD Seasonal Weights
+  1856→
+  1857→Each SKU has seasonal weight multipliers defined by the tenant (with sensible defaults). These capture product-specific seasonal patterns that Prophet's general seasonality may not fully represent.
+  1858→
+  1859→| Month | Default Weight | Cold Weather Parts | Off-Road Parts | Street Parts |
+  1860→|-------|---------------|--------------------|----------------|-------------|
+  1861→| Jan | 1.2 | 1.8 | 0.8 | 0.7 |
+  1862→| Feb | 1.1 | 1.5 | 0.8 | 0.8 |
+  1863→| Mar | 1.0 | 1.0 | 0.9 | 1.0 |
+  1864→| Apr | 1.0 | 0.7 | 0.9 | 1.1 |
+  1865→| May | 0.9 | 0.5 | 1.0 | 1.0 |
+  1866→| Jun | 0.8 | 0.3 | 1.3 | 0.7 |
+  1867→| Jul | 0.8 | 0.3 | 1.4 | 0.6 |
+  1868→| Aug | 0.8 | 0.3 | 1.3 | 0.7 |
+  1869→| Sep | 0.9 | 0.4 | 1.2 | 0.8 |
+  1870→| Oct | 1.1 | 0.8 | 1.0 | 1.1 |
+  1871→| Nov | 1.2 | 1.6 | 0.9 | 1.0 |
+  1872→| Dec | 1.3 | 2.0 | 0.8 | 0.8 |
+  1873→
+  1874→```
+  1875→after_seasonal[month] = prophet_forecast[month] × seasonal_weight[month][sku_category]
+  1876→```
+  1877→
+  1878→#### Step 3: Apply Marketing Adjustments
+  1879→
+  1880→The regression model's promo coefficient (β₂) is used to adjust the forecast based on planned promotional activity.
+  1881→
+  1882→```
+  1883→promo_adjustment = β₂ × (planned_promo_index - baseline_promo_index)
+  1884→after_marketing[month] = after_seasonal[month] + promo_adjustment
+  1885→```
+  1886→
+  1887→Where:
+  1888→- `planned_promo_index`: The marketing team's planned promo intensity for the forecast month (0.0 - 1.0)
+  1889→- `baseline_promo_index`: The average promo_index from the historical training data
+  1890→
+  1891→#### Step 4: Apply Sales Field Intelligence
+  1892→
+  1893→Sales representatives who visit dealers daily have ground-level intelligence that statistical models cannot capture:
+  1894→- A dealer is expanding to a second location (demand increase)
+  1895→- A competitor's supply is disrupted (demand shift)
+  1896→- A new government regulation is coming (demand spike or drop)
+  1897→- A local event (rally, fair) will temporarily boost demand
+  1898→
+  1899→This is captured as a **manual override** with mandatory audit trail:
+  1900→
+  1901→```python
+  1902→# Manual override schema
+  1903→{
+  1904→    "sku_id": "SKU-12345",
+  1905→    "month": "2025-07",
+  1906→    "override_qty": 500,          # Sales rep's estimate
+  1907→    "reason_code": "COMPETITOR_OOS",  # From enum: COMPETITOR_OOS, NEW_DEALER, REGULATION, EVENT, OTHER
+  1908→    "reason_text": "Main competitor (X Parts) has factory issue, expect demand shift",
+  1909→    "submitted_by": "user_id_456",
+  1910→    "submitted_at": "2025-06-15T10:30:00Z",
+  1911→    "confidence_level": "medium",  # low, medium, high
+  1912→}
+  1913→```
+  1914→
+  1915→**Override blending logic**:
+  1916→
+  1917→| Confidence Level | Blend Weight | Formula |
+  1918→|-----------------|-------------|---------|
+  1919→| low | 0.2 | `consensus = 0.8 × statistical + 0.2 × override` |
+  1920→| medium | 0.4 | `consensus = 0.6 × statistical + 0.4 × override` |
+  1921→| high | 0.7 | `consensus = 0.3 × statistical + 0.7 × override` |
+  1922→
+  1923→If no override exists for a SKU-month, Step 4 is skipped and the statistical forecast is used as-is.
+  1924→
+  1925→#### Step 5: Final Consensus Forecast
+  1926→
+  1927→```
+  1928→consensus_forecast[month] = after_marketing[month]  (if no override)
+  1929→consensus_forecast[month] = blended_value            (if override exists)
+  1930→```
+  1931→
+  1932→This is the **"Single Set of Numbers"** — the final forecast that:
+  1933→- Drives EOQ and safety stock calculations
+  1934→- Determines order trigger dates
+  1935→- Feeds the dashboard and reports
+  1936→- Is used in S&OP (Sales & Operations Planning) meetings
+  1937→
+  1938→### 3.4 Implementation
+  1939→
+  1940→```python
+  1941→# app/models/consensus_model.py
+  1942→
+  1943→import pandas as pd
+  1944→from typing import Optional
+  1945→
+  1946→
+  1947→class ConsensusModel:
+  1948→    """
+  1949→    Consensus Forecast combiner — produces the Single Set of Numbers.
+  1950→    """
+  1951→
+  1952→    OVERRIDE_BLEND_WEIGHTS = {
+  1953→        "low": 0.2,
+  1954→        "medium": 0.4,
+  1955→        "high": 0.7,
+  1956→    }
+  1957→
+  1958→    def calculate(
+  1959→        self,
+  1960→        prophet_forecast: dict,
+  1961→        seasonal_weights: dict,
+  1962→        promo_coefficient_beta2: float,
+  1963→        planned_promo_index: float,
+  1964→        baseline_promo_index: float,
+  1965→        manual_overrides: Optional[list[dict]] = None,
+  1966→    ) -> dict:
+  1967→        """
+  1968→        Calculate the consensus forecast.
+  1969→
+  1970→        Args:
+  1971→            prophet_forecast: Dict with month keys and yhat values.
+  1972→            seasonal_weights: Dict with month keys and weight values for the SKU category.
+  1973→            promo_coefficient_beta2: β₂ from regression model.
+  1974→            planned_promo_index: Marketing's planned promo intensity (0.0-1.0).
+  1975→            baseline_promo_index: Average historical promo_index.
+  1976→            manual_overrides: List of manual override dicts (from Step 4).
+  1977→
+  1978→        Returns:
+  1979→            Dictionary with consensus forecast, step-by-step breakdown, and audit trail.
+  1980→        """
+  1981→        consensus = {}
+  1982→        breakdown = []
+  1983→
+  1984→        # Build override lookup: (sku_id, month) → override dict
+  1985→        override_lookup = {}
+  1986→        if manual_overrides:
+  1987→            for ov in manual_overrides:
+  1988→                key = (ov.get("sku_id"), ov.get("month"))
+  1989→                override_lookup[key] = ov
+  1990→
+  1991→        for month, prophet_value in prophet_forecast.items():
+  1992→            # Step 1: Prophet baseline
+  1993→            step1_value = prophet_value
+  1994→
+  1995→            # Step 2: Apply seasonal weight
+  1996→            weight = seasonal_weights.get(month, 1.0)
+  1997→            step2_value = step1_value * weight
+  1998→
+  1999→            # Step 3: Apply marketing adjustment
+  2000→            promo_delta = planned_promo_index - baseline_promo_index
+
+[showing lines 1-2000 of 3436; use offset=2001 with limit to continue reading]

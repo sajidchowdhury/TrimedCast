@@ -5,11 +5,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { resolveTenantId } from '@/lib/tenant-resolver';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || 'default';
+    const tenantIdRaw = searchParams.get('tenantId') || 'default';
+    const tenantId = await resolveTenantId(tenantIdRaw);
 
     const products = await db.product.findMany({
       where: { tenantId, isActive: true },
