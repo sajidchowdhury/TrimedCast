@@ -29,6 +29,7 @@ import { RecommendedOrdersTable } from '@/components/forecast/recommended-orders
 import { CNYCalendar } from '@/components/forecast/cny-calendar';
 import { CategorySeasonalGrid } from '@/components/forecast/category-seasonal-grid';
 import { StockProjection } from '@/components/forecast/stock-projection';
+import { AdvancedForecastPanel } from '@/components/forecast/advanced-forecast-panel';
 import {
   Loader2,
   AlertCircle,
@@ -53,6 +54,7 @@ import {
   Search,
   ShoppingCart,
   Sparkles,
+  Brain,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -814,6 +816,89 @@ function OrderTriggersTab() {
 }
 
 // ============================================
+// Advanced Forecasting Tab (Session 7)
+// ============================================
+
+function AdvancedForecastTab() {
+  const {
+    products,
+    selectedProductId,
+    productsLoading,
+    setSelectedProductId,
+    fetchProducts,
+  } = useForecastStore();
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
+
+  return (
+    <div className="space-y-6">
+      {/* Product selector */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
+            <div className="flex-1 min-w-0">
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">Select Product</label>
+              <Select
+                value={selectedProductId || ''}
+                onValueChange={(val) => setSelectedProductId(val || null)}
+                disabled={productsLoading}
+              >
+                <SelectTrigger className="w-full h-10">
+                  <SelectValue placeholder={productsLoading ? 'Loading products...' : 'Choose a product...'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <Package className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-medium">{p.sku}</span>
+                        <span className="text-gray-400">—</span>
+                        <span className="truncate">{p.name}</span>
+                        <Badge variant="outline" className="text-[9px] h-4 ml-1">{p.salesCount} sales</Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedProduct && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Badge variant="outline">{selectedProduct.category}</Badge>
+                <span>Stock: {selectedProduct.currentStock}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Advanced Forecast Panel */}
+      <AdvancedForecastPanel
+        productId={selectedProductId}
+        productSku={selectedProduct?.sku}
+        productName={selectedProduct?.name}
+      />
+
+      {/* No product selected */}
+      {!selectedProductId && (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Brain className="h-12 w-12 mx-auto text-purple-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Advanced Forecasting</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">
+              Select a product above to run Prophet BD, Auto-Tuned ETS, Multi-Linear Regression, and Consensus forecasting models.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // Main Page Component
 // ============================================
 
@@ -853,8 +938,8 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'orders')} className="w-full">
-          <TabsList className="grid w-full max-w-lg mx-auto mb-6 grid-cols-3">
+        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'orders')} className="w-full">
+          <TabsList className="grid w-full max-w-xl mx-auto mb-6 grid-cols-4">
             <TabsTrigger value="import" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import Data</span>
@@ -864,6 +949,11 @@ export default function Home() {
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Forecast</span>
               <span className="sm:hidden">Forecast</span>
+            </TabsTrigger>
+            <TabsTrigger value="advanced" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              <span className="hidden sm:inline">Advanced</span>
+              <span className="sm:hidden">Adv.</span>
             </TabsTrigger>
             <TabsTrigger value="orders" className="flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
@@ -896,6 +986,20 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
               >
                 <ForecastDashboardTab />
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="advanced">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="advanced-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AdvancedForecastTab />
               </motion.div>
             </AnimatePresence>
           </TabsContent>
