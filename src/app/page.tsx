@@ -26,6 +26,9 @@ import { LeadTimeViz } from '@/components/forecast/lead-time-viz';
 import { ModelComparison } from '@/components/forecast/model-comparison';
 import { ForecastVsActual } from '@/components/forecast/forecast-vs-actual';
 import { RecommendedOrdersTable } from '@/components/forecast/recommended-orders-table';
+import { CNYCalendar } from '@/components/forecast/cny-calendar';
+import { CategorySeasonalGrid } from '@/components/forecast/category-seasonal-grid';
+import { StockProjection } from '@/components/forecast/stock-projection';
 import {
   Loader2,
   AlertCircle,
@@ -667,6 +670,17 @@ function ForecastDashboardTab() {
             productName={forecastResult.product.name || 'Unknown Product'}
             tenantId="demo-bd-motors"
           />
+
+          {/* Stock Projection Chart */}
+          <StockProjection
+            currentStock={forecastResult.orderTrigger.currentStock}
+            safetyStock={forecastResult.orderTrigger.safetyStock}
+            reorderPoint={forecastResult.orderTrigger.reorderPoint}
+            avgDailyDemand={forecastResult.orderTrigger.daysOfStock > 0 ? forecastResult.orderTrigger.currentStock / forecastResult.orderTrigger.daysOfStock : 1}
+            orderArrivalDate={forecastResult.orderTrigger.expectedDeliveryDate}
+            orderQty={forecastResult.orderTrigger.suggestedOrderQty}
+            productName={forecastResult.product.name || undefined}
+          />
         </motion.div>
       )}
     </div>
@@ -789,6 +803,12 @@ function OrderTriggersTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* CNY Calendar - Supply Chain Disruption Planning */}
+      <CNYCalendar />
+
+      {/* Category × Season Demand Matrix */}
+      <CategorySeasonalGrid />
     </div>
   );
 }

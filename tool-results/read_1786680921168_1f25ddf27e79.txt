@@ -1,0 +1,2002 @@
+     1→# Order Trigger & Lead Time Logic
+     2→
+     3→### **THE CORE IP — TrimedCast Integrated Seasonal Demand & Inventory Forecasting System**
+     4→
+     5→> **Classification:** CONFIDENTIAL — Core Intellectual Property  
+     6→> **System:** TrimedCast v1.0  
+     7→> **Target Market:** Motorcycle Parts Businesses, Bangladesh  
+     8→> **Supply Chain:** Bangladesh ← China (Cross-Border Import)  
+     9→> **Last Updated:** 2025-08-13
+    10→
+    11→---
+    12→
+    13→## Table of Contents
+    14→
+    15→1. [The Three Questions This System Answers](#1-the-three-questions-this-system-answers)
+    16→2. [Lead Time Decomposition — BD-China Supply Chain](#2-lead-time-decomposition--bd-china-supply-chain)
+    17→3. [Chinese New Year (CNY) Impact Model](#3-chinese-new-year-cny-impact-model)
+    18→4. [Order Trigger Date Calculator — Full Implementation](#4-order-trigger-date-calculator--full-implementation)
+    19→5. [Recommended Order Quantity Calculator](#5-recommended-order-quantity-calculator)
+    20→6. [Seasonal Demand Prediction for BD Market](#6-seasonal-demand-prediction-for-bd-market)
+    21→7. [Dashboard Visualization — Order Timeline Gantt](#7-dashboard-visualization--order-timeline-gantt)
+    22→8. [Performance Requirements](#8-performance-requirements)
+    23→9. [Complete System Pipeline — End-to-End](#9-complete-system-pipeline--end-to-end)
+    24→10. [Edge Cases & Failure Modes](#10-edge-cases--failure-modes)
+    25→11. [Database Schema Integration](#11-database-schema-integration)
+    26→12. [API Surface for Order Trigger Engine](#12-api-surface-for-order-trigger-engine)
+    27→
+    28→---
+    29→
+    30→## 1. The Three Questions This System Answers
+    31→
+    32→These are the three existential questions every motorcycle parts importer in Bangladesh must answer — and currently answers with guesswork, WhatsApp messages to suppliers, and gut feeling. **TrimedCast replaces all of that with deterministic, data-driven algorithms.**
+    33→
+    34→```
+    35→┌─────────────────────────────────────────────────────────────────────┐
+    36→│                                                                     │
+    37→│   ┌─────────────┐   ┌──────────────────┐   ┌───────────────────┐   │
+    38→│   │  Q1: WHAT?  │   │  Q2: WHAT QTY?  │   │  Q3: WHEN?       │   │
+    39→│   │             │   │                  │   │                   │   │
+    40→│   │ Which SKU  │   │ How many units  │   │ What date to     │   │
+    41→│   │ to order?  │   │ to order?       │   │ place the order? │   │
+    42→│   │             │   │                  │   │                   │   │
+    43→│   │ Reorder     │   │ EOQ + Gap +     │   │ Lead Time +      │   │
+    44→│   │ Point Logic │   │ Constraints     │   │ CNY + Season     │   │
+    45→│   └──────┬──────┘   └────────┬────────┘   └─────────┬─────────┘   │
+    46→│          │                   │                      │             │
+    47→│          └───────────────────┴──────────────────────┘             │
+    48→│                              │                                     │
+    49→│                    ┌─────────▼─────────┐                          │
+    50→│                    │  ORDER TRIGGER    │                          │
+    51→│                    │  ENGINE (CORE)   │                          │
+    52→│                    └───────────────────┘                          │
+    53→│                                                                     │
+    54→└─────────────────────────────────────────────────────────────────────┘
+    55→```
+    56→
+    57→### 1.1 Q1: What product should be ordered?
+    58→
+    59→**Logic:** A product appears on the recommended order list when:
+    60→
+    61→```
+    62→Current Available Stock < Reorder Point
+    63→```
+    64→
+    65→Where:
+    66→
+    67→```
+    68→Reorder Point = (Daily Consumption Rate × Lead Time) + Safety Stock
+    69→```
+    70→
+    71→**Filterable dimensions:**
+    72→| Filter | Values | Use Case |
+    73→|--------|--------|----------|
+    74→| Season | `winter`, `summer`, `monsoon`, `pre_winter`, `all_season` | "Show me winter-critical items" |
+    75→| Motorcycle Model | `CD70`, `Pulsar150`, `Platina100`, etc. | "Only CD70 parts" |
+    76→| Category | `brake_system`, `chain_sprocket`, `engine`, `electrical`, `body`, `riding_gear` | "Brake parts only" |
+    77→| Urgency | `critical`, `high`, `normal`, `low` | "What needs ordering NOW?" |
+    78→| CNY Risk | `true`, `false` | "Which orders have CNY risk?" |
+    79→| Shipment Mode | `sea`, `air` | "Air-ship the urgent ones" |
+    80→
+    81→**Output:** Filterable Recommended Order List (sorted by urgency descending)
+    82→
+    83→### 1.2 Q2: What quantity should be ordered?
+    84→
+    85→**Core formula:**
+    86→
+    87→```
+    88→Recommended Qty = max(EOQ, (Forecasted Demand + Safety Stock) - Current Stock - Pending Orders)
+    89→```
+    90→
+    91→**Constraints applied in order:**
+    92→
+    93→```
+    94→┌────────────────────────────────────────────────────────────────┐
+    95→│  1. Supplier MOQ:   qty >= MOQ    (cannot order below minimum) │
+    96→│  2. Warehouse Cap:  qty <= Max Stock - Current Stock            │
+    97→│  3. Overstock:      If current > max_stock, qty = 0 (draw down)│
+    98→│  4. Seasonal Cap:   qty <= seasonal_demand_ceiling              │
+    99→└────────────────────────────────────────────────────────────────┘
+   100→```
+   101→
+   102→### 1.3 Q3: WHEN should the product be ordered?
+   103→
+   104→**This is the single most valuable algorithm in the entire system.**
+   105→
+   106→The Order Trigger Date accounts for:
+   107→- ✅ Manufacturing lead time (supplier-specific)
+   108→- ✅ Shipment time (sea or air route)
+   109→- ✅ Customs clearance time (Chittagong port or Dhaka airport)
+   110→- ✅ Chinese New Year shutdown impact
+   111→- ✅ Seasonal demand acceleration/deceleration
+   112→- ✅ Safety buffer before stock hits critical level
+   113→
+   114→**Why this is so valuable:** A BD motorcycle parts importer who orders too early ties up capital in warehouse inventory. One who orders too late faces stockouts during peak season. The precise trigger date **maximizes cash flow efficiency while minimizing stockout risk** — and that is worth the entire SaaS subscription.
+   115→
+   116→---
+   117→
+   118→## 2. Lead Time Decomposition — BD-China Supply Chain
+   119→
+   120→### 2.1 The Three Components of Lead Time
+   121→
+   122→```
+   123→╔══════════════════════════════════════════════════════════════════════╗
+   124→║                                                                      ║
+   125→║   Total Lead Time = Manufacturing Time + Shipment Time + Customs Time║
+   126→║                                                                      ║
+   127→║   Each component is VARIABLE, not fixed:                             ║
+   128→║   - Manufacturing: varies by supplier (60-120 days)                  ║
+   129→║   - Shipment: varies by route (sea vs air) and congestion            ║
+   130→║   - Customs: varies by port, documentation quality, and volume       ║
+   131→║                                                                      ║
+   132→╚══════════════════════════════════════════════════════════════════════╝
+   133→```
+   134→
+   135→### 2.2 Manufacturing Time
+   136→
+   137→| Parameter | Value | Notes |
+   138→|-----------|-------|-------|
+   139→| **Default** | 90 days (3 months) | Standard for Chinese motorcycle parts factories |
+   140→| **Range** | 60–120 days | Depends on supplier size, order volume, product complexity |
+   141→| **Fast suppliers** | 60–75 days | Large factories with spare capacity |
+   142→| **Slow suppliers** | 100–120 days | Small workshops, complex parts, high season congestion |
+   143→| **Storage** | `suppliers.lead_time_days_manufacturing` | Per-supplier, tenant-configurable |
+   144→| **Start** | Date order is confirmed by supplier (acknowledged) |
+   145→| **End** | Date goods are ready at FOB port in China (typically Guangzhou/Shenzhen/Yiwu) |
+   146→
+   147→**Manufacturing time sub-stages:**
+   148→
+   149→```
+   150→  Order Confirmed        Raw Material          Production          QC + Packing
+   151→  ──────────────  ───>  ────────────  ───>  ──────────  ───>  ────────────
+   152→  Day 0                  Day 5-10             Day 10-75           Day 75-90
+   153→                                                │
+   154→                                                │  (longest phase —
+   155→                                                │   actual production)
+   156→```
+   157→
+   158→### 2.3 Shipment Time
+   159→
+   160→#### Sea Route (China → Chittagong Port) — DEFAULT, COST-OPTIMIZED
+   161→
+   162→```
+   163→  Chinese Port          South China       Malacca           Bay of        Chittagong
+   164→  (Guangzhou/           Sea / East        Strait            Bengal        Port
+   165→   Shenzhen/Yiwu)       China Sea
+   166→       │                    │                │                │              │
+   167→       ├─ Loading: 2-3d ──►├─ Transit: ────►├─ Transit: ───►├─ Transit: ──►├─ Unload: 3-5d
+   168→       │                    │  10-15d        │  10-15d       │  10-15d     │
+   169→       │                    │                │                │              │
+   170→       └────────────────────┴────────────────┴────────────────┘              │
+   171→                                                                            │
+   172→                              Total: 45-60 days (default: 52) ──────────────┘
+   173→```
+   174→
+   175→| Sub-stage | Duration | Default | Variability |
+   176→|-----------|----------|---------|-------------|
+   177→| Loading at Chinese port | 2–3 days | 2 | Weather, port congestion |
+   178→| South China Sea transit | 10–15 days | 12 | Vessel speed, weather |
+   179→| Malacca Strait transit | 10–15 days | 12 | Traffic, piracy delays (rare) |
+   180→| Bay of Bengal transit | 10–15 days | 12 | Monsoon rough seas (Jun–Sep) |
+   181→| Unloading at Chittagong | 3–5 days | 4 | Port congestion, berth availability |
+   182→| **Total** | **45–60 days** | **52** | **+8 days during monsoon season** |
+   183→
+   184→> ⚠️ **Monsoon Effect:** During Jun–Sep, Bay of Bengal can add 5–8 days due to rough seas and port congestion at Chittagong. The system applies a `monsoon_adjustment_days` when shipment date falls in monsoon months.
+   185→
+   186→#### Air Route (China → Dhaka/Hong Kong) — URGENT, TIME-OPTIMIZED
+   187→
+   188→| Sub-stage | Duration | Default |
+   189→|-----------|----------|---------|
+   190→| Airport processing (China) | 1–2 days | 1 |
+   191→| Air transit (Guangzhou → Dhaka) | 1–3 days | 2 |
+   192→| Airport clearance (Dhaka) | 2–3 days | 2 |
+   193→| Transport to warehouse | 1–2 days | 1 |
+   194→| **Total** | **5–10 days** | **8** |
+   195→
+   196→**Cost comparison:**
+   197→
+   198→```
+   199→  ┌──────────────────────────────────────────────────────────────┐
+   200→  │  Sea:  52 days  │  ~$2,500/container  │  ~$0.05/unit        │
+   201→  │  Air:   8 days  │  ~$8,000/shipment   │  ~$0.40/unit        │
+   202→  │                     8x cost           │  8x cost per unit   │
+   203→  └──────────────────────────────────────────────────────────────┘
+   204→  
+   205→  Air is used ONLY for:
+   206→  ✦ Critical stockout situations (urgency = 'critical')
+   207→  ✦ High-margin items where stockout cost > air freight cost
+   208→  ✦ Small, lightweight items (brake pads, gaskets — not engine blocks)
+   209→```
+   210→
+   211→### 2.4 Customs Clearance Time
+   212→
+   213→#### Sea — Chittagong Port (Default)
+   214→
+   215→```
+   216→  Vessel Arrives        Documents           Assessment          Duty               Release &
+   217→  at Chittagong         Submitted           & Inspection        Payment            Transport
+   218→       │                    │                    │                 │                   │
+   219→       ├─ 1-2d wait ──────►├─ 1-2d submit ────►├─ 3-5d assess ─►├─ 1-2d pay ──────►├─ 2-5d transport
+   220→       │                    │                    │                 │                   │
+   221→       └────────────────────┴────────────────────┴─────────────────┴───────────────────┘
+   222→  
+   223→                              Total: 7-14 days (default: 10)
+   224→```
+   225→
+   226→| Sub-stage | Duration | Default | Bottleneck Risk |
+   227→|-----------|----------|---------|-----------------|
+   228→| Document submission | 1–2 days | 1 | Missing/incomplete documents |
+   229→| Customs assessment | 3–5 days | 4 | **HIGHEST RISK** — backlogged during peak |
+   230→| Duty payment & processing | 1–2 days | 1 | Banking delays |
+   231→| Release + transport to warehouse | 2–5 days | 3 | Truck availability, road Dhaka–Chittagong |
+   232→| **Total** | **7–14 days** | **10** | +5 days during peak import season (Oct–Dec) |
+   233→
+   234→#### Air — Dhaka Airport
+   235→
+   236→| Sub-stage | Duration | Default |
+   237→|-----------|----------|---------|
+   238→| Document submission | 0.5–1 day | 1 |
+   239→| Customs assessment | 1–2 days | 1 |
+   240→| Duty payment | 0.5–1 day | 1 |
+   241→| **Total** | **2–5 days** | **3** |
+   242→
+   243→### 2.5 Total Lead Time Summary
+   244→
+   245→```
+   246→╔══════════════════════════════════════════════════════════════════════════╗
+   247→║                                                                          ║
+   248→║  SEA ROUTE (Default — Cost Optimized)                                    ║
+   249→║  ─────────────────────────────────────                                   ║
+   250→║  Manufacturing:   90 days                                                ║
+   251→║  Shipment:        52 days  (China → Chittagong via sea)                  ║
+   252→║  Customs:         10 days  (Chittagong Port)                             ║
+   253→║  Processing:       5 days  (order ack + packing + final transport)       ║
+   254→║  ─────────────────────────────────────                                   ║
+   255→║  TOTAL:          157 days  ≈ 5.2 months                                  ║
+   256→║                                                                          ║
+   257→║  AIR ROUTE (Urgency — Time Optimized)                                    ║
+   258→║  ─────────────────────────────────────                                   ║
+   259→║  Manufacturing:   90 days                                                ║
+   260→║  Shipment:         8 days  (China → Dhaka via air)                       ║
+   261→║  Customs:          3 days  (Dhaka Airport)                               ║
+   262→║  Processing:       4 days  (order ack + packing + final transport)       ║
+   263→║  ─────────────────────────────────────                                   ║
+   264→║  TOTAL:          105 days  ≈ 3.5 months                                  ║
+   265→║                                                                          ║
+   266→║  DELTA:           52 days  saved by air route                            ║
+   267→║  COST:            ~8x     higher freight by air                          ║
+   268→║                                                                          ║
+   269→╚══════════════════════════════════════════════════════════════════════════╝
+   270→```
+   271→
+   272→### 2.6 Lead Time Variability Model
+   273→
+   274→Lead times are NOT deterministic. The system models them as distributions for Monte Carlo simulation:
+   275→
+   276→```python
+   277→from dataclasses import dataclass
+   278→from typing import Optional
+   279→
+   280→@dataclass
+   281→class LeadTimeDistribution:
+   282→    """
+   283→    Probabilistic model of each lead time component.
+   284→    Used for Monte Carlo simulation of order arrival dates.
+   285→    """
+   286→    # Manufacturing
+   287→    mfg_best: int = 75       # Best case (days)
+   288→    mfg_likely: int = 90     # Most likely (days)
+   289→    mfg_worst: int = 120     # Worst case (days)
+   290→    
+   291→    # Shipment (Sea)
+   292→    ship_sea_best: int = 45
+   293→    ship_sea_likely: int = 52
+   294→    ship_sea_worst: int = 65
+   295→    
+   296→    # Shipment (Air)
+   297→    ship_air_best: int = 5
+   298→    ship_air_likely: int = 8
+   299→    ship_air_worst: int = 12
+   300→    
+   301→    # Customs (Sea/Chittagong)
+   302→    customs_sea_best: int = 7
+   303→    customs_sea_likely: int = 10
+   304→    customs_sea_worst: int = 18
+   305→    
+   306→    # Customs (Air/Dhaka)
+   307→    customs_air_best: int = 2
+   308→    customs_air_likely: int = 3
+   309→    customs_air_worst: int = 5
+   310→
+   311→    def total_sea_best(self) -> int:
+   312→        return self.mfg_best + self.ship_sea_best + self.customs_sea_best  # 127
+   313→    
+   314→    def total_sea_likely(self) -> int:
+   315→        return self.mfg_likely + self.ship_sea_likely + self.customs_sea_likely  # 152
+   316→    
+   317→    def total_sea_worst(self) -> int:
+   318→        return self.mfg_worst + self.ship_sea_worst + self.customs_sea_worst  # 203
+   319→    
+   320→    def total_air_best(self) -> int:
+   321→        return self.mfg_best + self.ship_air_best + self.customs_air_best  # 82
+   322→    
+   323→    def total_air_likely(self) -> int:
+   324→        return self.mfg_likely + self.ship_air_likely + self.customs_air_likely  # 101
+   325→    
+   326→    def total_air_worst(self) -> int:
+   327→        return self.mfg_worst + self.ship_air_worst + self.customs_air_worst  # 137
+   328→```
+   329→
+   330→**P90 lead times** (90% of orders arrive within this time):
+   331→```
+   332→  Sea P90:  ~175 days (use this for conservative planning)
+   333→  Air P90:  ~115 days (use this for conservative air planning)
+   334→```
+   335→
+   336→---
+   337→
+   338→## 3. Chinese New Year (CNY) Impact Model
+   339→
+   340→### 3.1 CNY Shutdown Facts
+   341→
+   342→> This is the single biggest disruption to BD–China motorcycle parts supply chain. Every year, importers who fail to plan for CNY face 2–3 month stockouts. **TrimedCast is the first system to model this explicitly.**
+   343→
+   344→```
+   345→  ┌─────────────────────────────────────────────────────────────────────┐
+   346→  │  CHINESE NEW YEAR — THE ANNUAL SUPPLY CHAIN BLACK HOLE            │
+   347→  │                                                                     │
+   348→  │  • Chinese factories shut down for 2–4 weeks around Lunar New Year │
+   349→  │  • No new production starts during the shutdown window              │
+   350→  │  • Existing production may pause mid-way                            │
+   351→  │  • Post-CNY restart is gradual (factories don't all restart Day 1) │
+   352→  │  • Effective delay: 20–30 days added to any order touching CNY     │
+   353→  │  • Pre-CNY rush: Suppliers prioritize older orders, new orders     │
+   354→  │    placed in December/January may get delayed further               │
+   355→  │                                                                     │
+   356→  └─────────────────────────────────────────────────────────────────────┘
+   357→```
+   358→
+   359→### 3.2 CNY Risk Detection Algorithm
+   360→
+   361→```python
+   362→from datetime import date, timedelta
+   363→from dataclasses import dataclass
+   364→from typing import Optional
+   365→
+   366→@dataclass
+   367→class CNYRisk:
+   368→    """Result of CNY overlap analysis."""
+   369→    has_risk: bool
+   370→    overlap_days: int
+   371→    original_trigger_date: Optional[date]
+   372→    revised_trigger_date: Optional[date]
+   373→    strategy: str           # 'before_cny', 'after_cny', 'none'
+   374→    additional_delay_days: int  # Extra days added to lead time
+   375→    explanation: str
+   376→
+   377→
+   378→def check_cny_risk(
+   379→    order_date: date,
+   380→    mfg_days: int,
+   381→    cny_start: date,
+   382→    cny_end: date,
+   383→    buffer_days: int = 5,  # Days before CNY when factories start winding down
+   384→) -> CNYRisk:
+   385→    """
+   386→    Check if the manufacturing period overlaps with CNY shutdown.
+   387→    
+   388→    Manufacturing period: order_date to (order_date + mfg_days)
+   389→    CNY shutdown: cny_start to cny_end
+   390→    
+   391→    Factories start winding down `buffer_days` before cny_start,
+   392→    so effective CNY impact window is (cny_start - buffer) to cny_end.
+   393→    
+   394→    Args:
+   395→        order_date: When the order would be placed
+   396→        mfg_days: Manufacturing lead time in days
+   397→        cny_start: First day of CNY factory shutdown
+   398→        cny_end: Last day of CNY factory shutdown (factories restart next day)
+   399→        buffer_days: Pre-CNY wind-down period (default 5)
+   400→    
+   401→    Returns:
+   402→        CNYRisk with overlap analysis and resolution strategy
+   403→    """
+   404→    # Effective CNY window (includes pre-CNY wind-down)
+   405→    effective_cny_start = cny_start - timedelta(days=buffer_days)
+   406→    
+   407→    # Manufacturing period
+   408→    mfg_start = order_date + timedelta(days=2)  # 2 days order processing
+   409→    mfg_end = mfg_start + timedelta(days=mfg_days)
+   410→    
+   411→    # Check overlap between manufacturing period and effective CNY window
+   412→    overlap_start = max(mfg_start, effective_cny_start)
+   413→    overlap_end = min(mfg_end, cny_end + timedelta(days=3))  # +3 for gradual restart
+   414→    
+   415→    if overlap_start < overlap_end:
+   416→        overlap_days = (overlap_end - overlap_start).days
+   417→        
+   418→        # Determine best strategy
+   419→        # Strategy A: Can we complete manufacturing before CNY starts?
+   420→        latest_start_before_cny = effective_cny_start - timedelta(days=mfg_days) - timedelta(days=2)
+   421→        
+   422→        if order_date <= latest_start_before_cny:
+   423→            strategy = 'before_cny'
+   424→            additional_delay = 0
+   425→            explanation = (
+   426→                f"Manufacturing overlaps CNY by {overlap_days} days. "
+   427→                f"However, ordering by {latest_start_before_cny} ensures "
+   428→                f"manufacturing completes before CNY shutdown."
+   429→            )
+   430→        else:
+   431→            strategy = 'after_cny'
+   432→            # Full CNY delay: shutdown period + gradual restart
+   433→            cny_shutdown_days = (cny_end - effective_cny_start).days + 3  # +3 restart
+   434→            additional_delay = cny_shutdown_days
+   435→            explanation = (
+   436→                f"Manufacturing overlaps CNY by {overlap_days} days. "
+   437→                f"Cannot complete before CNY. Effective delay: {cny_shutdown_days} days. "
+   438→                f"Recommend ordering after CNY ({cny_end + timedelta(days=1)})."
+   439→            )
+   440→        
+   441→        return CNYRisk(
+   442→            has_risk=True,
+   443→            overlap_days=overlap_days,
+   444→            original_trigger_date=order_date,
+   445→            revised_trigger_date=None,  # Set by caller based on strategy
+   446→            strategy=strategy,
+   447→            additional_delay_days=additional_delay,
+   448→            explanation=explanation,
+   449→        )
+   450→    
+   451→    # No overlap — safe
+   452→    return CNYRisk(
+   453→        has_risk=False,
+   454→        overlap_days=0,
+   455→        original_trigger_date=order_date,
+   456→        revised_trigger_date=None,
+   457→        strategy='none',
+   458→        additional_delay_days=0,
+   459→        explanation="Manufacturing period does not overlap with CNY shutdown.",
+   460→    )
+   461→```
+   462→
+   463→### 3.3 CNY Resolution Strategies
+   464→
+   465→```
+   466→  ┌─────────────────────────────────────────────────────────────────────────┐
+   467→  │                                                                         │
+   468→  │  STRATEGY A: ORDER BEFORE CNY (Preferred)                               │
+   469→  │  ──────────────────────────────────────                                 │
+   470→  │  Place order early enough that manufacturing completes before CNY.      │
+   471→  │  Required: order_date ≤ cny_start - mfg_days - buffer                  │
+   472→  │  Pro:  No delay, goods arrive on original schedule                      │
+   473→  │  Con:  Requires earlier capital outlay, may increase holding cost       │
+   474→  │                                                                         │
+   475→  │  STRATEGY B: ORDER AFTER CNY (Fallback)                                 │
+   476→  │  ─────────────────────────────────────                                  │
+   477→  │  Accept the delay. Place order after CNY ends.                          │
+   478→  │  order_date = cny_end + 1                                               │
+   479→  │  Adds CNY shutdown period (~25-35 days) to effective lead time          │
+   480→  │  Pro:  No rush, standard order process                                  │
+   481→  │  Con:  Stockout risk if safety stock is insufficient during CNY period  │
+   482→  │                                                                         │
+   483→  │  STRATEGY C: PARTIAL ORDER (Critical items only)                        │
+   484→  │  ─────────────────────────────────────                                  │
+   485→  │  Order critical/high-margin items before CNY (Strategy A)              │
+   486→  │  Order non-critical items after CNY (Strategy B)                       │
+   487→  │  Pro:  Balances capital efficiency with stockout prevention             │
+   488→  │  Con:  Two shipments, more logistics complexity                         │
+   489→  │                                                                         │
+   490→  │  STRATEGY D: AIR ROUTE ESCAPE (Emergency)                               │
+   491→  │  ─────────────────────────────────────                                  │
+   492→  │  If stockout is imminent and CNY blocks sea route,                      │
+   493→  │  switch to air route to reduce shipment time by ~44 days               │
+   494→  │  Pro:  Fastest resolution                                               │
+   495→  │  Con:  8x freight cost — use only for high-margin/critical items       │
+   496→  │                                                                         │
+   497→  └─────────────────────────────────────────────────────────────────────────┘
+   498→```
+   499→
+   500→**Strategy selection algorithm:**
+   501→
+   502→```python
+   503→def select_cny_strategy(
+   504→    days_until_stockout: int,
+   505→    cny_delay_days: int,
+   506→    item_margin_pct: float,
+   507→    item_urgency: str,
+   508→    can_air_ship: bool,
+   509→    air_cost_multiplier: float = 8.0,
+   510→) -> str:
+   511→    """
+   512→    Automatically select the best CNY resolution strategy.
+   513→    
+   514→    Decision tree:
+   515→    1. If we have enough stock to survive CNY delay → Strategy B (order after)
+   516→    2. If stockout before CNY ends AND high margin → Strategy A (order before)
+   517→    3. If stockout imminent AND can air ship → Strategy D (air escape)
+   518→    4. Otherwise → Strategy C (partial order)
+   519→    """
+   520→    # Can we survive the CNY delay with current stock?
+   521→    if days_until_stockout > cny_delay_days + 30:  # +30 buffer
+   522→        return 'after_cny'  # Strategy B
+   523→    
+   524→    # Stockout risk — try to order before CNY
+   525→    if item_urgency in ('critical', 'high'):
+   526→        return 'before_cny'  # Strategy A
+   527→    
+   528→    # Emergency: stockout imminent, consider air
+   529→    if days_until_stockout <= 30 and can_air_ship and item_margin_pct >= 30:
+   530→        return 'air_escape'  # Strategy D
+   531→    
+   532→    # Default: partial approach
+   533→    return 'partial_order'  # Strategy C
+   534→```
+   535→
+   536→### 3.4 Annual CNY Calendar (2025–2030)
+   537→
+   538→| Year | Lunar New Year Date | Shutdown Window (Estimated) | Pre-CNY Rush Starts | Post-CNY Full Restart |
+   539→|------|--------------------|-----------------------------|---------------------|-----------------------|
+   540→| 2025 | January 29 | Jan 20 — Feb 10 | ~Jan 6 | ~Feb 13 |
+   541→| 2026 | February 17 | Feb 7 — Feb 28 | ~Jan 24 | ~Mar 3 |
+   542→| 2027 | February 6 | Jan 27 — Feb 17 | ~Jan 13 | ~Feb 20 |
+   543→| 2028 | January 26 | Jan 16 — Feb 6 | ~Jan 2 | ~Feb 9 |
+   544→| 2029 | February 13 | Feb 3 — Feb 24 | ~Jan 20 | ~Feb 27 |
+   545→| 2030 | February 3 | Jan 24 — Feb 14 | ~Jan 10 | ~Feb 17 |
+   546→
+   547→```python
+   548→# CNY Calendar as a constant in the system
+   549→CNY_CALENDAR = {
+   550→    2025: {'date': date(2025, 1, 29), 'shutdown_start': date(2025, 1, 20), 'shutdown_end': date(2025, 2, 10)},
+   551→    2026: {'date': date(2026, 2, 17), 'shutdown_start': date(2026, 2, 7),  'shutdown_end': date(2026, 2, 28)},
+   552→    2027: {'date': date(2027, 2, 6),  'shutdown_start': date(2027, 1, 27), 'shutdown_end': date(2027, 2, 17)},
+   553→    2028: {'date': date(2028, 1, 26), 'shutdown_start': date(2028, 1, 16), 'shutdown_end': date(2028, 2, 6)},
+   554→    2029: {'date': date(2029, 2, 13), 'shutdown_start': date(2029, 2, 3),  'shutdown_end': date(2029, 2, 24)},
+   555→    2030: {'date': date(2030, 2, 3),  'shutdown_start': date(2030, 1, 24), 'shutdown_end': date(2030, 2, 14)},
+   556→}
+   557→
+   558→def get_cny_for_date(target_date: date) -> dict:
+   559→    """Get the CNY window that affects orders placed on or around target_date."""
+   560→    year = target_date.year
+   561→    # Check current year and next year (CNY might be early next year)
+   562→    for y in [year, year + 1]:
+   563→        if y in CNY_CALENDAR:
+   564→            cny = CNY_CALENDAR[y]
+   565→            # CNY affects orders placed up to ~6 months before the shutdown
+   566→            if target_date <= cny['shutdown_end']:
+   567→                return cny
+   568→    return None
+   569→```
+   570→
+   571→### 3.5 CNY Impact Visualization
+   572→
+   573→```
+   574→  2026 Timeline — CNY Impact on Order Placement
+   575→  ═════════════════════════════════════════════
+   576→  
+   577→  Jan        Feb        Mar        Apr        May
+   578→  ├──┼┼┼┼┼┼┼┤├┼┼┼┼┼┼┼┤├┼┼┼┼┼┼┼┤├┼┼┼┼┼┼┼┤├┼┼┼┼┼┼┼┤
+   579→  
+   580→       ████████████                                 ← CNY Shutdown (Feb 7 - Feb 28)
+   581→  
+   582→  ←── SAFE ──→│     ←── RISKY ──→     ←── SAFE ──→
+   583→               │                       │
+   584→    Order here │    Order here gets     │   Order here
+   585→    to finish  │    caught in CNY      │   starts after
+   586→    before CNY │    delay = 21 days    │   CNY restart
+   587→               │                       │
+   588→    Dec 9 *    │    Dec 10 - Feb 28    │   Mar 1
+   589→  
+   590→  * Dec 9 = Feb 7 - 90 days mfg - 5 days buffer
+   591→    (Last safe order date to complete before CNY 2026)
+   592→```
+   593→
+   594→---
+   595→
+   596→## 4. Order Trigger Date Calculator — Full Implementation
+   597→
+   598→### 4.1 Core Data Structures
+   599→
+   600→```python
+   601→from datetime import date, timedelta
+   602→from dataclasses import dataclass, field
+   603→from typing import Optional, List
+   604→from enum import Enum
+   605→
+   606→
+   607→class Urgency(Enum):
+   608→    CRITICAL = "critical"   # Order should have been placed already / within 30 days
+   609→    HIGH = "high"           # Order needed within 90 days
+   610→    NORMAL = "normal"       # Order needed within 180 days
+   611→    LOW = "low"             # Order needed after 180 days
+   612→
+   613→
+   614→class ShipmentMode(Enum):
+   615→    SEA = "sea"
+   616→    AIR = "air"
+   617→
+   618→
+   619→class CNYStrategy(Enum):
+   620→    BEFORE_CNY = "before_cny"
+   621→    AFTER_CNY = "after_cny"
+   622→    PARTIAL_ORDER = "partial_order"
+   623→    AIR_ESCAPE = "air_escape"
+   624→    NONE = "none"
+   625→
+   626→
+   627→@dataclass
+   628→class OrderTimeline:
+   629→    """Complete milestone timeline from order placement to product availability."""
+   630→    order_trigger_date: date          # When to place the order
+   631→    order_processing_end: date        # Supplier acknowledges order (+2 days)
+   632→    mfg_start_date: date             # Manufacturing begins
+   633→    mfg_complete_date: date          # Manufacturing completed, goods at FOB port
+   634→    packing_loading_end: date        # Goods packed and loaded onto vessel (+2 days)
+   635→    ship_departure_date: date        # Vessel/flight departs China
+   636→    arrival_date: date               # Vessel/flight arrives at BD port/airport
+   637→    customs_start_date: date         # Customs clearance begins
+   638→    customs_clearance_date: date     # Customs clearance completed
+   639→    warehouse_arrival_date: date     # Goods arrive at warehouse
+   640→    available_for_sale_date: date    # Goods available for sale (QC + shelving +1 day)
+   641→    total_lead_time_days: int        # Total from order to availability
+   642→    cny_delay_days: int = 0          # Extra days due to CNY
+   643→
+   644→
+   645→@dataclass
+   646→class CNYRiskAssessment:
+   647→    """Full CNY risk analysis for an order."""
+   648→    has_risk: bool
+   649→    overlap_days: int
+   650→    effective_cny_start: date        # Including pre-CNY wind-down
+   651→    cny_shutdown_start: date
+   652→    cny_shutdown_end: date
+   653→    strategy: CNYStrategy
+   654→    additional_delay_days: int
+   655→    latest_safe_order_date: Optional[date]  # Last date to order and finish before CNY
+   656→    post_cny_order_date: Optional[date]     # First date to order after CNY
+   657→    explanation: str
+   658→
+   659→
+   660→@dataclass
+   661→class OrderTriggerResult:
+   662→    """Complete output of the Order Trigger calculation."""
+   663→    sku_code: str
+   664→    product_name: str
+   665→    
+   666→    # The answer to Q1: What to order
+   667→    needs_order: bool
+   668→    reorder_point: float
+   669→    current_stock: int
+   670→    stock_status: str              # 'below_reorder', 'at_safety', 'adequate', 'overstock'
+   671→    
+   672→    # The answer to Q2: What qty
+   673→    recommended_qty: int
+   674→    recommended_qty_breakdown: dict
+   675→    
+   676→    # The answer to Q3: When to order
+   677→    order_trigger_date: date
+   678→    timeline: OrderTimeline
+   679→    urgency: Urgency
+   680→    days_until_trigger: int
+   681→    
+   682→    # CNY analysis
+   683→    cny_risk: CNYRiskAssessment
+   684→    
+   685→    # Shipment recommendation
+   686→    recommended_shipment_mode: ShipmentMode
+   687→    
+   688→    # Metadata
+   689→    calculated_at: date
+   690→    total_lead_time_days: int
+   691→```
+   692→
+   693→### 4.2 The Core Algorithm — Full Implementation
+   694→
+   695→```python
+   696→def calculate_order_trigger(
+   697→    sku_code: str,
+   698→    product_name: str,
+   699→    current_stock: int,
+   700→    safety_stock: int,
+   701→    max_stock: int,
+   702→    daily_consumption_rate: float,
+   703→    mfg_days: int,
+   704→    shipment_mode: ShipmentMode,
+   705→    shipment_days: Optional[int] = None,
+   706→    customs_days: Optional[int] = None,
+   707→    forecasted_demand: int = 0,
+   708→    qty_on_order: int = 0,
+   709→    eoq: int = 0,
+   710→    moq: int = 1,
+   711→    today: Optional[date] = None,
+   712→    cny_start: Optional[date] = None,
+   713→    cny_end: Optional[date] = None,
+   714→    buffer_days: int = 7,
+   715→    order_processing_days: int = 2,
+   716→    packing_loading_days: int = 2,
+   717→    warehouse_transport_days: int = 1,
+   718→    qc_shelving_days: int = 1,
+   719→    monsoon_adjustment: int = 0,
+   720→) -> OrderTriggerResult:
+   721→    """
+   722→    ╔═════════════════════════════════════════════════════════════════╗
+   723→    ║  THE CORE ALGORITHM: Calculate when, what, and how much to     ║
+   724→    ║  order for a single SKU.                                       ║
+   725→    ║                                                                 ║
+   726→    ║  This function answers ALL THREE QUESTIONS:                     ║
+   727→    ║    Q1: What product?  → needs_order, stock_status               ║
+   728→    ║    Q2: What qty?      → recommended_qty                         ║
+   729→    ║    Q3: When?          → order_trigger_date, timeline, urgency   ║
+   730→    ╚═════════════════════════════════════════════════════════════════╝
+   731→    
+   732→    Args:
+   733→        sku_code: Product SKU code
+   734→        product_name: Human-readable product name
+   735→        current_stock: Current available inventory (units)
+   736→        safety_stock: Minimum stock level before stockout risk
+   737→        max_stock: Maximum warehouse capacity for this SKU
+   738→        daily_consumption_rate: Average units consumed per day
+   739→        mfg_days: Manufacturing lead time (supplier-specific)
+   740→        shipment_mode: SEA or AIR
+   741→        shipment_days: Override for calculated shipment days
+   742→        customs_days: Override for calculated customs days
+   743→        forecasted_demand: Total forecasted demand for the planning period
+   744→        qty_on_order: Units already on order (in pipeline)
+   745→        eoq: Economic Order Quantity
+   746→        moq: Supplier Minimum Order Quantity
+   747→        today: Current date (defaults to date.today())
+   748→        cny_start: CNY shutdown start date (None = no CNY check)
+   749→        cny_end: CNY shutdown end date (None = no CNY check)
+   750→        buffer_days: Safety buffer before stock hits safety level
+   751→        order_processing_days: Days for supplier to acknowledge order
+   752→        packing_loading_days: Days for packing and loading at port
+   753→        warehouse_transport_days: Days for final transport to warehouse
+   754→        qc_shelving_days: Days for QC check and shelving
+   755→        monsoon_adjustment: Extra shipment days during monsoon (Jun-Sep)
+   756→    
+   757→    Returns:
+   758→        OrderTriggerResult with complete analysis
+   759→    """
+   760→    if today is None:
+   761→        today = date.today()
+   762→    
+   763→    # ──────────────────────────────────────────────────────────────
+   764→    # STEP 1: Determine shipment and customs durations
+   765→    # ──────────────────────────────────────────────────────────────
+   766→    if shipment_days is None:
+   767→        if shipment_mode == ShipmentMode.SEA:
+   768→            shipment_days = 52 + monsoon_adjustment
+   769→        else:
+   770→            shipment_days = 8
+   771→    
+   772→    if customs_days is None:
+   773→        customs_days = 10 if shipment_mode == ShipmentMode.SEA else 3
+   774→    
+   775→    # ──────────────────────────────────────────────────────────────
+   776→    # STEP 2: Calculate Reorder Point (answers Q1)
+   777→    # ──────────────────────────────────────────────────────────────
+   778→    total_lead_time = mfg_days + shipment_days + customs_days
+   779→    reorder_point = (daily_consumption_rate * total_lead_time) + safety_stock
+   780→    
+   781→    # Determine stock status
+   782→    if current_stock <= safety_stock:
+   783→        stock_status = 'at_safety'
+   784→        needs_order = True
+   785→    elif current_stock <= reorder_point:
+   786→        stock_status = 'below_reorder'
+   787→        needs_order = True
+   788→    elif current_stock > max_stock:
+   789→        stock_status = 'overstock'
+   790→        needs_order = False
+   791→    else:
+   792→        stock_status = 'adequate'
+   793→        needs_order = current_stock < reorder_point  # May still need to order for seasonal prep
+   794→    
+   795→    # ──────────────────────────────────────────────────────────────
+   796→    # STEP 3: Calculate Order Trigger Date (answers Q3)
+   797→    # ──────────────────────────────────────────────────────────────
+   798→    
+   799→    # 3a: When will stock hit safety stock level?
+   800→    if daily_consumption_rate > 0:
+   801→        days_until_safety_stock = (current_stock - safety_stock) / daily_consumption_rate
+   802→    else:
+   803→        days_until_safety_stock = float('inf')  # No consumption = no urgency
+   804→    
+   805→    safety_stock_hit_date = today + timedelta(days=max(0, days_until_safety_stock))
+   806→    
+   807→    # 3b: Order trigger = safety_stock_hit_date - total_lead_time - buffer
+   808→    #     (We must order early enough that goods arrive BEFORE we hit safety stock)
+   809→    order_trigger_date = safety_stock_hit_date - timedelta(days=total_lead_time) - timedelta(days=buffer_days)
+   810→    
+   811→    # ──────────────────────────────────────────────────────────────
+   812→    # STEP 4: CNY Risk Assessment
+   813→    # ──────────────────────────────────────────────────────────────
+   814→    cny_risk = _assess_cny_risk(
+   815→        order_trigger_date=order_trigger_date,
+   816→        mfg_days=mfg_days,
+   817→        cny_start=cny_start,
+   818→        cny_end=cny_end,
+   819→        today=today,
+   820→        current_stock=current_stock,
+   821→        safety_stock=safety_stock,
+   822→        daily_consumption_rate=daily_consumption_rate,
+   823→        buffer_days=buffer_days,
+   824→        order_processing_days=order_processing_days,
+   825→    )
+   826→    
+   827→    # If CNY risk detected, revise order trigger date
+   828→    cny_delay_days = 0
+   829→    if cny_risk.has_risk:
+   830→        if cny_risk.strategy == CNYStrategy.BEFORE_CNY:
+   831→            # Order early enough to finish before CNY
+   832→            if cny_risk.latest_safe_order_date and cny_risk.latest_safe_order_date >= today:
+   833→                order_trigger_date = min(order_trigger_date, cny_risk.latest_safe_order_date)
+   834→        elif cny_risk.strategy == CNYStrategy.AFTER_CNY:
+   835→            # Accept delay, order after CNY
+   836→            if cny_risk.post_cny_order_date:
+   837→                order_trigger_date = cny_risk.post_cny_order_date
+   838→                cny_delay_days = cny_risk.additional_delay_days
+   839→        cny_risk = dataclass_replace(cny_risk)  # Update if needed
+   840→    
+   841→    # ──────────────────────────────────────────────────────────────
+   842→    # STEP 5: Build Complete Timeline
+   843→    # ──────────────────────────────────────────────────────────────
+   844→    timeline = _build_timeline(
+   845→        order_trigger_date=order_trigger_date,
+   846→        mfg_days=mfg_days,
+   847→        shipment_days=shipment_days,
+   848→        customs_days=customs_days,
+   849→        order_processing_days=order_processing_days,
+   850→        packing_loading_days=packing_loading_days,
+   851→        warehouse_transport_days=warehouse_transport_days,
+   852→        qc_shelving_days=qc_shelving_days,
+   853→        cny_delay_days=cny_delay_days,
+   854→    )
+   855→    
+   856→    # ──────────────────────────────────────────────────────────────
+   857→    # STEP 6: Determine Urgency
+   858→    # ──────────────────────────────────────────────────────────────
+   859→    days_until_trigger = (order_trigger_date - today).days
+   860→    
+   861→    if days_until_trigger <= 0:
+   862→        urgency = Urgency.CRITICAL  # OVERDUE — should have been ordered already!
+   863→    elif days_until_trigger <= 30:
+   864→        urgency = Urgency.CRITICAL
+   865→    elif days_until_trigger <= 90:
+   866→        urgency = Urgency.HIGH
+   867→    elif days_until_trigger <= 180:
+   868→        urgency = Urgency.NORMAL
+   869→    else:
+   870→        urgency = Urgency.LOW
+   871→    
+   872→    # ──────────────────────────────────────────────────────────────
+   873→    # STEP 7: Calculate Recommended Order Quantity (answers Q2)
+   874→    # ──────────────────────────────────────────────────────────────
+   875→    qty_result = calculate_recommended_qty(
+   876→        forecasted_demand=forecasted_demand,
+   877→        safety_stock=safety_stock,
+   878→        current_stock=current_stock,
+   879→        qty_on_order=qty_on_order,
+   880→        eoq=eoq,
+   881→        moq=moq,
+   882→        max_stock=max_stock,
+   883→    )
+   884→    
+   885→    # ──────────────────────────────────────────────────────────────
+   886→    # STEP 8: Recommend shipment mode
+   887→    # ──────────────────────────────────────────────────────────────
+   888→    recommended_mode = shipment_mode
+   889→    if urgency == Urgency.CRITICAL and shipment_mode == ShipmentMode.SEA:
+   890→        # Consider air for critical items (but only if it saves enough time)
+   891→        if days_until_trigger <= 0:
+   892→            recommended_mode = ShipmentMode.AIR
+   893→    
+   894→    # ──────────────────────────────────────────────────────────────
+   895→    # STEP 9: Return complete result
+   896→    # ──────────────────────────────────────────────────────────────
+   897→    return OrderTriggerResult(
+   898→        sku_code=sku_code,
+   899→        product_name=product_name,
+   900→        needs_order=needs_order,
+   901→        reorder_point=round(reorder_point, 1),
+   902→        current_stock=current_stock,
+   903→        stock_status=stock_status,
+   904→        recommended_qty=qty_result['recommended_qty'],
+   905→        recommended_qty_breakdown=qty_result,
+   906→        order_trigger_date=order_trigger_date,
+   907→        timeline=timeline,
+   908→        urgency=urgency,
+   909→        days_until_trigger=days_until_trigger,
+   910→        cny_risk=cny_risk,
+   911→        recommended_shipment_mode=recommended_mode,
+   912→        calculated_at=today,
+   913→        total_lead_time_days=total_lead_time,
+   914→    )
+   915→
+   916→
+   917→def _assess_cny_risk(
+   918→    order_trigger_date: date,
+   919→    mfg_days: int,
+   920→    cny_start: Optional[date],
+   921→    cny_end: Optional[date],
+   922→    today: date,
+   923→    current_stock: int,
+   924→    safety_stock: int,
+   925→    daily_consumption_rate: float,
+   926→    buffer_days: int,
+   927→    order_processing_days: int,
+   928→) -> CNYRiskAssessment:
+   929→    """Assess CNY risk for a planned order."""
+   930→    
+   931→    # No CNY data provided
+   932→    if cny_start is None or cny_end is None:
+   933→        return CNYRiskAssessment(
+   934→            has_risk=False, overlap_days=0,
+   935→            effective_cny_start=today, cny_shutdown_start=today, cny_shutdown_end=today,
+   936→            strategy=CNYStrategy.NONE, additional_delay_days=0,
+   937→            latest_safe_order_date=None, post_cny_order_date=None,
+   938→            explanation="No CNY window provided for analysis.",
+   939→        )
+   940→    
+   941→    # Pre-CNY wind-down period (factories slow down 5 days before)
+   942→    pre_cny_winddown = 5
+   943→    effective_cny_start = cny_start - timedelta(days=pre_cny_winddown)
+   944→    
+   945→    # Manufacturing period
+   946→    mfg_start = order_trigger_date + timedelta(days=order_processing_days)
+   947→    mfg_end = mfg_start + timedelta(days=mfg_days)
+   948→    
+   949→    # Post-CNY restart buffer (factories don't all restart on day 1)
+   950→    post_cny_restart_buffer = 3
+   951→    effective_cny_end = cny_end + timedelta(days=post_cny_restart_buffer)
+   952→    
+   953→    # Check overlap
+   954→    overlap_start = max(mfg_start, effective_cny_start)
+   955→    overlap_end = min(mfg_end, effective_cny_end)
+   956→    
+   957→    if overlap_start < overlap_end:
+   958→        overlap_days = (overlap_end - overlap_start).days
+   959→        
+   960→        # Calculate latest safe order date (Strategy A)
+   961→        latest_safe = effective_cny_start - timedelta(days=mfg_days) - timedelta(days=order_processing_days)
+   962→        
+   963→        # Calculate post-CNY order date (Strategy B)
+   964→        post_cny_order = cny_end + timedelta(days=post_cny_restart_buffer)
+   965→        
+   966→        # Total CNY shutdown period
+   967→        cny_total_days = (effective_cny_end - effective_cny_start).days
+   968→        
+   969→        # Determine strategy
+   970→        if latest_safe >= today:
+   971→            strategy = CNYStrategy.BEFORE_CNY
+   972→            additional_delay = 0
+   973→            explanation = (
+   974→                f"⚠️ CNY RISK: Manufacturing overlaps CNY by {overlap_days} days. "
+   975→                f"STRATEGY A: Order by {latest_safe.strftime('%Y-%m-%d')} to complete "
+   976→                f"manufacturing before CNY shutdown ({cny_start.strftime('%b %d')}–"
+   977→                f"{cny_end.strftime('%b %d')})."
+   978→            )
+   979→        else:
+   980→            strategy = CNYStrategy.AFTER_CNY
+   981→            additional_delay = cny_total_days
+   982→            explanation = (
+   983→                f"🔴 CNY RISK: Manufacturing overlaps CNY by {overlap_days} days. "
+   984→                f"Cannot finish before CNY. STRATEGY B: Order after CNY on "
+   985→                f"{post_cny_order.strftime('%Y-%m-%d')}. Effective delay: {cny_total_days} days. "
+   986→                f"Verify safety stock ({safety_stock}) can cover the delay."
+   987→            )
+   988→        
+   989→        return CNYRiskAssessment(
+   990→            has_risk=True,
+   991→            overlap_days=overlap_days,
+   992→            effective_cny_start=effective_cny_start,
+   993→            cny_shutdown_start=cny_start,
+   994→            cny_shutdown_end=cny_end,
+   995→            strategy=strategy,
+   996→            additional_delay_days=additional_delay,
+   997→            latest_safe_order_date=latest_safe if strategy == CNYStrategy.BEFORE_CNY else None,
+   998→            post_cny_order_date=post_cny_order if strategy == CNYStrategy.AFTER_CNY else None,
+   999→            explanation=explanation,
+  1000→        )
+  1001→    
+  1002→    # No overlap — safe
+  1003→    return CNYRiskAssessment(
+  1004→        has_risk=False, overlap_days=0,
+  1005→        effective_cny_start=effective_cny_start,
+  1006→        cny_shutdown_start=cny_start, cny_shutdown_end=cny_end,
+  1007→        strategy=CNYStrategy.NONE, additional_delay_days=0,
+  1008→        latest_safe_order_date=None, post_cny_order_date=None,
+  1009→        explanation=f"✅ No CNY risk. Manufacturing completes before CNY window "
+  1010→                    f"({cny_start.strftime('%b %d')}–{cny_end.strftime('%b %d')}).",
+  1011→    )
+  1012→
+  1013→
+  1014→def _build_timeline(
+  1015→    order_trigger_date: date,
+  1016→    mfg_days: int,
+  1017→    shipment_days: int,
+  1018→    customs_days: int,
+  1019→    order_processing_days: int,
+  1020→    packing_loading_days: int,
+  1021→    warehouse_transport_days: int,
+  1022→    qc_shelving_days: int,
+  1023→    cny_delay_days: int,
+  1024→) -> OrderTimeline:
+  1025→    """Build the complete order-to-availability timeline."""
+  1026→    
+  1027→    d = order_trigger_date
+  1028→    total = 0
+  1029→    
+  1030→    # Order processing
+  1031→    order_processing_end = d + timedelta(days=order_processing_days)
+  1032→    total += order_processing_days
+  1033→    
+  1034→    # Manufacturing (including any CNY delay)
+  1035→    mfg_start = order_processing_end
+  1036→    effective_mfg_days = mfg_days + cny_delay_days
+  1037→    mfg_complete = mfg_start + timedelta(days=effective_mfg_days)
+  1038→    total += effective_mfg_days
+  1039→    
+  1040→    # Packing & loading
+  1041→    packing_end = mfg_complete + timedelta(days=packing_loading_days)
+  1042→    total += packing_loading_days
+  1043→    
+  1044→    # Shipment
+  1045→    ship_departure = packing_end
+  1046→    arrival = ship_departure + timedelta(days=shipment_days)
+  1047→    total += shipment_days
+  1048→    
+  1049→    # Customs
+  1050→    customs_start = arrival
+  1051→    customs_clearance = customs_start + timedelta(days=customs_days)
+  1052→    total += customs_days
+  1053→    
+  1054→    # Warehouse transport
+  1055→    warehouse_arrival = customs_clearance + timedelta(days=warehouse_transport_days)
+  1056→    total += warehouse_transport_days
+  1057→    
+  1058→    # QC + shelving
+  1059→    available_for_sale = warehouse_arrival + timedelta(days=qc_shelving_days)
+  1060→    total += qc_shelving_days
+  1061→    
+  1062→    return OrderTimeline(
+  1063→        order_trigger_date=d,
+  1064→        order_processing_end=order_processing_end,
+  1065→        mfg_start_date=mfg_start,
+  1066→        mfg_complete_date=mfg_complete,
+  1067→        packing_loading_end=packing_end,
+  1068→        ship_departure_date=ship_departure,
+  1069→        arrival_date=arrival,
+  1070→        customs_start_date=customs_start,
+  1071→        customs_clearance_date=customs_clearance,
+  1072→        warehouse_arrival_date=warehouse_arrival,
+  1073→        available_for_sale_date=available_for_sale,
+  1074→        total_lead_time_days=total,
+  1075→        cny_delay_days=cny_delay_days,
+  1076→    )
+  1077→
+  1078→
+  1079→def dataclass_replace(obj, **kwargs):
+  1080→    """Simple dataclass replace (like dataclasses.replace)."""
+  1081→    from dataclasses import asdict, replace
+  1082→    return replace(obj, **kwargs)
+  1083→```
+  1084→
+  1085→### 4.3 Worked Example 1: Winter 2026 Order for Brake Pads
+  1086→
+  1087→**Scenario:** Brake Pad Set (BP-001), preparing for Winter 2026 season
+  1088→
+  1089→**Input parameters:**
+  1090→
+  1091→| Parameter | Value | Notes |
+  1092→|-----------|-------|-------|
+  1093→| SKU | BP-001 | Brake Pad Set - Front (CD70) |
+  1094→| Current stock | 95 units | |
+  1095→| Safety stock | 50 units | |
+  1096→| Max stock | 500 units | Warehouse capacity |
+  1097→| Daily consumption rate | 3.2 units/day | Higher in winter (normal: 2.0) |
+  1098→| Manufacturing | 90 days | Standard Chinese supplier |
+  1099→| Shipment | Sea, 52 days | Default sea route |
+  1100→| Customs | 10 days | Chittagong port |
+  1101→| EOQ | 200 units | Economic batch size |
+  1102→| MOQ | 100 units | Supplier minimum |
+  1103→| Forecasted demand | 580 units | Prophet forecast for Nov–Feb |
+  1104→| On order | 0 units | No pending orders |
+  1105→| Today | August 13, 2025 | |
+  1106→| CNY 2026 | Feb 7 — Feb 28 | |
+  1107→| Buffer | 7 days | |
+  1108→
+  1109→**Step-by-step calculation:**
+  1110→
+  1111→```
+  1112→═══════════════════════════════════════════════════════════════════════════
+  1113→  WORKED EXAMPLE: BP-001 Brake Pad Set — Winter 2026
+  1114→═══════════════════════════════════════════════════════════════════════════
+  1115→
+  1116→STEP 1: Calculate Total Lead Time
+  1117→──────────────────────────────────
+  1118→  Manufacturing:     90 days
+  1119→  Shipment (sea):    52 days
+  1120→  Customs:           10 days
+  1121→  ────────────────────────
+  1122→  Total Lead Time:  152 days
+  1123→
+  1124→STEP 2: Calculate Reorder Point
+  1125→────────────────────────────────
+  1126→  Reorder Point = (Daily Consumption × Lead Time) + Safety Stock
+  1127→  Reorder Point = (3.2 × 152) + 50
+  1128→  Reorder Point = 486.4 + 50
+  1129→  Reorder Point = 536.4 units
+  1130→
+  1131→  Current Stock (95) < Reorder Point (536.4)  →  NEEDS ORDER ✅
+  1132→  Stock Status: below_reorder
+  1133→
+  1134→STEP 3: Calculate When Stock Hits Safety Level
+  1135→──────────────────────────────────────────────
+  1136→  Days until safety stock = (Current Stock - Safety Stock) / Daily Rate
+  1137→  Days until safety stock = (95 - 50) / 3.2
+  1138→  Days until safety stock = 45 / 3.2
+  1139→  Days until safety stock = 14.06 days
+  1140→
+  1141→  Safety stock hit date = Aug 13 + 14 days = Aug 27, 2025
+  1142→
+  1143→STEP 4: Calculate Order Trigger Date
+  1144→────────────────────────────────────
+  1145→  Order Trigger Date = Safety Hit Date - Total Lead Time - Buffer
+  1146→  Order Trigger Date = Aug 27 - 152 days - 7 days
+  1147→  Order Trigger Date = Aug 27 - 159 days
+  1148→
+  1149→  Aug 27, 2025 − 159 days:
+  1150→    Aug 27 − 27 = Aug 0 → Jul 31
+  1151→    Jul 31 − 31 = Jun 30
+  1152→    Jun 30 − 30 = May 31
+  1153→    May 31 − 31 = Apr 30
+  1154→    Apr 30 − 30 = Mar 31
+  1155→    Mar 31 − 10 = Mar 21
+  1156→
+  1157→  Order Trigger Date = March 21, 2025  ← ALREADY PAST!
+  1158→
+  1159→STEP 5: CNY Risk Assessment
+  1160→──────────────────────────
+  1161→  Manufacturing period: Mar 21 + 2 days → Mar 23 to Jun 21, 2025
+  1162→  CNY 2025 shutdown: Jan 20 – Feb 10, 2025
+  1163→  Effective CNY (with wind-down): Jan 15 – Feb 13, 2025
+  1164→
+  1165→  Does Mar 23, 2025 – Jun 21, 2025 overlap with Jan 15 – Feb 13, 2025?
+  1166→  overlap_start = max(Mar 23, Jan 15) = Mar 23
+  1167→  overlap_end = min(Jun 21, Feb 13) = Feb 13
+  1168→  Mar 23 > Feb 13 → NO OVERLAP
+  1169→
+  1170→  ✅ No CNY risk for this order (CNY 2025 already passed)
+  1171→  
+  1172→  But wait — check CNY 2026:
+  1173→  Manufacturing period: Mar 23, 2025 to Jun 21, 2025
+  1174→  CNY 2026 shutdown: Feb 7 – Feb 28, 2026
+  1175→  Jun 21, 2025 < Feb 7, 2026 → NO OVERLAP
+  1176→  
+  1177→  ✅ No CNY risk (manufacturing completes well before CNY 2026)
+  1178→
+  1179→STEP 6: Determine Urgency
+  1180→─────────────────────────
+  1181→  Days until trigger = Mar 21, 2025 - Aug 13, 2025 = -145 days
+  1182→
+  1183→  -145 days ≤ 0  →  URGENCY = CRITICAL 🔴
+  1184→
+  1185→  ⚠️ This order is 145 days OVERDUE! The product is likely already
+  1186→     in stockout territory. Immediate action required.
+  1187→
+  1188→STEP 7: Build Full Timeline (from today, Aug 13, since order is overdue)
+  1189→────────────────────────────────────────────────────────────────────────
+  1190→  Order Trigger Date:      Aug 13, 2025 (order NOW — it's overdue)
+  1191→  Order Processing:        Aug 13 → Aug 15 (2 days)
+  1192→  Manufacturing:           Aug 15 → Nov 13 (90 days)
+  1193→  Packing & Loading:       Nov 13 → Nov 15 (2 days)
+  1194→  Shipment (Sea):          Nov 15 → Jan 6, 2026 (52 days)
+  1195→  Arrival Chittagong:      Jan 6, 2026
+  1196→  Customs Clearance:       Jan 6 → Jan 16 (10 days)
+  1197→  Transport to Warehouse:  Jan 16 → Jan 17 (1 day)
+  1198→  QC + Shelving:           Jan 17 → Jan 18 (1 day)
+  1199→  ────────────────────────────────────────────
+  1200→  Available for Sale:      January 18, 2026
+  1201→  
+  1202→  Total: 2 + 90 + 2 + 52 + 10 + 1 + 1 = 158 days
+  1203→
+  1204→STEP 8: Calculate Recommended Order Quantity
+  1205→────────────────────────────────────────────
+  1206→  Total needed = Forecasted Demand + Safety Stock = 580 + 50 = 630
+  1207→  Total supply = Current Stock + On Order = 95 + 0 = 95
+  1208→  Gap = 630 - 95 = 535 units
+  1209→  
+  1210→  qty = max(Gap, EOQ) = max(535, 200) = 535
+  1211→  qty = max(535, MOQ) = max(535, 100) = 535  (MOQ satisfied)
+  1212→  qty = min(535, Max Stock - Current) = min(535, 500-95) = min(535, 405) = 405
+  1213→  
+  1214→  ⚠️ Warehouse cap constraint applied!
+  1215→  Recommended Qty = 405 units
+  1216→  (Need 535 but warehouse can only hold 405 more)
+  1217→
+  1218→═══════════════════════════════════════════════════════════════════════════
+  1219→  RESULT SUMMARY
+  1220→═══════════════════════════════════════════════════════════════════════════
+  1221→  Product:            BP-001 Brake Pad Set - Front (CD70)
+  1222→  Needs Order:        YES ✅
+  1223→  Recommended Qty:    405 units (constrained by warehouse capacity)
+  1224→  Order Trigger:      OVERDUE by 145 days — ORDER IMMEDIATELY
+  1225→  Urgency:            CRITICAL 🔴
+  1226→  Available Date:     January 18, 2026
+  1227→  Total Lead Time:    158 days
+  1228→  CNY Risk:           None ✅
+  1229→═══════════════════════════════════════════════════════════════════════════
+  1230→```
+  1231→
+  1232→**Python execution of the same example:**
+  1233→
+  1234→```python
+  1235→result = calculate_order_trigger(
+  1236→    sku_code="BP-001",
+  1237→    product_name="Brake Pad Set - Front (CD70)",
+  1238→    current_stock=95,
+  1239→    safety_stock=50,
+  1240→    max_stock=500,
+  1241→    daily_consumption_rate=3.2,
+  1242→    mfg_days=90,
+  1243→    shipment_mode=ShipmentMode.SEA,
+  1244→    shipment_days=52,
+  1245→    customs_days=10,
+  1246→    forecasted_demand=580,
+  1247→    qty_on_order=0,
+  1248→    eoq=200,
+  1249→    moq=100,
+  1250→    today=date(2025, 8, 13),
+  1251→    cny_start=date(2025, 1, 20),  # CNY 2025 (already passed)
+  1252→    cny_end=date(2025, 2, 10),
+  1253→    buffer_days=7,
+  1254→)
+  1255→
+  1256→# Key outputs:
+  1257→# result.needs_order = True
+  1258→# result.reorder_point = 536.4
+  1259→# result.stock_status = 'below_reorder'
+  1260→# result.urgency = Urgency.CRITICAL
+  1261→# result.days_until_trigger = -145  (OVERDUE!)
+  1262→# result.recommended_qty = 405
+  1263→# result.timeline.available_for_sale_date = date(2026, 1, 18)
+  1264→# result.cny_risk.has_risk = False
+  1265→```
+  1266→
+  1267→### 4.4 Worked Example 2: CNY-Risky Order
+  1268→
+  1269→**Scenario:** Chain Sprocket Kit (CS-015), where the natural order trigger date falls during CNY shutdown.
+  1270→
+  1271→**Input parameters:**
+  1272→
+  1273→| Parameter | Value | Notes |
+  1274→|-----------|-------|-------|
+  1275→| SKU | CS-015 | Chain Sprocket Kit (Pulsar 150) |
+  1276→| Current stock | 320 units | |
+  1277→| Safety stock | 80 units | |
+  1278→| Max stock | 600 units | |
+  1279→| Daily consumption rate | 1.5 units/day | Moderate demand |
+  1280→| Manufacturing | 90 days | |
+  1281→| Shipment | Sea, 52 days | |
+  1282→| Customs | 10 days | |
+  1283→| Today | November 15, 2025 | |
+  1284→| CNY 2026 | Feb 7 — Feb 28 | |
+  1285→| Buffer | 7 days | |
+  1286→
+  1287→**Step-by-step calculation:**
+  1288→
+  1289→```
+  1290→═══════════════════════════════════════════════════════════════════════════
+  1291→  WORKED EXAMPLE: CS-015 Chain Sprocket Kit — CNY Risk Scenario
+  1292→═══════════════════════════════════════════════════════════════════════════
+  1293→
+  1294→STEP 1: Total Lead Time
+  1295→────────────────────────
+  1296→  Manufacturing:  90 days
+  1297→  Shipment:       52 days
+  1298→  Customs:        10 days
+  1299→  Total:         152 days
+  1300→
+  1301→STEP 2: Reorder Point
+  1302→──────────────────────
+  1303→  Reorder Point = (1.5 × 152) + 80 = 228 + 80 = 308 units
+  1304→  Current Stock (320) > Reorder Point (308)  →  Close to reorder!
+  1305→  (Will cross reorder point soon at current consumption rate)
+  1306→
+  1307→STEP 3: When does stock hit safety level?
+  1308→─────────────────────────────────────────
+  1309→  Days until safety stock = (320 - 80) / 1.5 = 160 days
+  1310→  Safety stock hit date = Nov 15 + 160 days = Apr 24, 2026
+  1311→
+  1312→STEP 4: Calculate Order Trigger Date
+  1313→────────────────────────────────────
+  1314→  Order Trigger Date = Apr 24, 2026 - 152 days - 7 days
+  1315→  Order Trigger Date = Apr 24 - 159 days
+  1316→  Order Trigger Date = November 16, 2025
+  1317→
+  1318→  (Just 1 day from today — essentially, order NOW)
+  1319→
+  1320→STEP 5: CNY Risk Assessment ⚠️
+  1321→──────────────────────────────
+  1322→  Manufacturing period: Nov 17, 2025 → Feb 15, 2026
+  1323→    (Nov 16 + 2 processing = Nov 17 start; + 90 mfg = Feb 15)
+  1324→
+  1325→  CNY 2026 shutdown: Feb 7 – Feb 28, 2026
+  1326→  Effective CNY window (with 5-day wind-down): Feb 2 – Mar 3, 2026
+  1327→
+  1328→  Overlap check:
+  1329→    overlap_start = max(Nov 17, Feb 2) = Feb 2, 2026
+  1330→    overlap_end = min(Feb 15, Mar 3) = Feb 15, 2026
+  1331→    Feb 2 < Feb 15 → OVERLAP! 🔴
+  1332→
+  1333→    Overlap = 13 days
+  1334→
+  1335→  Strategy A (Order Before CNY):
+  1336→    Latest safe order = Feb 2 - 90 mfg - 2 processing = Nov 2, 2025
+  1337→    Is Nov 2 >= today (Nov 15)?  NO ❌
+  1338→    → Cannot complete manufacturing before CNY starts
+  1339→
+  1340→  Strategy B (Order After CNY):
+  1341→    Post-CNY order date = Feb 28 + 3 restart buffer = Mar 3, 2026
+  1342→    This adds ~29 days of effective CNY delay
+  1343→
+  1344→  ⚠️ RESULT: CNY Risk detected. Strategy B selected.
+  1345→    Revised order trigger date: March 3, 2026
+  1346→    Additional delay: 29 days (CNY shutdown + restart buffer)
+  1347→
+  1348→STEP 6: Revised Timeline (with CNY delay)
+  1349→─────────────────────────────────────────
+  1350→  Order Trigger Date:      Mar 3, 2026 (revised from Nov 16)
+  1351→  Order Processing:        Mar 3 → Mar 5 (2 days)
+  1352→  Manufacturing:           Mar 5 → Jun 3 (90 days, no CNY overlap now)
+  1353→  Packing & Loading:       Jun 3 → Jun 5 (2 days)
+  1354→  Shipment (Sea):          Jun 5 → Jul 27 (52 days)
+  1355→  Arrival Chittagong:      Jul 27, 2026
+  1356→  Customs Clearance:       Jul 27 → Aug 6 (10 days)
+  1357→  Transport to Warehouse:  Aug 6 → Aug 7 (1 day)
+  1358→  QC + Shelving:           Aug 7 → Aug 8 (1 day)
+  1359→  ────────────────────────────────────────────
+  1360→  Available for Sale:      August 8, 2026
+  1361→
+  1362→STEP 7: Urgency (with revised date)
+  1363→────────────────────────────────────
+  1364→  Days until trigger = Mar 3, 2026 - Nov 15, 2025 = 108 days
+  1365→  90 < 108 ≤ 180  →  URGENCY = NORMAL 🟡
+  1366→
+  1367→  But stock will hit safety level on Apr 24, 2026
+  1368→  Available date is Aug 8, 2026
+  1369→  Stockout risk: Apr 24 to Aug 8 = 106 days of stockout! 🔴
+  1370→
+  1371→  ⚠️ UPGRADED URGENCY: HIGH (due to stockout gap despite CNY delay)
+  1372→
+  1373→═══════════════════════════════════════════════════════════════════════════
+  1374→  RESULT SUMMARY
+  1375→═══════════════════════════════════════════════════════════════════════════
+  1376→  Product:            CS-015 Chain Sprocket Kit (Pulsar 150)
+  1377→  Needs Order:        YES ✅
+  1378→  Original Trigger:   Nov 16, 2025
+  1379→  Revised Trigger:    Mar 3, 2026 (CNY delay)
+  1380→  CNY Strategy:       AFTER_CNY (Strategy B)
+  1381→  CNY Overlap:        13 days
+  1382→  Additional Delay:   29 days
+  1383→  Urgency:            HIGH 🟡→🔴 (upgraded due to stockout gap)
+  1384→  Available Date:     Aug 8, 2026
+  1385→  Stockout Risk:      Apr 24 – Aug 8 (106 days)
+  1386→  
+  1387→  💡 RECOMMENDATION: Consider partial order via AIR for critical
+  1388→     items to bridge the stockout gap, or increase safety stock
+  1389→     to 240 units (160 days × 1.5/day) to survive until Aug 2026.
+  1390→═══════════════════════════════════════════════════════════════════════════
+  1391→```
+  1392→
+  1393→**Alternative: What if we used Strategy A (rushed order before Nov 2)?**
+  1394→
+  1395→```
+  1396→  If the business had placed the order by November 2, 2025:
+  1397→  
+  1398→  Order Date:            Nov 2, 2025
+  1399→  Mfg Start:            Nov 4, 2025
+  1400→  Mfg Complete:         Feb 2, 2026 (just before effective CNY start)
+  1401→  Packing:              Feb 2 → Feb 4
+  1402→  Shipment:             Feb 4 → Mar 28 (52 days)
+  1403→  Arrival:              Mar 28, 2026
+  1404→  Customs:              Mar 28 → Apr 7
+  1405→  Available:            Apr 9, 2026
+  1406→  
+  1407→  vs. Strategy B available: Aug 8, 2026
+  1408→  TIME SAVED: 121 days! 🎯
+  1409→  
+  1410→  But Nov 2 < today (Nov 15) → This option is no longer available.
+  1411→  LESSON: Early CNY planning is critical. System should have flagged
+  1412→  this product in September 2025.
+  1413→```
+  1414→
+  1415→### 4.5 Worked Example 3: Overstocked Product (No Order Needed)
+  1416→
+  1417→**Scenario:** Engine Oil Filter (EOF-022), currently overstocked
+  1418→
+  1419→```
+  1420→═══════════════════════════════════════════════════════════════════════════
+  1421→  WORKED EXAMPLE: EOF-022 Engine Oil Filter — Overstock Scenario
+  1422→═══════════════════════════════════════════════════════════════════════════
+  1423→
+  1424→  Current Stock:    450 units
+  1425→  Safety Stock:     40 units
+  1426→  Max Stock:        400 units
+  1427→  Daily Rate:       2.0 units/day
+  1428→  
+  1429→  Current Stock (450) > Max Stock (400) → OVERSTOCK ⚠️
+  1430→  
+  1431→  Days to draw down to max: (450 - 400) / 2.0 = 25 days
+  1432→  Days to draw down to reorder: (450 - 344) / 2.0 = 53 days
+  1433→    (Reorder Point = (2.0 × 152) + 40 = 344)
+  1434→  
+  1435→  RESULT: No order needed. Wait for stock to draw down.
+  1436→  Next review: In 53 days (when stock approaches reorder point)
+  1437→═══════════════════════════════════════════════════════════════════════════
+  1438→```
+  1439→
+  1440→---
+  1441→
+  1442→## 5. Recommended Order Quantity Calculator
+  1443→
+  1444→### 5.1 Full Implementation
+  1445→
+  1446→```python
+  1447→@dataclass
+  1448→class QuantityBreakdown:
+  1449→    """Detailed breakdown of how the recommended qty was calculated."""
+  1450→    total_needed: int           # forecasted_demand + safety_stock
+  1451→    total_supply: int           # current_stock + qty_on_order
+  1452→    gap: int                    # total_needed - total_supply
+  1453→    eoq: int                    # economic order quantity
+  1454→    moq: int                    # supplier minimum
+  1455→    max_stock: int              # warehouse capacity
+  1456→    pre_constraint_qty: int     # qty before constraints applied
+  1457→    recommended_qty: int        # final constrained qty
+  1458→    status: str                 # 'order_needed', 'adequate', 'overstock', 'warehouse_full'
+  1459→    constraints_applied: List[str]  # Which constraints were active
+  1460→    reason: str                 # Human-readable explanation
+  1461→
+  1462→
+  1463→def calculate_recommended_qty(
+  1464→    forecasted_demand: int,
+  1465→    safety_stock: int,
+  1466→    current_stock: int,
+  1467→    qty_on_order: int,
+  1468→    eoq: int,
+  1469→    moq: int,
+  1470→    max_stock: int,
+  1471→) -> dict:
+  1472→    """
+  1473→    Calculate the recommended order quantity with full constraint handling.
+  1474→    
+  1475→    Algorithm:
+  1476→    ─────────
+  1477→    1. Calculate total needed: Forecasted Demand + Safety Stock
+  1478→    2. Calculate total supply: Current Stock + On Order
+  1479→    3. Calculate gap: total_needed - total_supply
+  1480→    4. If gap <= 0 → No order needed (adequate stock)
+  1481→    5. If currently overstocked → No order, allow draw-down
+  1482→    6. Start with qty = max(gap, EOQ) → economic batch optimization
+  1483→    7. Apply MOQ constraint: qty = max(qty, MOQ)
+  1484→    8. Apply warehouse cap: qty = min(qty, max_stock - current_stock)
+  1485→    9. If final qty < MOQ and warehouse can't fit MOQ → warehouse_full
+  1486→    10. Return final qty with full breakdown
+  1487→    
+  1488→    Args:
+  1489→        forecasted_demand: Total forecasted demand for planning period
+  1490→        safety_stock: Minimum safety stock level
+  1491→        current_stock: Current available inventory
+  1492→        qty_on_order: Units already on order (in pipeline)
+  1493→        eoq: Economic Order Quantity (optimal batch size)
+  1494→        moq: Supplier Minimum Order Quantity
+  1495→        max_stock: Maximum warehouse capacity for this SKU
+  1496→    
+  1497→    Returns:
+  1498→        Dictionary with recommended_qty, status, and full breakdown
+  1499→    """
+  1500→    constraints_applied = []
+  1501→    
+  1502→    # Step 1-3: Calculate demand gap
+  1503→    total_needed = forecasted_demand + safety_stock
+  1504→    total_supply = current_stock + qty_on_order
+  1505→    gap = total_needed - total_supply
+  1506→    
+  1507→    # Step 4: Check if stock is adequate
+  1508→    if gap <= 0:
+  1509→        return {
+  1510→            'recommended_qty': 0,
+  1511→            'status': 'adequate',
+  1512→            'reason': f'Stock sufficient. Supply ({total_supply}) covers need ({total_needed}).',
+  1513→            'gap': gap,
+  1514→            'eoq': eoq,
+  1515→            'moq': moq,
+  1516→            'max_stock': max_stock,
+  1517→            'constraints_applied': [],
+  1518→            'total_needed': total_needed,
+  1519→            'total_supply': total_supply,
+  1520→        }
+  1521→    
+  1522→    # Step 5: Check overstock
+  1523→    if current_stock > max_stock:
+  1524→        return {
+  1525→            'recommended_qty': 0,
+  1526→            'status': 'overstock',
+  1527→            'reason': f'Currently overstocked ({current_stock} > max {max_stock}). Allow draw-down.',
+  1528→            'gap': gap,
+  1529→            'eoq': eoq,
+  1530→            'moq': moq,
+  1531→            'max_stock': max_stock,
+  1532→            'constraints_applied': ['overstock_drawdown'],
+  1533→            'total_needed': total_needed,
+  1534→            'total_supply': total_supply,
+  1535→        }
+  1536→    
+  1537→    # Step 6: Start with economic quantity
+  1538→    qty = max(gap, eoq)
+  1539→    if eoq > gap:
+  1540→        constraints_applied.append(f'eoq_floor: EOQ ({eoq}) > gap ({gap}), using EOQ')
+  1541→    
+  1542→    # Step 7: Apply MOQ constraint
+  1543→    if qty < moq:
+  1544→        qty = moq
+  1545→        constraints_applied.append(f'moq_floor: qty raised to MOQ ({moq})')
+  1546→    
+  1547→    pre_constraint_qty = qty
+  1548→    
+  1549→    # Step 8: Apply warehouse capacity constraint
+  1550→    warehouse_capacity_remaining = max_stock - current_stock
+  1551→    if qty > warehouse_capacity_remaining:
+  1552→        qty = warehouse_capacity_remaining
+  1553→        constraints_applied.append(
+  1554→            f'warehouse_cap: qty reduced from {pre_constraint_qty} to {qty} '
+  1555→            f'(max_stock {max_stock} - current {current_stock})'
+  1556→        )
+  1557→    
+  1558→    # Step 9: Check if warehouse can't even fit MOQ
+  1559→    if qty < moq and qty > 0:
+  1560→        return {
+  1561→            'recommended_qty': 0,
+  1562→            'status': 'warehouse_full',
+  1563→            'reason': f'Insufficient warehouse space for MOQ. '
+  1564→                      f'Available space: {warehouse_capacity_remaining}, MOQ: {moq}.',
+  1565→            'gap': gap,
+  1566→            'eoq': eoq,
+  1567→            'moq': moq,
+  1568→            'max_stock': max_stock,
+  1569→            'constraints_applied': constraints_applied + ['warehouse_below_moq'],
+  1570→            'total_needed': total_needed,
+  1571→            'total_supply': total_supply,
+  1572→        }
+  1573→    
+  1574→    # Ensure qty is non-negative
+  1575→    qty = max(0, qty)
+  1576→    
+  1577→    status = 'order_needed' if qty > 0 else 'adequate'
+  1578→    reason = f'Order {qty} units. Gap: {gap}, constrained by: {constraints_applied or "none"}'
+  1579→    
+  1580→    return {
+  1581→        'recommended_qty': qty,
+  1582→        'status': status,
+  1583→        'reason': reason,
+  1584→        'gap': gap,
+  1585→        'eoq': eoq,
+  1586→        'moq': moq,
+  1587→        'max_stock': max_stock,
+  1588→        'constraints_applied': constraints_applied,
+  1589→        'total_needed': total_needed,
+  1590→        'total_supply': total_supply,
+  1591→        'pre_constraint_qty': pre_constraint_qty,
+  1592→    }
+  1593→```
+  1594→
+  1595→### 5.2 Quantity Calculation Examples
+  1596→
+  1597→```python
+  1598→# Example 1: Normal order (gap > EOQ > MOQ)
+  1599→result1 = calculate_recommended_qty(
+  1600→    forecasted_demand=580, safety_stock=50, current_stock=95,
+  1601→    qty_on_order=0, eoq=200, moq=100, max_stock=500
+  1602→)
+  1603→# Gap = 630 - 95 = 535
+  1604→# qty = max(535, 200) = 535
+  1605→# qty = max(535, 100) = 535  (MOQ satisfied)
+  1606→# qty = min(535, 405) = 405  (warehouse cap: 500-95=405)
+  1607→# Result: 405, warehouse_cap constraint applied
+  1608→
+  1609→
+  1610→# Example 2: Small gap, EOQ applies
+  1611→result2 = calculate_recommended_qty(
+  1612→    forecasted_demand=200, safety_stock=30, current_stock=180,
+  1613→    qty_on_order=0, eoq=150, moq=50, max_stock=500
+  1614→)
+  1615→# Gap = 230 - 180 = 50
+  1616→# qty = max(50, 150) = 150  (EOQ floor applies)
+  1617→# qty = max(150, 50) = 150  (MOQ satisfied)
+  1618→# qty = min(150, 320) = 150  (warehouse cap OK)
+  1619→# Result: 150, eoq_floor constraint applied
+  1620→
+  1621→
+  1622→# Example 3: Overstocked
+  1623→result3 = calculate_recommended_qty(
+  1624→    forecasted_demand=100, safety_stock=20, current_stock=450,
+  1625→    qty_on_order=0, eoq=100, moq=50, max_stock=400
+  1626→)
+  1627→# Current stock (450) > max_stock (400) → OVERSTOCK
+  1628→# Result: 0, status='overstock'
+  1629→
+  1630→
+  1631→# Example 4: Warehouse full
+  1632→result4 = calculate_recommended_qty(
+  1633→    forecasted_demand=500, safety_stock=50, current_stock=490,
+  1634→    qty_on_order=0, eoq=200, moq=100, max_stock=500
+  1635→)
+  1636→# Gap = 550 - 490 = 60
+  1637→# qty = max(60, 200) = 200
+  1638→# qty = max(200, 100) = 200
+  1639→# qty = min(200, 10) = 10  (warehouse cap: 500-490=10)
+  1640→# 10 < MOQ (100) → warehouse_full
+  1641→# Result: 0, status='warehouse_full'
+  1642→```
+  1643→
+  1644→---
+  1645→
+  1646→## 6. Seasonal Demand Prediction for BD Market
+  1647→
+  1648→### 6.1 BD Season Definitions
+  1649→
+  1650→```
+  1651→  ┌─────────────────────────────────────────────────────────────────────┐
+  1652→  │  BANGLADESH MOTORCYCLE SEASONAL CALENDAR                            │
+  1653→  │                                                                     │
+  1654→  │  Jan  Feb  Mar  Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec       │
+  1655→  │  ├──┼──┤├──┼──┼──┤├──┼──┼──┼──┤├──┤├──┼──┤                      │
+  1656→  │  │WINTER│  │SUMMER │  │  MONSOON   │Pre│  │WINTER│               │
+  1657→  │  │      │  │       │  │            │W  │  │      │               │
+  1658→  │  │HIGH  │  │MODERATE│  │  LOW       │HI │  │HIGH  │               │
+  1659→  │                                                                     │
+  1660→  └─────────────────────────────────────────────────────────────────────┘
+  1661→```
+  1662→
+  1663→| Season | Period | Duration | Demand Level | Key Products | Reason |
+  1664→|--------|--------|----------|-------------|-------------|--------|
+  1665→| **Winter** | Nov 1 — Feb 28 | 4 months | 🔴 HIGH | Brake pads, chains, riding gear, engine oil | Cool dry weather = peak riding season |
+  1666→| **Summer** | Mar 1 — May 31 | 3 months | 🟡 MODERATE | Electrical parts, tires, filters | Hot but rideable; AC/electrical issues |
+  1667→| **Monsoon** | Jun 1 — Sep 30 | 4 months | 🟢 LOW | Rain gear, brake pads (wet brakes wear fast), chains | Heavy rain = reduced riding; but wet brakes increase pad wear |
+  1668→| **Pre-Winter** | Oct 1 — Oct 31 | 1 month | 🟠 HIGH (spike) | ALL categories | Preparation rush before peak season |
+  1669→
+  1670→### 6.2 Seasonal Weight Model
+  1671→
+  1672→```python
+  1673→# Default seasonal weights (multiplier on base demand)
+  1674→SEASONAL_WEIGHTS = {
+  1675→    'winter':     1.40,   # 40% above base demand
+  1676→    'summer':     1.00,   # Base demand (reference)
+  1677→    'monsoon':    0.65,   # 35% below base demand
+  1678→    'pre_winter': 1.25,   # 25% above base (preparation spike)
+  1679→}
+  1680→
+  1681→# Category-specific seasonal adjustments
+  1682→# Some categories have counter-cyclical demand
+  1683→CATEGORY_SEASONAL_ADJUSTMENTS = {
+  1684→    'brake_system': {
+  1685→        'winter': 1.50,     # More braking in cool weather
+  1686→        'summer': 1.00,
+  1687→        'monsoon': 1.20,    # Wet brakes wear faster!
+  1688→        'pre_winter': 1.30,
+  1689→    },
+  1690→    'chain_sprocket': {
+  1691→        'winter': 1.60,     # Peak riding = peak chain wear
+  1692→        'summer': 1.10,
+  1693→        'monsoon': 0.80,    # Less riding, but rust issues
+  1694→        'pre_winter': 1.40,
+  1695→    },
+  1696→    'riding_gear': {
+  1697→        'winter': 2.00,     # Jackets, gloves in cold weather
+  1698→        'summer': 0.50,     # Minimal gear in heat
+  1699→        'monsoon': 1.50,    # Rain gear demand!
+  1700→        'pre_winter': 1.80,
+  1701→    },
+  1702→    'engine': {
+  1703→        'winter': 1.20,     # Engine oil, filters for winter prep
+  1704→        'summer': 1.10,
+  1705→        'monsoon': 0.60,    # Reduced riding
+  1706→        'pre_winter': 1.30,
+  1707→    },
+  1708→    'electrical': {
+  1709→        'winter': 0.80,     # Fewer electrical issues
+  1710→        'summer': 1.50,     # Heat causes electrical failures
+  1711→        'monsoon': 1.30,    # Water damage
+  1712→        'pre_winter': 1.00,
+  1713→    },
+  1714→    'body': {
+  1715→        'winter': 1.00,
+  1716→        'summer': 0.90,
+  1717→        'monsoon': 0.70,    # Less cosmetic work in rain
+  1718→        'pre_winter': 1.10,
+  1719→    },
+  1720→}
+  1721→
+  1722→
+  1723→def get_season_for_date(target_date: date) -> str:
+  1724→    """Determine which season a date falls in."""
+  1725→    month = target_date.month
+  1726→    if month in (11, 12, 1, 2):
+  1727→        return 'winter'
+  1728→    elif month in (3, 4, 5):
+  1729→        return 'summer'
+  1730→    elif month in (6, 7, 8, 9):
+  1731→        return 'monsoon'
+  1732→    else:  # October
+  1733→        return 'pre_winter'
+  1734→
+  1735→
+  1736→def get_season_date_range(season: str, year: int) -> tuple:
+  1737→    """Get start and end dates for a season."""
+  1738→    ranges = {
+  1739→        'winter': (date(year, 11, 1), date(year + 1, 2, 28)),
+  1740→        'summer': (date(year, 3, 1), date(year, 5, 31)),
+  1741→        'monsoon': (date(year, 6, 1), date(year, 9, 30)),
+  1742→        'pre_winter': (date(year, 10, 1), date(year, 10, 31)),
+  1743→    }
+  1744→    return ranges[season]
+  1745→
+  1746→
+  1747→def apply_seasonal_weight(
+  1748→    base_demand: float,
+  1749→    season: str,
+  1750→    category: str,
+  1751→) -> float:
+  1752→    """
+  1753→    Apply seasonal weighting to base demand.
+  1754→    
+  1755→    Uses category-specific weights if available, 
+  1756→    otherwise falls back to general seasonal weights.
+  1757→    """
+  1758→    # Try category-specific first
+  1759→    if category in CATEGORY_SEASONAL_ADJUSTMENTS:
+  1760→        weight = CATEGORY_SEASONAL_ADJUSTMENTS[category].get(
+  1761→            season, SEASONAL_WEIGHTS.get(season, 1.0)
+  1762→        )
+  1763→    else:
+  1764→        weight = SEASONAL_WEIGHTS.get(season, 1.0)
+  1765→    
+  1766→    return base_demand * weight
+  1767→```
+  1768→
+  1769→### 6.3 How to Predict "Next Winter Best Products"
+  1770→
+  1771→```python
+  1772→def predict_season_best_products(
+  1773→    products: List[dict],        # List of product records with forecast data
+  1774→    target_season: str,          # 'winter', 'summer', 'monsoon', 'pre_winter'
+  1775→    target_year: int,
+  1776→    current_stock_by_sku: dict,  # {sku_code: current_stock}
+  1777→    safety_stock_by_sku: dict,   # {sku_code: safety_stock}
+  1778→    supplier_lead_times: dict,   # {supplier_id: mfg_days}
+  1779→    today: Optional[date] = None,
+  1780→    top_n: int = 20,
+  1781→) -> List[dict]:
+  1782→    """
+  1783→    Predict the best products for an upcoming season.
+  1784→    
+  1785→    Algorithm:
+  1786→    1. Filter products by season compatibility (season_type matches target or 'all_season')
+  1787→    2. For each product, apply seasonal weight to forecasted demand
+  1788→    3. Rank by: adjusted_demand (forecasted_demand × seasonal_weight)
+  1789→    4. For top N, calculate order trigger date and recommended qty
+  1790→    5. Sort by urgency (critical first), then by adjusted_demand descending
+  1791→    
+  1792→    Returns:
+  1793→        List of product recommendations with full order trigger analysis
+  1794→    """
+  1795→    if today is None:
+  1796→        today = date.today()
+  1797→    
+  1798→    season_start, season_end = get_season_date_range(target_season, target_year)
+  1799→    
+  1800→    # Get CNY window that affects this season's orders
+  1801→    cny = get_cny_for_date(season_start)
+  1802→    cny_start = cny['shutdown_start'] if cny else None
+  1803→    cny_end = cny['shutdown_end'] if cny else None
+  1804→    
+  1805→    recommendations = []
+  1806→    
+  1807→    for product in products:
+  1808→        # Step 1: Season compatibility filter
+  1809→        if product.get('season_type') not in (target_season, 'all_season'):
+  1810→            continue
+  1811→        
+  1812→        sku = product['sku_code']
+  1813→        category = product.get('category', 'general')
+  1814→        base_demand = product.get('forecasted_demand', 0)
+  1815→        
+  1816→        # Step 2: Apply seasonal weight
+  1817→        adjusted_demand = apply_seasonal_weight(base_demand, target_season, category)
+  1818→        
+  1819→        if adjusted_demand <= 0:
+  1820→            continue
+  1821→        
+  1822→        # Step 3: Get parameters
+  1823→        current_stock = current_stock_by_sku.get(sku, 0)
+  1824→        safety_stock = safety_stock_by_sku.get(sku, 0)
+  1825→        supplier_id = product.get('default_supplier_id')
+  1826→        mfg_days = supplier_lead_times.get(supplier_id, 90) if supplier_id else 90
+  1827→        
+  1828→        # Step 4: Calculate order trigger
+  1829→        trigger_result = calculate_order_trigger(
+  1830→            sku_code=sku,
+  1831→            product_name=product.get('name', ''),
+  1832→            current_stock=current_stock,
+  1833→            safety_stock=safety_stock,
+  1834→            max_stock=product.get('max_stock', 500),
+  1835→            daily_consumption_rate=adjusted_demand / (season_end - season_start).days,
+  1836→            mfg_days=mfg_days,
+  1837→            shipment_mode=ShipmentMode.SEA,
+  1838→            forecasted_demand=int(adjusted_demand),
+  1839→            qty_on_order=product.get('qty_on_order', 0),
+  1840→            eoq=product.get('eoq', 100),
+  1841→            moq=product.get('moq', 50),
+  1842→            today=today,
+  1843→            cny_start=cny_start,
+  1844→            cny_end=cny_end,
+  1845→        )
+  1846→        
+  1847→        recommendations.append({
+  1848→            'sku_code': sku,
+  1849→            'name': product.get('name', ''),
+  1850→            'category': category,
+  1851→            'season_type': product.get('season_type'),
+  1852→            'motorcycle_model': product.get('motorcycle_model'),
+  1853→            'forecasted_demand': base_demand,
+  1854→            'seasonal_weight': CATEGORY_SEASONAL_ADJUSTMENTS.get(
+  1855→                category, SEASONAL_WEIGHTS
+  1856→            ).get(target_season, 1.0),
+  1857→            'adjusted_demand': round(adjusted_demand, 0),
+  1858→            'recommended_qty': trigger_result.recommended_qty,
+  1859→            'order_trigger_date': trigger_result.order_trigger_date,
+  1860→            'expected_available_date': trigger_result.timeline.available_for_sale_date,
+  1861→            'urgency': trigger_result.urgency.value,
+  1862→            'cny_risk': trigger_result.cny_risk.has_risk,
+  1863→            'cny_strategy': trigger_result.cny_risk.strategy.value,
+  1864→            'days_until_trigger': trigger_result.days_until_trigger,
+  1865→            'total_lead_time_days': trigger_result.total_lead_time_days,
+  1866→        })
+  1867→    
+  1868→    # Step 5: Sort by urgency, then by adjusted demand
+  1869→    urgency_order = {'critical': 0, 'high': 1, 'normal': 2, 'low': 3}
+  1870→    recommendations.sort(
+  1871→        key=lambda x: (urgency_order.get(x['urgency'], 99), -x['adjusted_demand'])
+  1872→    )
+  1873→    
+  1874→    return recommendations[:top_n]
+  1875→```
+  1876→
+  1877→### 6.4 Session-Wise Forecast Output Format
+  1878→
+  1879→```json
+  1880→{
+  1881→  "forecast_session_id": "fs_20250813_winter2026",
+  1882→  "tenant_id": "t_bd_parts_001",
+  1883→  "season": "winter_2026",
+  1884→  "period": {
+  1885→    "start": "2025-11-01",
+  1886→    "end": "2026-02-28",
+  1887→    "total_days": 120
+  1888→  },
+  1889→  "generated_at": "2025-08-13T10:30:00+06:00",
+  1890→  "cny_window": {
+  1891→    "year": 2026,
+  1892→    "shutdown_start": "2026-02-07",
+  1893→    "shutdown_end": "2026-02-28",
+  1894→    "effective_start": "2026-02-02",
+  1895→    "effective_end": "2026-03-03"
+  1896→  },
+  1897→  "products": [
+  1898→    {
+  1899→      "sku_code": "BP-001",
+  1900→      "name": "Brake Pad Set - Front (CD70)",
+  1901→      "category": "brake_system",
+  1902→      "season_type": "winter",
+  1903→      "motorcycle_model": "CD70",
+  1904→      "forecasted_demand": 580,
+  1905→      "seasonal_weight": 1.50,
+  1906→      "adjusted_demand": 870,
+  1907→      "recommended_qty": 405,
+  1908→      "order_trigger_date": "2025-08-13",
+  1909→      "expected_available_date": "2026-01-18",
+  1910→      "urgency": "critical",
+  1911→      "days_until_trigger": 0,
+  1912→      "cny_risk": false,
+  1913→      "cny_strategy": "none",
+  1914→      "total_lead_time_days": 158,
+  1915→      "unit_cost_bdt": 450,
+  1916→      "total_cost_bdt": 182250
+  1917→    },
+  1918→    {
+  1919→      "sku_code": "CS-015",
+  1920→      "name": "Chain Sprocket Kit (Pulsar 150)",
+  1921→      "category": "chain_sprocket",
+  1922→      "season_type": "winter",
+  1923→      "motorcycle_model": "Pulsar150",
+  1924→      "forecasted_demand": 320,
+  1925→      "seasonal_weight": 1.60,
+  1926→      "adjusted_demand": 512,
+  1927→      "recommended_qty": 280,
+  1928→      "order_trigger_date": "2026-03-03",
+  1929→      "expected_available_date": "2026-08-08",
+  1930→      "urgency": "high",
+  1931→      "days_until_trigger": 108,
+  1932→      "cny_risk": true,
+  1933→      "cny_strategy": "after_cny",
+  1934→      "total_lead_time_days": 181,
+  1935→      "unit_cost_bdt": 1200,
+  1936→      "total_cost_bdt": 336000
+  1937→    },
+  1938→    {
+  1939→      "sku_code": "RG-008",
+  1940→      "name": "Riding Jacket - Winter (Universal)",
+  1941→      "category": "riding_gear",
+  1942→      "season_type": "winter",
+  1943→      "motorcycle_model": "universal",
+  1944→      "forecasted_demand": 150,
+  1945→      "seasonal_weight": 2.00,
+  1946→      "adjusted_demand": 300,
+  1947→      "recommended_qty": 200,
+  1948→      "order_trigger_date": "2025-06-15",
+  1949→      "expected_available_date": "2025-11-20",
+  1950→      "urgency": "critical",
+  1951→      "days_until_trigger": -59,
+  1952→      "cny_risk": false,
+  1953→      "cny_strategy": "none",
+  1954→      "total_lead_time_days": 158,
+  1955→      "unit_cost_bdt": 2800,
+  1956→      "total_cost_bdt": 560000
+  1957→    }
+  1958→  ],
+  1959→  "summary": {
+  1960→    "total_products": 47,
+  1961→    "total_recommended_units": 8750,
+  1962→    "total_recommended_spend_bdt": 8500000,
+  1963→    "critical_urgency_count": 5,
+  1964→    "high_urgency_count": 12,
+  1965→    "normal_urgency_count": 20,
+  1966→    "low_urgency_count": 10,
+  1967→    "cny_risk_count": 3,
+  1968→    "cny_strategy_before": 1,
+  1969→    "cny_strategy_after": 2,
+  1970→    "earliest_order_date": "2025-06-15",
+  1971→    "latest_order_date": "2026-03-15",
+  1972→    "warehouse_utilization_pct": 72.5,
+  1973→    "products_by_category": {
+  1974→      "brake_system": 15,
+  1975→      "chain_sprocket": 8,
+  1976→      "riding_gear": 6,
+  1977→      "engine": 10,
+  1978→      "electrical": 5,
+  1979→      "body": 3
+  1980→    }
+  1981→  }
+  1982→}
+  1983→```
+  1984→
+  1985→---
+  1986→
+  1987→## 7. Dashboard Visualization — Order Timeline Gantt
+  1988→
+  1989→### 7.1 Visual Specification
+  1990→
+  1991→```
+  1992→  ┌─────────────────────────────────────────────────────────────────────────────┐
+  1993→  │  ORDER TIMELINE — WINTER 2026 PREPARATION                                  │
+  1994→  │  Generated: Aug 13, 2025  │  Total Products: 47  │  Critical: 5           │
+  1995→  ├─────────────────────────────────────────────────────────────────────────────┤
+  1996→  │                                                                             │
+  1997→  │  Aug'25  Sep'25  Oct'25  Nov'25  Dec'25  Jan'26  Feb'26  Mar'26           │
+  1998→  │  ├──┼──┤├──┼──┤├──┼──┤├──┼──┤├──┼──┤├──┼──┤├──┼──┤├──┼──┤           │
+  1999→  │                                                                             │
+  2000→  │  BP-001  ▼████████████████░░░░░░░░░░░░████████░░░░░░░░░░░✓             │
+
+[showing lines 1-2000 of 2826; use offset=2001 with limit to continue reading]

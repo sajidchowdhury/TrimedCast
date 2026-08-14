@@ -158,7 +158,13 @@ export async function POST(request: NextRequest) {
           reorderHitDate: orderTrigger.reorderHitDate.toISOString().split('T')[0],
           orderTriggerDate: orderTrigger.orderTriggerDate.toISOString().split('T')[0],
           expectedDeliveryDate: orderTrigger.expectedDeliveryDate.toISOString().split('T')[0],
-          adjustedOrderDate: orderTrigger.adjustedOrderDate.toISOString().split('T')[0],
+          // Flatten CNY risk for response
+          cnyRisk: orderTrigger.cnyRisk.hasRisk,
+          cnyDelayDays: orderTrigger.cnyRisk.additionalDelayDays,
+          cnyStrategy: orderTrigger.cnyRisk.strategy,
+          cnyExplanation: orderTrigger.cnyRisk.explanation,
+          // Map urgency to priority for backward compat
+          priority: orderTrigger.urgency,
         },
         eoq,
         safetyStock: safetyStockResult,

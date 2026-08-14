@@ -1,0 +1,756 @@
+     1→'use client';
+     2→
+     3→import { useMemo } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import { Badge } from '@/components/ui/badge';
+     6→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     7→import {
+     8→  Tooltip,
+     9→  TooltipContent,
+    10→  TooltipTrigger,
+    11→} from '@/components/ui/tooltip';
+    12→import {
+    13→  Package,
+    14→  Factory,
+    15→  Ship,
+    16→  Anchor,
+    17→  ShieldCheck,
+    18→  Warehouse,
+    19→  CalendarClock,
+    20→  Truck,
+    21→  AlertTriangle,
+    22→  Clock,
+    23→  Plane,
+    24→} from 'lucide-react';
+    25→
+    26→// ---------------------------------------------------------------------------
+    27→// Types
+    28→// ---------------------------------------------------------------------------
+    29→
+    30→export interface OrderTimelineProps {
+    31→  orderDate: string; // ISO date
+    32→  leadTimeBreakdown: {
+    33→    manufacturing: number;
+    34→    shipping: number;
+    35→    customs: number;
+    36→    internal: number;
+    37→  };
+    38→  shippingMethod: 'sea' | 'air';
+    39→  cnyRisk?: boolean;
+    40→  cnyDelayDays?: number;
+    41→  cnyPeriod?: { start: string; end: string }; // CNY shutdown dates
+    42→  compact?: boolean; // compact mode for embedding in table rows
+    43→}
+    44→
+    45→// ---------------------------------------------------------------------------
+    46→// Helpers
+    47→// ---------------------------------------------------------------------------
+    48→
+    49→function addDays(iso: string, days: number): Date {
+    50→  const d = new Date(iso);
+    51→  d.setDate(d.getDate() + days);
+    52→  return d;
+    53→}
+    54→
+    55→function formatDate(date: Date): string {
+    56→  return date.toLocaleDateString('en-US', {
+    57→    month: 'short',
+    58→    day: 'numeric',
+    59→  });
+    60→}
+    61→
+    62→function formatDateFull(date: Date): string {
+    63→  return date.toLocaleDateString('en-US', {
+    64→    month: 'short',
+    65→    day: 'numeric',
+    66→    year: 'numeric',
+    67→  });
+    68→}
+    69→
+    70→function daysBetween(a: Date, b: Date): number {
+    71→  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+    72→}
+    73→
+    74→// ---------------------------------------------------------------------------
+    75→// Milestone definition
+    76→// ---------------------------------------------------------------------------
+    77→
+    78→interface Milestone {
+    79→  label: string;
+    80→  icon: React.ReactNode;
+    81→  date: Date;
+    82→  /** Cumulative day offset from order date */
+    83→  dayOffset: number;
+    84→  color: string;
+    85→}
+    86→
+    87→// ---------------------------------------------------------------------------
+    88→// Segment colors matching the spec
+    89→// ---------------------------------------------------------------------------
+    90→
+    91→const SEGMENT_COLORS = {
+    92→  manufacturing: 'bg-blue-600',
+    93→  manufacturingLight: 'bg-blue-400',
+    94→  shipping: 'bg-emerald-500',
+    95→  shippingLight: 'bg-emerald-300',
+    96→  customs: 'bg-amber-500',
+    97→  customsLight: 'bg-amber-300',
+    98→  internal: 'bg-gray-400',
+    99→  internalLight: 'bg-gray-200',
+   100→} as const;
+   101→
+   102→// ---------------------------------------------------------------------------
+   103→// Animation variants
+   104→// ---------------------------------------------------------------------------
+   105→
+   106→const containerVariants = {
+   107→  hidden: { opacity: 0 },
+   108→  visible: {
+   109→    opacity: 1,
+   110→    transition: { staggerChildren: 0.08 },
+   111→  },
+   112→};
+   113→
+   114→const itemVariants = {
+   115→  hidden: { opacity: 0, y: 12 },
+   116→  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+   117→};
+   118→
+   119→const barVariants = {
+   120→  hidden: { scaleX: 0 },
+   121→  visible: { scaleX: 1, transition: { duration: 0.6, ease: 'easeOut' as const } },
+   122→};
+   123→
+   124→// ---------------------------------------------------------------------------
+   125→// Compact Timeline (single line bar with milestone dots, no labels)
+   126→// ---------------------------------------------------------------------------
+   127→
+   128→function CompactTimeline({
+   129→  milestones,
+   130→  totalDays,
+   131→  todayOffset,
+   132→  cnyOffset,
+   133→  cnyWidth,
+   134→}: {
+   135→  milestones: Milestone[];
+   136→  totalDays: number;
+   137→  todayOffset: number | null;
+   138→  cnyOffset: number | null;
+   139→  cnyWidth: number | null;
+   140→}) {
+   141→  return (
+   142→    <div className="relative w-full py-1">
+   143→      {/* Background track */}
+   144→      <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
+   145→        {milestones.slice(0, -1).map((m, i) => {
+   146→          const next = milestones[i + 1];
+   147→          const segDays = next.dayOffset - m.dayOffset;
+   148→          const widthPct = (segDays / totalDays) * 100;
+   149→          const colorClass =
+   150→            i === 0
+   151→              ? SEGMENT_COLORS.manufacturing
+   152→              : i === 1
+   153→                ? SEGMENT_COLORS.shipping
+   154→                : i === 2
+   155→                  ? SEGMENT_COLORS.customs
+   156→                  : SEGMENT_COLORS.internal;
+   157→          return (
+   158→            <motion.div
+   159→              key={i}
+   160→              className={`${colorClass} first:rounded-l-full last:rounded-r-full`}
+   161→              style={{ width: `${widthPct}%`, transformOrigin: 'left' }}
+   162→              variants={barVariants}
+   163→              initial="hidden"
+   164→              animate="visible"
+   165→            />
+   166→          );
+   167→        })}
+   168→      </div>
+   169→
+   170→      {/* CNY overlay */}
+   171→      {cnyOffset !== null && cnyWidth !== null && (
+   172→        <div
+   173→          className="absolute top-1 h-3 bg-red-400/40 rounded-sm"
+   174→          style={{
+   175→            left: `${(cnyOffset / totalDays) * 100}%`,
+   176→            width: `${(cnyWidth / totalDays) * 100}%`,
+   177→          }}
+   178→        />
+   179→      )}
+   180→
+   181→      {/* Today marker */}
+   182→      {todayOffset !== null && todayOffset >= 0 && todayOffset <= totalDays && (
+   183→        <div
+   184→          className="absolute top-0 bottom-0 w-0.5 bg-slate-800"
+   185→          style={{ left: `${(todayOffset / totalDays) * 100}%` }}
+   186→        >
+   187→          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-slate-800" />
+   188→        </div>
+   189→      )}
+   190→
+   191→      {/* Milestone dots */}
+   192→      <div className="absolute inset-0 flex items-center">
+   193→        {milestones.map((m, i) => (
+   194→          <Tooltip key={i}>
+   195→            <TooltipTrigger asChild>
+   196→              <motion.div
+   197→                className="absolute w-3 h-3 rounded-full border-2 border-white shadow-sm cursor-default"
+   198→                style={{
+   199→                  left: `${(m.dayOffset / totalDays) * 100}%`,
+   200→                  transform: 'translateX(-50%)',
+   201→                  backgroundColor:
+   202→                    i === 0
+   203→                      ? '#475569'
+   204→                      : i === milestones.length - 1
+   205→                        ? '#10b981'
+   206→                        : '#3b82f6',
+   207→                }}
+   208→                variants={itemVariants}
+   209→                initial="hidden"
+   210→                animate="visible"
+   211→              />
+   212→            </TooltipTrigger>
+   213→            <TooltipContent side="top">
+   214→              <p className="font-medium">{m.label}</p>
+   215→              <p className="text-[10px] opacity-80">{formatDateFull(m.date)}</p>
+   216→            </TooltipContent>
+   217→          </Tooltip>
+   218→        ))}
+   219→      </div>
+   220→    </div>
+   221→  );
+   222→}
+   223→
+   224→// ---------------------------------------------------------------------------
+   225→// Full Timeline (horizontal bar with milestone dots, dates, icons, labels)
+   226→// ---------------------------------------------------------------------------
+   227→
+   228→function FullTimeline({
+   229→  milestones,
+   230→  segments,
+   231→  totalDays,
+   232→  todayOffset,
+   233→  cnyOffset,
+   234→  cnyWidth,
+   235→  orderDate,
+   236→  cnyRisk,
+   237→  cnyDelayDays,
+   238→  cnyPeriod,
+   239→  shippingMethod,
+   240→}: {
+   241→  milestones: Milestone[];
+   242→  segments: { label: string; days: number; color: string; icon: React.ReactNode }[];
+   243→  totalDays: number;
+   244→  todayOffset: number | null;
+   245→  cnyOffset: number | null;
+   246→  cnyWidth: number | null;
+   247→  orderDate: string;
+   248→  cnyRisk?: boolean;
+   249→  cnyDelayDays?: number;
+   250→  cnyPeriod?: { start: string; end: string };
+   251→  shippingMethod: 'sea' | 'air';
+   252→}) {
+   253→  const deliveryDate = milestones[milestones.length - 1].date;
+   254→  const totalWithCny = totalDays + (cnyDelayDays ?? 0);
+   255→
+   256→  return (
+   257→    <Card>
+   258→      <CardHeader className="pb-3">
+   259→        <CardTitle className="text-base flex items-center gap-2">
+   260→          <Truck className="h-4 w-4 text-blue-500" />
+   261→          Order Timeline
+   262→        </CardTitle>
+   263→      </CardHeader>
+   264→      <CardContent>
+   265→        <motion.div
+   266→          className="space-y-5"
+   267→          variants={containerVariants}
+   268→          initial="hidden"
+   269→          animate="visible"
+   270→        >
+   271→          {/* Summary Stats */}
+   272→          <motion.div variants={itemVariants} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   273→            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+   274→              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Lead Time</p>
+   275→              <p className="text-xl font-bold text-slate-800">
+   276→                {totalWithCny} <span className="text-xs font-normal text-slate-500">days</span>
+   277→              </p>
+   278→            </div>
+   279→            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+   280→              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Order Date</p>
+   281→              <p className="text-sm font-semibold text-slate-700">{formatDateFull(new Date(orderDate))}</p>
+   282→            </div>
+   283→            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+   284→              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Expected Delivery</p>
+   285→              <p className="text-sm font-semibold text-slate-700">{formatDateFull(deliveryDate)}</p>
+   286→            </div>
+   287→            <div className="p-2.5 rounded-lg border border-slate-100">
+   288→              <p className="text-[10px] text-slate-500 uppercase tracking-wider">CNY Risk</p>
+   289→              {cnyRisk ? (
+   290→                <Badge variant="destructive" className="mt-1">
+   291→                  <AlertTriangle className="h-3 w-3 mr-0.5" />
+   292→                  Yes (+{cnyDelayDays ?? 0}d)
+   293→                </Badge>
+   294→              ) : (
+   295→                <Badge variant="secondary" className="mt-1 bg-emerald-100 text-emerald-700">
+   296→                  No
+   297→                </Badge>
+   298→              )}
+   299→            </div>
+   300→          </motion.div>
+   301→
+   302→          {/* Desktop: Horizontal Gantt */}
+   303→          <motion.div variants={itemVariants} className="hidden sm:block">
+   304→            <HorizontalGantt
+   305→              milestones={milestones}
+   306→              segments={segments}
+   307→              totalDays={totalDays}
+   308→              todayOffset={todayOffset}
+   309→              cnyOffset={cnyOffset}
+   310→              cnyWidth={cnyWidth}
+   311→              cnyPeriod={cnyPeriod}
+   312→              shippingMethod={shippingMethod}
+   313→            />
+   314→          </motion.div>
+   315→
+   316→          {/* Mobile: Vertical Stack */}
+   317→          <motion.div variants={itemVariants} className="block sm:hidden">
+   318→            <VerticalGantt
+   319→              milestones={milestones}
+   320→              segments={segments}
+   321→              totalDays={totalDays}
+   322→              todayOffset={todayOffset}
+   323→            />
+   324→          </motion.div>
+   325→
+   326→          {/* Segment Legend */}
+   327→          <motion.div variants={itemVariants} className="flex flex-wrap gap-2">
+   328→            {segments.map((seg, i) => (
+   329→              <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600">
+   330→                <span className={`inline-block w-3 h-2 rounded-sm ${seg.color}`} />
+   331→                {seg.label} ({seg.days}d)
+   332→              </div>
+   333→            ))}
+   334→            {cnyRisk && cnyDelayDays && cnyDelayDays > 0 && (
+   335→              <div className="flex items-center gap-1.5 text-xs text-red-600">
+   336→                <span className="inline-block w-3 h-2 rounded-sm bg-red-400/60" />
+   337→                CNY Delay (+{cnyDelayDays}d)
+   338→              </div>
+   339→            )}
+   340→          </motion.div>
+   341→        </motion.div>
+   342→      </CardContent>
+   343→    </Card>
+   344→  );
+   345→}
+   346→
+   347→// ---------------------------------------------------------------------------
+   348→// Horizontal Gantt (desktop)
+   349→// ---------------------------------------------------------------------------
+   350→
+   351→function HorizontalGantt({
+   352→  milestones,
+   353→  segments,
+   354→  totalDays,
+   355→  todayOffset,
+   356→  cnyOffset,
+   357→  cnyWidth,
+   358→  cnyPeriod,
+   359→  shippingMethod,
+   360→}: {
+   361→  milestones: Milestone[];
+   362→  segments: { label: string; days: number; color: string; icon: React.ReactNode }[];
+   363→  totalDays: number;
+   364→  todayOffset: number | null;
+   365→  cnyOffset: number | null;
+   366→  cnyWidth: number | null;
+   367→  cnyPeriod?: { start: string; end: string };
+   368→  shippingMethod: 'sea' | 'air';
+   369→}) {
+   370→  return (
+   371→    <div className="relative pt-10 pb-8">
+   372→      {/* Colored bar segments */}
+   373→      <div className="flex h-8 rounded-lg overflow-hidden">
+   374→        {segments.map((seg, i) => {
+   375→          const widthPct = (seg.days / totalDays) * 100;
+   376→          return (
+   377→            <motion.div
+   378→              key={i}
+   379→              className={`${seg.color} flex items-center justify-center text-white text-[11px] font-medium relative`}
+   380→              style={{ width: `${widthPct}%`, transformOrigin: 'left' }}
+   381→              variants={barVariants}
+   382→              initial="hidden"
+   383→              animate="visible"
+   384→              title={`${seg.label}: ${seg.days} days`}
+   385→            >
+   386→              {widthPct > 8 && (
+   387→                <span className="truncate px-1">
+   388→                  {seg.label} {seg.days}d
+   389→                </span>
+   390→              )}
+   391→            </motion.div>
+   392→          );
+   393→        })}
+   394→      </div>
+   395→
+   396→      {/* CNY Shutdown overlay */}
+   397→      {cnyOffset !== null && cnyWidth !== null && (
+   398→        <motion.div
+   399→          className="absolute top-10 h-8 bg-red-500/25 border-l-2 border-r-2 border-red-500/60 flex items-center justify-center rounded-sm"
+   400→          style={{
+   401→            left: `${(cnyOffset / totalDays) * 100}%`,
+   402→            width: `${(cnyWidth / totalDays) * 100}%`,
+   403→          }}
+   404→          initial={{ opacity: 0 }}
+   405→          animate={{ opacity: 1 }}
+   406→          transition={{ delay: 0.6, duration: 0.3 }}
+   407→        >
+   408→          <span className="text-[9px] font-semibold text-red-700 bg-red-100/80 px-1.5 py-0.5 rounded whitespace-nowrap">
+   409→            CNY Shutdown
+   410→          </span>
+   411→        </motion.div>
+   412→      )}
+   413→
+   414→      {/* Today marker */}
+   415→      {todayOffset !== null && todayOffset >= 0 && todayOffset <= totalDays && (
+   416→        <motion.div
+   417→          className="absolute top-6 bottom-0 w-0.5 bg-slate-700 z-10"
+   418→          style={{ left: `${(todayOffset / totalDays) * 100}%` }}
+   419→          initial={{ scaleY: 0 }}
+   420→          animate={{ scaleY: 1 }}
+   421→          transition={{ delay: 0.5, duration: 0.3 }}
+   422→        >
+   423→          <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-slate-700 bg-white px-1 rounded shadow-sm whitespace-nowrap">
+   424→            Today
+   425→          </div>
+   426→        </motion.div>
+   427→      )}
+   428→
+   429→      {/* Milestone dots with icons above and dates below */}
+   430→      {milestones.map((m, i) => {
+   431→        const leftPct = (m.dayOffset / totalDays) * 100;
+   432→        return (
+   433→          <motion.div
+   434→            key={i}
+   435→            className="absolute flex flex-col items-center"
+   436→            style={{ left: `${leftPct}%`, transform: 'translateX(-50%)' }}
+   437→            variants={itemVariants}
+   438→            initial="hidden"
+   439→            animate="visible"
+   440→          >
+   441→            {/* Icon above */}
+   442→            <div
+   443→              className={`w-7 h-7 rounded-full flex items-center justify-center shadow-sm mb-1 ${
+   444→                i === 0
+   445→                  ? 'bg-slate-100 text-slate-600'
+   446→                  : i === milestones.length - 1
+   447→                    ? 'bg-emerald-100 text-emerald-600'
+   448→                    : 'bg-blue-50 text-blue-600'
+   449→              }`}
+   450→            >
+   451→              {m.icon}
+   452→            </div>
+   453→
+   454→            {/* Dot on the bar */}
+   455→            <div
+   456→              className={`w-4 h-4 rounded-full border-[3px] border-white shadow-md z-10 ${
+   457→                i === 0
+   458→                  ? 'bg-slate-500'
+   459→                  : i === milestones.length - 1
+   460→                    ? 'bg-emerald-500'
+   461→                    : 'bg-blue-500'
+   462→              }`}
+   463→            />
+   464→
+   465→            {/* Date label below */}
+   466→            <span className="text-[10px] text-slate-500 mt-1 whitespace-nowrap font-medium">
+   467→              {formatDate(m.date)}
+   468→            </span>
+   469→          </motion.div>
+   470→        );
+   471→      })}
+   472→    </div>
+   473→  );
+   474→}
+   475→
+   476→// ---------------------------------------------------------------------------
+   477→// Vertical Gantt (mobile)
+   478→// ---------------------------------------------------------------------------
+   479→
+   480→function VerticalGantt({
+   481→  milestones,
+   482→  segments,
+   483→  totalDays,
+   484→  todayOffset,
+   485→}: {
+   486→  milestones: Milestone[];
+   487→  segments: { label: string; days: number; color: string; icon: React.ReactNode }[];
+   488→  totalDays: number;
+   489→  todayOffset: number | null;
+   490→}) {
+   491→  return (
+   492→    <div className="relative pl-10 space-y-0">
+   493→      {/* Vertical line */}
+   494→      <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-200" />
+   495→
+   496→      {/* Today position (if within range) */}
+   497→      {todayOffset !== null && todayOffset >= 0 && todayOffset <= totalDays && (
+   498→        <div
+   499→          className="absolute left-0 right-0 h-0.5 bg-slate-400 z-10"
+   500→          style={{ top: `${(todayOffset / totalDays) * 100}%` }}
+   501→        >
+   502→          <span className="absolute -left-10 top-1/2 -translate-y-1/2 text-[9px] font-semibold text-slate-600">
+   503→            Now
+   504→          </span>
+   505→        </div>
+   506→      )}
+   507→
+   508→      {milestones.map((m, i) => {
+   509→        const seg = i < segments.length ? segments[i] : null;
+   510→        const isLast = i === milestones.length - 1;
+   511→        return (
+   512→          <motion.div
+   513→            key={i}
+   514→            className="relative flex items-start gap-3 pb-4"
+   515→            variants={itemVariants}
+   516→            initial="hidden"
+   517→            animate="visible"
+   518→          >
+   519→            {/* Dot on the line */}
+   520→            <div
+   521→              className={`absolute left-[-21px] w-5 h-5 rounded-full border-[3px] border-white shadow-sm z-10 ${
+   522→                i === 0
+   523→                  ? 'bg-slate-500'
+   524→                  : isLast
+   525→                    ? 'bg-emerald-500'
+   526→                    : 'bg-blue-500'
+   527→              }`}
+   528→            />
+   529→
+   530→            {/* Content */}
+   531→            <div className="flex-1 min-w-0">
+   532→              <div className="flex items-center gap-2">
+   533→                <div
+   534→                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+   535→                    i === 0
+   536→                      ? 'bg-slate-100 text-slate-600'
+   537→                      : isLast
+   538→                        ? 'bg-emerald-100 text-emerald-600'
+   539→                        : 'bg-blue-50 text-blue-600'
+   540→                  }`}
+   541→                >
+   542→                  {m.icon}
+   543→                </div>
+   544→                <span className="text-sm font-medium text-slate-700">{m.label}</span>
+   545→                <span className="text-[10px] text-slate-400 ml-auto">{formatDateFull(m.date)}</span>
+   546→              </div>
+   547→              {seg && (
+   548→                <div className="flex items-center gap-2 mt-1 ml-8">
+   549→                  <span className={`inline-block w-full h-2 rounded-sm ${seg.color}`} style={{ maxWidth: '120px' }} />
+   550→                  <span className="text-[10px] text-slate-500">
+   551→                    {seg.label}: {seg.days}d
+   552→                  </span>
+   553→                </div>
+   554→              )}
+   555→            </div>
+   556→          </motion.div>
+   557→        );
+   558→      })}
+   559→    </div>
+   560→  );
+   561→}
+   562→
+   563→// ---------------------------------------------------------------------------
+   564→// Main Export
+   565→// ---------------------------------------------------------------------------
+   566→
+   567→export function OrderTimeline({
+   568→  orderDate,
+   569→  leadTimeBreakdown,
+   570→  shippingMethod,
+   571→  cnyRisk = false,
+   572→  cnyDelayDays = 0,
+   573→  cnyPeriod,
+   574→  compact = false,
+   575→}: OrderTimelineProps) {
+   576→  const { milestones, segments, totalDays, todayOffset, cnyOffset, cnyWidth } = useMemo(() => {
+   577→    const bd = leadTimeBreakdown;
+   578→    const total = bd.manufacturing + bd.shipping + bd.customs + bd.internal;
+   579→
+   580→    // Cumulative offsets for each milestone
+   581→    const offsets = [
+   582→      0,
+   583→      bd.manufacturing,
+   584→      bd.manufacturing + bd.shipping,
+   585→      bd.manufacturing + bd.shipping + bd.customs,
+   586→      bd.manufacturing + bd.shipping + bd.customs + bd.internal,
+   587→    ];
+   588→    // The 6th milestone is same as 5th (Available = after internal processing)
+   589→    // But per spec: 6 milestones from Order to Availability
+   590→    // Offsets: 0, mfg, mfg+ship, mfg+ship+customs, mfg+ship+customs+internal
+   591→    // But the 6th milestone "Available" is at the same offset as the 5th "Customs Cleared" + internal
+   592→
+   593→    const milestoneDates = offsets.map((off) => addDays(orderDate, off));
+   594→
+   595→    const milestoneList: Milestone[] = [
+   596→      {
+   597→        label: 'Order Placed',
+   598→        icon: <Package className="h-3.5 w-3.5" />,
+   599→        date: milestoneDates[0],
+   600→        dayOffset: offsets[0],
+   601→        color: 'slate',
+   602→      },
+   603→      {
+   604→        label: 'Mfg Complete',
+   605→        icon: <Factory className="h-3.5 w-3.5" />,
+   606→        date: milestoneDates[1],
+   607→        dayOffset: offsets[1],
+   608→        color: 'blue',
+   609→      },
+   610→      {
+   611→        label: 'Shipped',
+   612→        icon: shippingMethod === 'air' ? <Plane className="h-3.5 w-3.5" /> : <Ship className="h-3.5 w-3.5" />,
+   613→        date: milestoneDates[2],
+   614→        dayOffset: offsets[2],
+   615→        color: 'emerald',
+   616→      },
+   617→      {
+   618→        label: 'Arrived at Port',
+   619→        icon: <Anchor className="h-3.5 w-3.5" />,
+   620→        date: milestoneDates[2],
+   621→        dayOffset: offsets[2],
+   622→        color: 'emerald',
+   623→      },
+   624→      {
+   625→        label: 'Customs Cleared',
+   626→        icon: <ShieldCheck className="h-3.5 w-3.5" />,
+   627→        date: milestoneDates[3],
+   628→        dayOffset: offsets[3],
+   629→        color: 'amber',
+   630→      },
+   631→      {
+   632→        label: 'Available',
+   633→        icon: <Warehouse className="h-3.5 w-3.5" />,
+   634→        date: milestoneDates[4],
+   635→        dayOffset: offsets[4],
+   636→        color: 'emerald',
+   637→      },
+   638→    ];
+   639→
+   640→    // Fix: "Arrived at Port" is at the end of shipping, which is offsets[2]
+   641→    // But shipping includes transit, so "Shipped" is start of shipping, "Arrived" is end of shipping
+   642→    // Let me recalculate: Shipped = after manufacturing starts shipping (offsets[1])
+   643→    // Arrived at Port = after shipping completes (offsets[2])
+   644→    milestoneList[2] = {
+   645→      ...milestoneList[2],
+   646→      date: addDays(orderDate, offsets[1]), // Shipped date = after manufacturing
+   647→      dayOffset: offsets[1],
+   648→    };
+   649→    milestoneList[3] = {
+   650→      ...milestoneList[3],
+   651→      date: addDays(orderDate, offsets[2]), // Arrived at Port = after shipping
+   652→      dayOffset: offsets[2],
+   653→    };
+   654→
+   655→    const segmentList = [
+   656→      {
+   657→        label: 'Manufacturing',
+   658→        days: bd.manufacturing,
+   659→        color: SEGMENT_COLORS.manufacturing,
+   660→        icon: <Factory className="h-3 w-3" />,
+   661→      },
+   662→      {
+   663→        label: shippingMethod === 'air' ? 'Air Shipping' : 'Sea Shipping',
+   664→        days: bd.shipping,
+   665→        color: SEGMENT_COLORS.shipping,
+   666→        icon: shippingMethod === 'air' ? <Plane className="h-3 w-3" /> : <Ship className="h-3 w-3" />,
+   667→      },
+   668→      {
+   669→        label: 'Customs',
+   670→        days: bd.customs,
+   671→        color: SEGMENT_COLORS.customs,
+   672→        icon: <ShieldCheck className="h-3 w-3" />,
+   673→      },
+   674→      {
+   675→        label: 'Internal',
+   676→        days: bd.internal,
+   677→        color: SEGMENT_COLORS.internal,
+   678→        icon: <Warehouse className="h-3 w-3" />,
+   679→      },
+   680→    ];
+   681→
+   682→    // Today offset (days from order date)
+   683→    const today = new Date();
+   684→    today.setHours(0, 0, 0, 0);
+   685→    const orderD = new Date(orderDate);
+   686→    orderD.setHours(0, 0, 0, 0);
+   687→    const todayOff = daysBetween(orderD, today);
+   688→
+   689→    // CNY overlay calculation
+   690→    let cnyOff: number | null = null;
+   691→    let cnyW: number | null = null;
+   692→    if (cnyPeriod) {
+   693→      const cnyStart = new Date(cnyPeriod.start);
+   694→      cnyStart.setHours(0, 0, 0, 0);
+   695→      const cnyEnd = new Date(cnyPeriod.end);
+   696→      cnyEnd.setHours(0, 0, 0, 0);
+   697→      const cnyStartOff = daysBetween(orderD, cnyStart);
+   698→      const cnyEndOff = daysBetween(orderD, cnyEnd);
+   699→      // Only show if within timeline range
+   700→      if (cnyEndOff > 0 && cnyStartOff < total) {
+   701→        cnyOff = Math.max(0, cnyStartOff);
+   702→        cnyW = Math.min(total, cnyEndOff) - cnyOff;
+   703→      }
+   704→    }
+   705→
+   706→    return {
+   707→      milestones: milestoneList,
+   708→      segments: segmentList,
+   709→      totalDays: total,
+   710→      todayOffset: todayOff >= 0 && todayOff <= total ? todayOff : null,
+   711→      cnyOffset: cnyOff,
+   712→      cnyWidth: cnyW,
+   713→    };
+   714→  }, [orderDate, leadTimeBreakdown, shippingMethod, cnyPeriod]);
+   715→
+   716→  if (compact) {
+   717→    return (
+   718→      <Tooltip>
+   719→        <TooltipTrigger asChild>
+   720→          <div className="w-full min-w-[200px]">
+   721→            <CompactTimeline
+   722→              milestones={milestones}
+   723→              totalDays={totalDays}
+   724→              todayOffset={todayOffset}
+   725→              cnyOffset={cnyOffset}
+   726→              cnyWidth={cnyWidth}
+   727→            />
+   728→          </div>
+   729→        </TooltipTrigger>
+   730→        <TooltipContent side="bottom">
+   731→          <p className="font-medium">Order Timeline</p>
+   732→          <p className="text-[10px] opacity-80">
+   733→            {totalDays + (cnyDelayDays ?? 0)}d total &middot; {shippingMethod === 'air' ? 'Air' : 'Sea'} freight
+   734→          </p>
+   735→        </TooltipContent>
+   736→      </Tooltip>
+   737→    );
+   738→  }
+   739→
+   740→  return (
+   741→    <FullTimeline
+   742→      milestones={milestones}
+   743→      segments={segments}
+   744→      totalDays={totalDays}
+   745→      todayOffset={todayOffset}
+   746→      cnyOffset={cnyOffset}
+   747→      cnyWidth={cnyWidth}
+   748→      orderDate={orderDate}
+   749→      cnyRisk={cnyRisk}
+   750→      cnyDelayDays={cnyDelayDays}
+   751→      cnyPeriod={cnyPeriod}
+   752→      shippingMethod={shippingMethod}
+   753→    />
+   754→  );
+   755→}
+   756→

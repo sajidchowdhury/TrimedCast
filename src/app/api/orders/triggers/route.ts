@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveTenantId } from '@/lib/tenant-resolver';
 import {
-  calculateOrderTrigger,
+  safeCalculateOrderTrigger,
   type OrderTriggerInput,
   type OrderTriggerResult,
 } from '@/lib/forecasting/order-trigger';
@@ -47,14 +47,13 @@ export async function POST(request: NextRequest) {
 
     for (const product of products) {
       const inv = product.inventory[0];
-      if (!inv) continue; // Skip products without inventory
+      if (!inv) continue;
 
       // Calculate average daily demand from sales history
       const salesData = product.salesHistory;
       let avgDailyDemand = 0;
 
       if (salesData.length > 0) {
-        // Group by date and aggregate
         const dailySales = new Map<string, number>();
         for (const sale of salesData) {
           const dateKey = sale.date.toISOString().split('T')[0];
@@ -62,30 +61,33 @@ export async function POST(request: NextRequest) {
         }
         const totalQty = Array.from(dailySales.values()).reduce((a, b) => a + b, 0);
         const uniqueDays = dailySales.size;
-        // Average per day over the sales period
         avgDailyDemand = uniqueDays > 0 ? totalQty / uniqueDays : 0;
       }
 
-      // If no sales data, estimate from stock turnover
       if (avgDailyDemand === 0 && inv.currentStock > 0) {
-        avgDailyDemand = inv.currentStock / 90; // rough: assume stock covers 90 days
+        avgDailyDemand = inv.currentStock / 90;
       }
 
       const input: OrderTriggerInput = {
         productId: product.id,
         productSku: product.sku,
         productName: product.name,
+        category: product.category,
         currentStock: inv.currentStock,
         reservedStock: inv.reservedStock,
         safetyStock: inv.safetyStock || 15,
+        maxStock: inv.maxStock || inv.currentStock * 3,
         reorderPoint: inv.reorderPoint || 30,
         avgDailyDemand,
         shippingMethod: shippingMethod as 'sea' | 'air',
         serviceLevel,
+        forecastedDemand: Math.round(avgDailyDemand * 120),
+        eoq: product.eoq || 100,
+        moq: product.moq || 50,
       };
 
       try {
-        const trigger = calculateOrderTrigger(input);
+        const trigger = safeCalculateOrderTrigger(input);
         triggers.push({ ...trigger, unitCost: product.unitCost || undefined });
       } catch {
         // Skip products that fail trigger calculation
@@ -98,29 +100,48 @@ export async function POST(request: NextRequest) {
       filtered = triggers.filter(t => t.currentSeason === season);
     }
 
-    // Sort by priority: urgent > high > normal > low
-    const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-    filtered.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+    // Sort by urgency: critical > high > normal > low
+    const urgencyOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+    filtered.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
 
     // Calculate summary stats
-    const totalUrgent = filtered.filter(t => t.priority === 'urgent').length;
-    const totalHigh = filtered.filter(t => t.priority === 'high').length;
-    const totalNormal = filtered.filter(t => t.priority === 'normal').length;
-    const totalLow = filtered.filter(t => t.priority === 'low').length;
-    const cnyRiskCount = filtered.filter(t => t.cnyRisk).length;
+    const totalCritical = filtered.filter(t => t.urgency === 'critical').length;
+    const totalHigh = filtered.filter(t => t.urgency === 'high').length;
+    const totalNormal = filtered.filter(t => t.urgency === 'normal').length;
+    const totalLow = filtered.filter(t => t.urgency === 'low').length;
+    const cnyRiskCount = filtered.filter(t => t.cnyRisk.hasRisk).length;
     const totalSuggestedSpend = filtered.reduce((sum, t) => {
       const cost = (t as OrderTriggerResult & { unitCost?: number }).unitCost || 0;
       return sum + t.suggestedOrderQty * cost;
     }, 0);
 
-    // Serialize dates
+    // Serialize dates for JSON response
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
     const serialized = filtered.map(t => ({
       ...t,
       unitCost: undefined,
-      reorderHitDate: t.reorderHitDate.toISOString().split('T')[0],
-      orderTriggerDate: t.orderTriggerDate.toISOString().split('T')[0],
-      expectedDeliveryDate: t.expectedDeliveryDate.toISOString().split('T')[0],
-      adjustedOrderDate: t.adjustedOrderDate.toISOString().split('T')[0],
+      reorderHitDate: fmt(t.reorderHitDate),
+      orderTriggerDate: fmt(t.orderTriggerDate),
+      expectedDeliveryDate: fmt(t.expectedDeliveryDate),
+      // Flatten CNY risk for backward compat
+      cnyRisk: t.cnyRisk.hasRisk,
+      cnyDelayDays: t.cnyRisk.additionalDelayDays,
+      cnyStrategy: t.cnyRisk.strategy,
+      cnyExplanation: t.cnyRisk.explanation,
+      // Flatten timeline
+      timelineDates: {
+        orderTriggerDate: fmt(t.timeline.orderTriggerDate),
+        mfgStartDate: fmt(t.timeline.mfgStartDate),
+        mfgCompleteDate: fmt(t.timeline.mfgCompleteDate),
+        shipDepartureDate: fmt(t.timeline.shipDepartureDate),
+        arrivalDate: fmt(t.timeline.arrivalDate),
+        customsClearanceDate: fmt(t.timeline.customsClearanceDate),
+        availableForSaleDate: fmt(t.timeline.availableForSaleDate),
+        totalLeadTimeDays: t.timeline.totalLeadTimeDays,
+        cnyDelayDays: t.timeline.cnyDelayDays,
+      },
+      // Map urgency to priority for backward compat
+      priority: t.urgency,
     }));
 
     return NextResponse.json({
@@ -129,7 +150,8 @@ export async function POST(request: NextRequest) {
         triggers: serialized,
         summary: {
           totalProducts: filtered.length,
-          totalUrgent,
+          totalUrgent: totalCritical,
+          totalCritical,
           totalHigh,
           totalNormal,
           totalLow,
@@ -177,14 +199,13 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [
         { priority: 'asc' },
-        { orderDate: 'desc' },
+        { createdAt: 'desc' },
       ],
     });
 
-    // Post-filter by season and CNY risk if needed (these aren't direct DB fields)
+    // Post-filter by season and CNY risk if needed
     let filtered = orders;
     if (season) {
-      // Filter by justification containing season info
       filtered = filtered.filter(o => o.justification?.includes(season));
     }
     if (cnyRisk === 'true') {
@@ -198,13 +219,12 @@ export async function GET(request: NextRequest) {
           id: o.id,
           productId: o.productId,
           product: o.product,
-          orderDate: o.orderDate.toISOString().split('T')[0],
-          quantity: o.quantity,
           orderTrigger: o.orderTrigger,
           totalLeadTime: o.totalLeadTime,
           reorderHitDate: o.reorderHitDate?.toISOString().split('T')[0] || null,
           priority: o.priority,
           status: o.status,
+          suggestedQty: o.suggestedQty,
           justification: o.justification,
           createdAt: o.createdAt.toISOString(),
         })),

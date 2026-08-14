@@ -60,7 +60,7 @@ export interface OrderTriggerClient {
   safetyStock: number;
   reorderPoint: number;
   daysOfStock: number;
-  stockStatus: 'healthy' | 'low' | 'critical' | 'stockout';
+  stockStatus: 'healthy' | 'low' | 'critical' | 'stockout' | 'below_reorder' | 'at_safety' | 'adequate' | 'overstock' | 'no_demand';
   totalLeadTimeDays: number;
   leadTimeBreakdown: {
     manufacturing: number;
@@ -74,12 +74,34 @@ export interface OrderTriggerClient {
   cnyRisk: boolean;
   cnyDelayDays: number;
   cnyStrategy: string;
-  adjustedOrderDate: string;
+  cnyExplanation?: string;
   suggestedOrderQty: number;
-  orderTrigger: 'reorder_point' | 'seasonal_uplift' | 'cny_urgency' | 'stockout_risk';
-  priority: 'urgent' | 'high' | 'normal' | 'low';
+  priority: 'urgent' | 'high' | 'normal' | 'low' | 'critical';
+  urgency?: 'critical' | 'high' | 'normal' | 'low';
   currentSeason: BDSeason;
   seasonNote: string;
+  // Enhanced timeline dates (from pipeline)
+  timelineDates?: {
+    orderTriggerDate: string;
+    mfgStartDate: string;
+    mfgCompleteDate: string;
+    shipDepartureDate: string;
+    arrivalDate: string;
+    customsClearanceDate: string;
+    availableForSaleDate: string;
+    totalLeadTimeDays: number;
+    cnyDelayDays: number;
+  };
+  // Quantity breakdown
+  qtyBreakdown?: {
+    recommendedQty: number;
+    status: string;
+    reason: string;
+    gap: number;
+    constraintsApplied: string[];
+  };
+  // Shipment mode
+  recommendedShipmentMode?: 'sea' | 'air';
 }
 
 export interface EOQResultClient {
