@@ -1,0 +1,930 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useCallback, useState } from 'react';
+     4→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Badge } from '@/components/ui/badge';
+     7→import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+     8→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+     9→import { Skeleton } from '@/components/ui/skeleton';
+    10→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    11→import { useETLStore, type ValidationResultClient, type HarmonizationResultClient, type InsertionResultClient } from '@/lib/etl/store';
+    12→import { IMPORT_TYPE_SCHEMAS, type ImportType, type QualityStats } from '@/lib/etl/import-types';
+    13→import { calculateQualityScore } from '@/lib/etl/quality-score';
+    14→import { useForecastStore } from '@/lib/forecasting/store';
+    15→import { UploadZone } from '@/components/etl/upload-zone';
+    16→import { ColumnMapper } from '@/components/etl/column-mapper';
+    17→import { ValidationResults } from '@/components/etl/validation-results';
+    18→import { HarmonizationLog } from '@/components/etl/harmonization-log';
+    19→import { QualityBadge } from '@/components/etl/quality-badge';
+    20→import { ImportProgress } from '@/components/etl/import-progress';
+    21→import { ImportHistory } from '@/components/etl/import-history';
+    22→import { ForecastChart } from '@/components/forecast/forecast-chart';
+    23→import { OrderTriggerCard } from '@/components/forecast/order-trigger-card';
+    24→import { SeasonalPattern } from '@/components/forecast/seasonal-pattern';
+    25→import { LeadTimeViz } from '@/components/forecast/lead-time-viz';
+    26→import { ModelComparison } from '@/components/forecast/model-comparison';
+    27→import { ForecastVsActual } from '@/components/forecast/forecast-vs-actual';
+    28→import { RecommendedOrdersTable } from '@/components/forecast/recommended-orders-table';
+    29→import { CNYCalendar } from '@/components/forecast/cny-calendar';
+    30→import { CategorySeasonalGrid } from '@/components/forecast/category-seasonal-grid';
+    31→import { StockProjection } from '@/components/forecast/stock-projection';
+    32→import {
+    33→  Loader2,
+    34→  AlertCircle,
+    35→  RotateCcw,
+    36→  Database,
+    37→  CheckCircle2,
+    38→  FileSpreadsheet,
+    39→  Bike,
+    40→  ArrowRight,
+    41→  History,
+    42→  XCircle,
+    43→  TrendingUp,
+    44→  BarChart3,
+    45→  Upload,
+    46→  Package,
+    47→  Activity,
+    48→  Clock,
+    49→  Target,
+    50→  Shield,
+    51→  Calculator,
+    52→  Zap,
+    53→  Search,
+    54→  ShoppingCart,
+    55→  Sparkles,
+    56→} from 'lucide-react';
+    57→import { motion, AnimatePresence } from 'framer-motion';
+    58→
+    59→// ============================================
+    60→// ETL Step content components (unchanged)
+    61→// ============================================
+    62→
+    63→function UploadStep() {
+    64→  return <UploadZone />;
+    65→}
+    66→
+    67→function MapStep() {
+    68→  const { setStep } = useETLStore();
+    69→  const handleProceed = useCallback(() => { setStep(2); }, [setStep]);
+    70→  return <ColumnMapper onProceed={handleProceed} />;
+    71→}
+    72→
+    73→function ValidateStep() {
+    74→  const { currentImportId, setLoading, setError, setValidationResult, setStep, isLoading } = useETLStore();
+    75→  const handleProceed = useCallback(() => { setStep(3); }, [setStep]);
+    76→
+    77→  useEffect(() => {
+    78→    const runValidation = async () => {
+    79→      if (!currentImportId) return;
+    80→      setLoading(true);
+    81→      setError(null);
+    82→      try {
+    83→        const res = await fetch(`/api/imports/${currentImportId}/validate`, { method: 'POST' });
+    84→        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Validation failed'); }
+    85→        const json = await res.json();
+    86→        if (!json.success) throw new Error(json.error || 'Validation failed');
+    87→        setValidationResult(json.data as ValidationResultClient);
+    88→      } catch (err) { setError(err instanceof Error ? err.message : 'Validation failed'); }
+    89→      finally { setLoading(false); }
+    90→    };
+    91→    runValidation();
+    92→  }, [currentImportId, setLoading, setError, setValidationResult]);
+    93→
+    94→  return (
+    95→    <div>
+    96→      {isLoading && (
+    97→        <Card className="mb-4">
+    98→          <CardContent className="py-8 text-center">
+    99→            <Loader2 className="h-8 w-8 mx-auto text-blue-500 animate-spin mb-3" />
+   100→            <p className="text-sm text-gray-600">Running 3-phase validation...</p>
+   101→            <p className="text-xs text-gray-400 mt-1">Schema → Data → Business Rules</p>
+   102→          </CardContent>
+   103→        </Card>
+   104→      )}
+   105→      <ValidationResults onProceed={handleProceed} />
+   106→    </div>
+   107→  );
+   108→}
+   109→
+   110→function HarmonizeStep() {
+   111→  const { currentImportId, setLoading, setError, setHarmonizationResult, setStep, harmonizationResult, isLoading } = useETLStore();
+   112→  const handleProceed = useCallback(() => { setStep(4); }, [setStep]);
+   113→
+   114→  useEffect(() => {
+   115→    if (harmonizationResult) return;
+   116→    const runHarmonization = async () => {
+   117→      if (!currentImportId) return;
+   118→      setLoading(true); setError(null);
+   119→      try {
+   120→        const res = await fetch(`/api/imports/${currentImportId}/harmonize`, { method: 'POST' });
+   121→        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Harmonization failed'); }
+   122→        const json = await res.json();
+   123→        if (!json.success) throw new Error(json.error || 'Harmonization failed');
+   124→        setHarmonizationResult(json.data as HarmonizationResultClient);
+   125→      } catch (err) { setError(err instanceof Error ? err.message : 'Harmonization failed'); }
+   126→      finally { setLoading(false); }
+   127→    };
+   128→    runHarmonization();
+   129→  }, [currentImportId, harmonizationResult, setLoading, setError, setHarmonizationResult]);
+   130→
+   131→  if (isLoading && !harmonizationResult) {
+   132→    return (
+   133→      <Card>
+   134→        <CardContent className="py-8 text-center">
+   135→          <Loader2 className="h-8 w-8 mx-auto text-blue-500 animate-spin mb-3" />
+   136→          <p className="text-sm text-gray-600">Running 6-step harmonization...</p>
+   137→          <p className="text-xs text-gray-400 mt-1">Trim → Dates → Categories → Units → Dedup → Enrich</p>
+   138→        </CardContent>
+   139→      </Card>
+   140→    );
+   141→  }
+   142→  return <HarmonizationLog onProceed={handleProceed} />;
+   143→}
+   144→
+   145→function InsertStep() {
+   146→  const { currentImportId, setLoading, setError, setInsertionResult, setStep, insertionResult, uploadResult, mappings, importType, isLoading } = useETLStore();
+   147→
+   148→  useEffect(() => {
+   149→    if (insertionResult) return;
+   150→    const runInsert = async () => {
+   151→      if (!currentImportId) return;
+   152→      setLoading(true); setError(null);
+   153→      try {
+   154→        const res = await fetch(`/api/imports/${currentImportId}/insert`, { method: 'POST' });
+   155→        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Insertion failed'); }
+   156→        const json = await res.json();
+   157→        if (!json.success) throw new Error(json.error || 'Insertion failed');
+   158→        setInsertionResult(json.data as InsertionResultClient);
+   159→      } catch (err) { setError(err instanceof Error ? err.message : 'Insertion failed'); }
+   160→      finally { setLoading(false); }
+   161→    };
+   162→    runInsert();
+   163→  }, [currentImportId, insertionResult, setLoading, setError, setInsertionResult]);
+   164→
+   165→  if (isLoading && !insertionResult) {
+   166→    return (
+   167→      <Card>
+   168→        <CardContent className="py-8 text-center">
+   169→          <Loader2 className="h-8 w-8 mx-auto text-blue-500 animate-spin mb-3" />
+   170→          <p className="text-sm text-gray-600">Inserting data into database...</p>
+   171→        </CardContent>
+   172→      </Card>
+   173→    );
+   174→  }
+   175→  if (!insertionResult) return null;
+   176→
+   177→  const schema = importType ? IMPORT_TYPE_SCHEMAS[importType as ImportType] : null;
+   178→  const requiredTotal = schema?.requiredFields.length || 0;
+   179→  const requiredMapped = mappings.filter((m) => m.targetField && m.confidence > 0 && schema?.requiredFields.some((rf) => rf.field === m.targetField)).length;
+   180→  const qualityStats: QualityStats = {
+   181→    rowsTotal: uploadResult?.rowsTotal || 0,
+   182→    rowsValid: uploadResult?.rowsTotal || insertionResult.inserted,
+   183→    rowsInserted: insertionResult.inserted,
+   184→    rowsDuplicate: 0,
+   185→    requiredMapped,
+   186→    requiredTotal,
+   187→  };
+   188→
+   189→  return (
+   190→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="space-y-4">
+   191→      <Card className="border-emerald-200 bg-emerald-50/50">
+   192→        <CardContent className="py-6">
+   193→          <div className="flex items-center gap-3 mb-4">
+   194→            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+   195→              <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+   196→            </div>
+   197→            <div>
+   198→              <h2 className="text-xl font-bold text-emerald-800">Import Complete!</h2>
+   199→              <p className="text-sm text-emerald-600">Your data has been successfully processed and inserted</p>
+   200→            </div>
+   201→          </div>
+   202→          <QualityBadge score={insertionResult.qualityScore} size="lg" showBreakdown={true} stats={qualityStats} />
+   203→        </CardContent>
+   204→      </Card>
+   205→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   206→        <Card><CardContent className="pt-4 pb-3 text-center"><Database className="h-5 w-5 mx-auto text-blue-500 mb-1" /><div className="text-2xl font-bold text-gray-700">{insertionResult.inserted}</div><div className="text-xs text-gray-500">Rows Inserted</div></CardContent></Card>
+   207→        <Card><CardContent className="pt-4 pb-3 text-center"><XCircle className="h-5 w-5 mx-auto text-red-500 mb-1" /><div className="text-2xl font-bold text-gray-700">{insertionResult.skipped}</div><div className="text-xs text-gray-500">Rows Skipped</div></CardContent></Card>
+   208→        <Card><CardContent className="pt-4 pb-3 text-center"><FileSpreadsheet className="h-5 w-5 mx-auto text-gray-500 mb-1" /><div className="text-2xl font-bold text-gray-700">{insertionResult.createdMasterData?.length || 0}</div><div className="text-xs text-gray-500">Master Data Created</div></CardContent></Card>
+   209→        <Card><CardContent className="pt-4 pb-3 text-center"><Loader2 className="h-5 w-5 mx-auto text-gray-400 mb-1" style={{ animation: 'none' }} /><div className="text-2xl font-bold text-gray-700">{insertionResult.durationMs !== null ? insertionResult.durationMs < 1000 ? `${insertionResult.durationMs}ms` : `${(insertionResult.durationMs / 1000).toFixed(1)}s` : '—'}</div><div className="text-xs text-gray-500">Duration</div></CardContent></Card>
+   210→      </div>
+   211→      {insertionResult.createdMasterData && insertionResult.createdMasterData.length > 0 && (
+   212→        <Card>
+   213→          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-600">Auto-Created Master Data</CardTitle></CardHeader>
+   214→          <CardContent><ul className="text-xs text-gray-500 space-y-1">{insertionResult.createdMasterData.map((item, i) => (<li key={i} className="flex items-center gap-2"><Badge variant="outline" className="text-xs h-5">New</Badge>{item}</li>))}</ul></CardContent>
+   215→        </Card>
+   216→      )}
+   217→      {insertionResult.errors && insertionResult.errors.length > 0 && (
+   218→        <Card>
+   219→          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Insertion Errors ({insertionResult.errors.length})</CardTitle></CardHeader>
+   220→          <CardContent><ul className="text-xs text-red-500 space-y-1">{insertionResult.errors.slice(0, 10).map((err, i) => (<li key={i}>Row {err.row}: {err.error}</li>))}{insertionResult.errors.length > 10 && <li className="text-gray-400">...and {insertionResult.errors.length - 10} more</li>}</ul></CardContent>
+   221→        </Card>
+   222→      )}
+   223→    </motion.div>
+   224→  );
+   225→}
+   226→
+   227→// ============================================
+   228→// Import Data Tab
+   229→// ============================================
+   230→
+   231→function ImportDataTab() {
+   232→  const { currentStep, isLoading, error, setError, reset, seedDemo, fetchImports, isSeeded } = useETLStore();
+   233→
+   234→  useEffect(() => {
+   235→    if (!isSeeded) seedDemo();
+   236→    fetchImports();
+   237→  }, [isSeeded]);
+   238→
+   239→  const renderStepContent = () => {
+   240→    switch (currentStep) {
+   241→      case 0: return <UploadStep />;
+   242→      case 1: return <MapStep />;
+   243→      case 2: return <ValidateStep />;
+   244→      case 3: return <HarmonizeStep />;
+   245→      case 4: return <InsertStep />;
+   246→      case 5: return <InsertStep />;
+   247→      default: return <UploadStep />;
+   248→    }
+   249→  };
+   250→
+   251→  return (
+   252→    <div className="space-y-6">
+   253→      {/* Error */}
+   254→      {error && (
+   255→        <Alert variant="destructive">
+   256→          <AlertCircle className="h-4 w-4" />
+   257→          <AlertTitle>Error</AlertTitle>
+   258→          <AlertDescription className="flex items-center justify-between">
+   259→            <span>{error}</span>
+   260→            <Button variant="outline" size="sm" className="ml-4 h-7 text-xs" onClick={() => setError(null)}>Dismiss</Button>
+   261→          </AlertDescription>
+   262→        </Alert>
+   263→      )}
+   264→
+   265→      {/* Progress Stepper */}
+   266→      {currentStep > 0 && (
+   267→        <ImportProgress>
+   268→          <AnimatePresence mode="wait">
+   269→            <motion.div key={currentStep} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
+   270→              {renderStepContent()}
+   271→            </motion.div>
+   272→          </AnimatePresence>
+   273→        </ImportProgress>
+   274→      )}
+   275→
+   276→      {/* Step 0: Upload */}
+   277→      {currentStep === 0 && (
+   278→        <AnimatePresence mode="wait">
+   279→          <motion.div key="upload" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+   280→            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   281→              <div className="lg:col-span-2"><UploadStep /></div>
+   282→              <div className="space-y-4">
+   283→                <Card>
+   284→                  <CardHeader className="pb-3"><CardTitle className="text-sm font-medium flex items-center gap-2"><TrendingUp className="h-4 w-4 text-blue-500" />How It Works</CardTitle></CardHeader>
+   285→                  <CardContent>
+   286→                    <ol className="text-xs text-gray-600 space-y-3">
+   287→                      <li className="flex items-start gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">1</span><span>Select import type and upload your Excel file (.xlsx, .xls, .csv)</span></li>
+   288→                      <li className="flex items-start gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">2</span><span>Review auto-mapped columns. Fuzzy matching uses Levenshtein distance + BD aliases</span></li>
+   289→                      <li className="flex items-start gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-[10px] font-bold">3</span><span>3-phase validation: Schema, Data quality, Business rules</span></li>
+   290→                      <li className="flex items-start gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-cyan-100 text-cyan-600 flex items-center justify-center text-[10px] font-bold">4</span><span>6-step harmonization: Trim, Dates, Categories, Units, Dedup, Enrich</span></li>
+   291→                      <li className="flex items-start gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">5</span><span>Batch insert with quality scoring (0-100)</span></li>
+   292→                    </ol>
+   293→                  </CardContent>
+   294→                </Card>
+   295→                <Card>
+   296→                  <CardHeader className="pb-3"><CardTitle className="text-sm font-medium flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-gray-500" />Supported Data Types</CardTitle></CardHeader>
+   297→                  <CardContent>
+   298→                    <div className="space-y-2">
+   299→                      {Object.values(IMPORT_TYPE_SCHEMAS).map((schema) => (
+   300→                        <div key={schema.type} className="flex items-center gap-2 text-xs text-gray-600">
+   301→                          <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+   302→                          <span className="font-medium">{schema.label}</span>
+   303→                          <span className="text-gray-400">({schema.requiredFields.length} required)</span>
+   304→                        </div>
+   305→                      ))}
+   306→                    </div>
+   307→                  </CardContent>
+   308→                </Card>
+   309→              </div>
+   310→            </div>
+   311→          </motion.div>
+   312→        </AnimatePresence>
+   313→      )}
+   314→
+   315→      <ImportHistory />
+   316→    </div>
+   317→  );
+   318→}
+   319→
+   320→// ============================================
+   321→// Forecast Dashboard Tab
+   322→// ============================================
+   323→
+   324→function ForecastDashboardTab() {
+   325→  const {
+   326→    products,
+   327→    selectedProductId,
+   328→    productsLoading,
+   329→    forecastResult,
+   330→    forecastLoading,
+   331→    shippingMethod,
+   332→    error,
+   333→    setSelectedProductId,
+   334→    setShippingMethod,
+   335→    fetchProducts,
+   336→    generateForecast,
+   337→    setError,
+   338→    resetForecast,
+   339→  } = useForecastStore();
+   340→
+   341→  useEffect(() => {
+   342→    fetchProducts();
+   343→  }, []);
+   344→
+   345→  const selectedProduct = products.find((p) => p.id === selectedProductId);
+   346→
+   347→  return (
+   348→    <div className="space-y-6">
+   349→      {/* Error */}
+   350→      {error && (
+   351→        <Alert variant="destructive">
+   352→          <AlertCircle className="h-4 w-4" />
+   353→          <AlertTitle>Error</AlertTitle>
+   354→          <AlertDescription className="flex items-center justify-between">
+   355→            <span>{error}</span>
+   356→            <Button variant="outline" size="sm" className="ml-4 h-7 text-xs" onClick={() => setError(null)}>Dismiss</Button>
+   357→          </AlertDescription>
+   358→        </Alert>
+   359→      )}
+   360→
+   361→      {/* Product selector + controls */}
+   362→      <Card>
+   363→        <CardContent className="p-4">
+   364→          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
+   365→            {/* Product select */}
+   366→            <div className="flex-1 min-w-0">
+   367→              <label className="text-xs font-medium text-gray-500 mb-1.5 block">Select Product</label>
+   368→              <Select
+   369→                value={selectedProductId || ''}
+   370→                onValueChange={(val) => setSelectedProductId(val || null)}
+   371→                disabled={productsLoading}
+   372→              >
+   373→                <SelectTrigger className="w-full h-10">
+   374→                  <SelectValue placeholder={productsLoading ? 'Loading products...' : 'Choose a product...'} />
+   375→                </SelectTrigger>
+   376→                <SelectContent>
+   377→                  {products.map((p) => (
+   378→                    <SelectItem key={p.id} value={p.id}>
+   379→                      <div className="flex items-center gap-2">
+   380→                        <Package className="h-3.5 w-3.5 text-gray-400" />
+   381→                        <span className="font-medium">{p.sku}</span>
+   382→                        <span className="text-gray-400">—</span>
+   383→                        <span className="truncate">{p.name}</span>
+   384→                        <Badge variant="outline" className="text-[9px] h-4 ml-1">{p.salesCount} sales</Badge>
+   385→                      </div>
+   386→                    </SelectItem>
+   387→                  ))}
+   388→                </SelectContent>
+   389→              </Select>
+   390→            </div>
+   391→
+   392→            {/* Shipping method */}
+   393→            <div>
+   394→              <label className="text-xs font-medium text-gray-500 mb-1.5 block">Shipping</label>
+   395→              <Select value={shippingMethod} onValueChange={(val) => setShippingMethod(val as 'sea' | 'air')}>
+   396→                <SelectTrigger className="w-32 h-10">
+   397→                  <SelectValue />
+   398→                </SelectTrigger>
+   399→                <SelectContent>
+   400→                  <SelectItem value="sea">Sea Freight</SelectItem>
+   401→                  <SelectItem value="air">Air Freight</SelectItem>
+   402→                </SelectContent>
+   403→              </Select>
+   404→            </div>
+   405→
+   406→            {/* Generate button */}
+   407→            <Button
+   408→              onClick={generateForecast}
+   409→              disabled={!selectedProductId || forecastLoading}
+   410→              className="h-10 px-6 bg-emerald-600 hover:bg-emerald-700 text-white"
+   411→            >
+   412→              {forecastLoading ? (
+   413→                <>
+   414→                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   415→                  Generating...
+   416→                </>
+   417→              ) : (
+   418→                <>
+   419→                  <BarChart3 className="h-4 w-4 mr-2" />
+   420→                  Generate Forecast
+   421→                </>
+   422→              )}
+   423→            </Button>
+   424→
+   425→            {/* Reset */}
+   426→            {forecastResult && (
+   427→              <Button variant="outline" size="sm" onClick={resetForecast} className="h-10">
+   428→                <RotateCcw className="h-4 w-4 mr-1" />
+   429→                Reset
+   430→              </Button>
+   431→            )}
+   432→          </div>
+   433→        </CardContent>
+   434→      </Card>
+   435→
+   436→      {/* No product selected state */}
+   437→      {!selectedProductId && !forecastLoading && (
+   438→        <Card>
+   439→          <CardContent className="py-16 text-center">
+   440→            <Search className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+   441→            <h3 className="text-lg font-medium text-gray-700 mb-2">Select a Product to Forecast</h3>
+   442→            <p className="text-sm text-gray-500 max-w-md mx-auto">
+   443→              Choose a product from the dropdown above and click &quot;Generate Forecast&quot; to view
+   444→              seasonal demand predictions, order triggers, and inventory optimization recommendations.
+   445→            </p>
+   446→            {products.length === 0 && !productsLoading && (
+   447→              <div className="mt-4">
+   448→                <Badge variant="outline" className="text-amber-600 border-amber-300">
+   449→                  No products found — Import sales history data first
+   450→                </Badge>
+   451→              </div>
+   452→            )}
+   453→          </CardContent>
+   454→        </Card>
+   455→      )}
+   456→
+   457→      {/* Loading state */}
+   458→      {forecastLoading && (
+   459→        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+   460→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   461→            <Card><CardContent className="p-4"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16 mb-1" /><Skeleton className="h-3 w-24" /></CardContent></Card>
+   462→            <Card><CardContent className="p-4"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16 mb-1" /><Skeleton className="h-3 w-24" /></CardContent></Card>
+   463→            <Card><CardContent className="p-4"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16 mb-1" /><Skeleton className="h-3 w-24" /></CardContent></Card>
+   464→            <Card><CardContent className="p-4"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16 mb-1" /><Skeleton className="h-3 w-24" /></CardContent></Card>
+   465→          </div>
+   466→          <Card>
+   467→            <CardContent className="p-4">
+   468→              <Skeleton className="h-[400px] w-full rounded" />
+   469→            </CardContent>
+   470→          </Card>
+   471→        </motion.div>
+   472→      )}
+   473→
+   474→      {/* Forecast results */}
+   475→      {forecastResult && !forecastLoading && (
+   476→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="space-y-6">
+   477→          {/* Top row: 4 stat cards */}
+   478→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   479→            {/* Avg Daily Demand */}
+   480→            <Card>
+   481→              <CardContent className="p-4">
+   482→                <div className="flex items-center gap-2 mb-1">
+   483→                  <Activity className="h-4 w-4 text-emerald-500" />
+   484→                  <span className="text-xs font-medium text-gray-500">Avg Daily Demand</span>
+   485→                </div>
+   486→                <p className="text-2xl font-bold text-slate-800">
+   487→                  {forecastResult.forecast.points.length > 0
+   488→                    ? (forecastResult.forecast.points.reduce((sum, p) => sum + p.predicted, 0) / forecastResult.forecast.points.length).toFixed(1)
+   489→                    : '—'}
+   490→                </p>
+   491→                <p className="text-[10px] text-gray-400 mt-1">units/day average</p>
+   492→              </CardContent>
+   493→            </Card>
+   494→
+   495→            {/* Current Stock Days */}
+   496→            <Card>
+   497→              <CardContent className="p-4">
+   498→                <div className="flex items-center gap-2 mb-1">
+   499→                  <Clock className="h-4 w-4 text-blue-500" />
+   500→                  <span className="text-xs font-medium text-gray-500">Stock Days Left</span>
+   501→                </div>
+   502→                <p className="text-2xl font-bold text-slate-800">
+   503→                  {forecastResult.orderTrigger.daysOfStock}
+   504→                </p>
+   505→                <p className="text-[10px] text-gray-400 mt-1">
+   506→                  {forecastResult.orderTrigger.stockStatus === 'healthy' ? 'Healthy' :
+   507→                   forecastResult.orderTrigger.stockStatus === 'low' ? 'Low — Reorder soon' :
+   508→                   forecastResult.orderTrigger.stockStatus === 'critical' ? 'Critical!' :
+   509→                   'Stockout!'}
+   510→                </p>
+   511→              </CardContent>
+   512→            </Card>
+   513→
+   514→            {/* Lead Time */}
+   515→            <Card>
+   516→              <CardContent className="p-4">
+   517→                <div className="flex items-center gap-2 mb-1">
+   518→                  <Zap className="h-4 w-4 text-amber-500" />
+   519→                  <span className="text-xs font-medium text-gray-500">Lead Time</span>
+   520→                </div>
+   521→                <p className="text-2xl font-bold text-slate-800">
+   522→                  {forecastResult.leadTime.total}d
+   523→                </p>
+   524→                <p className="text-[10px] text-gray-400 mt-1 capitalize">
+   525→                  {forecastResult.leadTime.shippingMethod} freight
+   526→                </p>
+   527→              </CardContent>
+   528→            </Card>
+   529→
+   530→            {/* Quality Score / MAPE */}
+   531→            <Card>
+   532→              <CardContent className="p-4">
+   533→                <div className="flex items-center gap-2 mb-1">
+   534→                  <Target className="h-4 w-4 text-violet-500" />
+   535→                  <span className="text-xs font-medium text-gray-500">Model MAPE</span>
+   536→                </div>
+   537→                <p className="text-2xl font-bold text-slate-800">
+   538→                  {forecastResult.forecast.metrics.mape.toFixed(1)}%
+   539→                </p>
+   540→                <p className="text-[10px] text-gray-400 mt-1">
+   541→                  {forecastResult.forecast.metrics.mape < 10 ? 'Excellent accuracy' :
+   542→                   forecastResult.forecast.metrics.mape < 20 ? 'Good accuracy' :
+   543→                   forecastResult.forecast.metrics.mape < 30 ? 'Moderate accuracy' :
+   544→                   'Needs recalibration'}
+   545→                </p>
+   546→              </CardContent>
+   547→            </Card>
+   548→          </div>
+   549→
+   550→          {/* Main chart */}
+   551→          <Card>
+   552→            <CardHeader className="pb-2">
+   553→              <div className="flex items-center justify-between">
+   554→                <div>
+   555→                  <CardTitle className="text-base">Demand Forecast with Confidence Interval</CardTitle>
+   556→                  <CardDescription>
+   557→                    {forecastResult.product.sku} — {forecastResult.product.name} ·
+   558→                    {forecastResult.forecast.points.length}-day horizon · {forecastResult.forecast.model} model
+   559→                  </CardDescription>
+   560→                </div>
+   561→                <Badge variant="outline" className="text-[10px]">
+   562→                  {forecastResult.dataPoints} data points
+   563→                </Badge>
+   564→              </div>
+   565→            </CardHeader>
+   566→            <CardContent>
+   567→              <ForecastChart points={forecastResult.forecast.points} />
+   568→            </CardContent>
+   569→          </Card>
+   570→
+   571→          {/* Order Trigger + Seasonal Pattern */}
+   572→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   573→            <OrderTriggerCard trigger={forecastResult.orderTrigger} />
+   574→            <Card>
+   575→              <CardHeader className="pb-3">
+   576→                <CardTitle className="text-base flex items-center gap-2">
+   577→                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+   578→                  BD Seasonal Pattern
+   579→                </CardTitle>
+   580→              </CardHeader>
+   581→              <CardContent>
+   582→                <SeasonalPattern currentSeason={forecastResult.orderTrigger.currentSeason} />
+   583→              </CardContent>
+   584→            </Card>
+   585→          </div>
+   586→
+   587→          {/* Lead Time + EOQ/Safety Stock */}
+   588→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   589→            <LeadTimeViz
+   590→              leadTime={forecastResult.leadTime}
+   591→              cnyDelayDays={forecastResult.orderTrigger.cnyDelayDays}
+   592→            />
+   593→            <div className="space-y-4">
+   594→              {/* EOQ Card */}
+   595→              <Card>
+   596→                <CardHeader className="pb-3">
+   597→                  <CardTitle className="text-base flex items-center gap-2">
+   598→                    <Calculator className="h-4 w-4 text-blue-500" />
+   599→                    Economic Order Quantity (EOQ)
+   600→                  </CardTitle>
+   601→                </CardHeader>
+   602→                <CardContent className="space-y-3">
+   603→                  <div className="flex items-center justify-between">
+   604→                    <span className="text-sm text-gray-600">Optimal Order Qty</span>
+   605→                    <span className="text-2xl font-bold text-slate-800">{forecastResult.eoq.eoq}</span>
+   606→                  </div>
+   607→                  <div className="grid grid-cols-3 gap-2 text-center">
+   608→                    <div className="p-2 rounded bg-blue-50">
+   609→                      <p className="text-sm font-bold text-blue-700">{forecastResult.eoq.ordersPerYear}</p>
+   610→                      <p className="text-[10px] text-blue-500">Orders/yr</p>
+   611→                    </div>
+   612→                    <div className="p-2 rounded bg-blue-50">
+   613→                      <p className="text-sm font-bold text-blue-700">{forecastResult.eoq.orderCycleDays}d</p>
+   614→                      <p className="text-[10px] text-blue-500">Cycle</p>
+   615→                    </div>
+   616→                    <div className="p-2 rounded bg-blue-50">
+   617→                      <p className="text-sm font-bold text-blue-700">৳{forecastResult.eoq.totalCost.toLocaleString()}</p>
+   618→                      <p className="text-[10px] text-blue-500">Total Cost</p>
+   619→                    </div>
+   620→                  </div>
+   621→                </CardContent>
+   622→              </Card>
+   623→
+   624→              {/* Safety Stock Card */}
+   625→              <Card>
+   626→                <CardHeader className="pb-3">
+   627→                  <CardTitle className="text-base flex items-center gap-2">
+   628→                    <Shield className="h-4 w-4 text-amber-500" />
+   629→                    Safety Stock
+   630→                  </CardTitle>
+   631→                </CardHeader>
+   632→                <CardContent className="space-y-3">
+   633→                  <div className="flex items-center justify-between">
+   634→                    <span className="text-sm text-gray-600">Safety Stock Level</span>
+   635→                    <span className="text-2xl font-bold text-slate-800">{forecastResult.safetyStock.safetyStock}</span>
+   636→                  </div>
+   637→                  <div className="grid grid-cols-3 gap-2 text-center">
+   638→                    <div className="p-2 rounded bg-amber-50">
+   639→                      <p className="text-sm font-bold text-amber-700">{forecastResult.safetyStock.reorderPoint}</p>
+   640→                      <p className="text-[10px] text-amber-500">Reorder Pt</p>
+   641→                    </div>
+   642→                    <div className="p-2 rounded bg-amber-50">
+   643→                      <p className="text-sm font-bold text-amber-700">{(forecastResult.safetyStock.serviceLevel * 100).toFixed(0)}%</p>
+   644→                      <p className="text-[10px] text-amber-500">Service Lvl</p>
+   645→                    </div>
+   646→                    <div className="p-2 rounded bg-amber-50">
+   647→                      <p className="text-sm font-bold text-amber-700">{forecastResult.safetyStock.zScore}</p>
+   648→                      <p className="text-[10px] text-amber-500">Z-Score</p>
+   649→                    </div>
+   650→                  </div>
+   651→                  <div className="text-xs text-gray-500 bg-slate-50 rounded p-2">
+   652→                    <span className="font-medium">Components:</span>{' '}
+   653→                    Demand var: {forecastResult.safetyStock.components.demandVariability.toFixed(2)} |
+   654→                    Lead time var: {forecastResult.safetyStock.components.leadTimeVariability.toFixed(2)}
+   655→                  </div>
+   656→                </CardContent>
+   657→              </Card>
+   658→            </div>
+   659→          </div>
+   660→
+   661→          {/* Model Comparison */}
+   662→          <ModelComparison
+   663→            individualResults={forecastResult.forecast.individualResults}
+   664→            ensembleModel={forecastResult.forecast.model}
+   665→          />
+   666→
+   667→          {/* Forecast vs Actual Comparison */}
+   668→          <ForecastVsActual
+   669→            productId={selectedProductId}
+   670→            productName={forecastResult.product.name || 'Unknown Product'}
+   671→            tenantId="demo-bd-motors"
+   672→          />
+   673→
+   674→          {/* Stock Projection Chart */}
+   675→          <StockProjection
+   676→            currentStock={forecastResult.orderTrigger.currentStock}
+   677→            safetyStock={forecastResult.orderTrigger.safetyStock}
+   678→            reorderPoint={forecastResult.orderTrigger.reorderPoint}
+   679→            avgDailyDemand={forecastResult.orderTrigger.daysOfStock > 0 ? forecastResult.orderTrigger.currentStock / forecastResult.orderTrigger.daysOfStock : 1}
+   680→            orderArrivalDate={forecastResult.orderTrigger.expectedDeliveryDate}
+   681→            orderQty={forecastResult.orderTrigger.suggestedOrderQty}
+   682→            productName={forecastResult.product.name || undefined}
+   683→          />
+   684→        </motion.div>
+   685→      )}
+   686→    </div>
+   687→  );
+   688→}
+   689→
+   690→// ============================================
+   691→// Order Triggers Tab (THE CORE IP - THE PRIMARY OUTPUT)
+   692→// ============================================
+   693→
+   694→function OrderTriggersTab() {
+   695→  const [seasonalBest, setSeasonalBest] = useState<{ products: Array<{ productId: string; productSku: string; productName: string; category: string; predictedDemand: number; currentStock: number; stockGap: number; season: string }> } | null>(null);
+   696→  const [seasonalBestLoading, setSeasonalBestLoading] = useState(false);
+   697→
+   698→  // Fetch seasonal best products on mount
+   699→  useEffect(() => {
+   700→    const fetchSeasonalBest = async () => {
+   701→      setSeasonalBestLoading(true);
+   702→      try {
+   703→        const res = await fetch('/api/forecast/seasonal-best?tenantId=demo-bd-motors');
+   704→        if (res.ok) {
+   705→          const json = await res.json();
+   706→          if (json.success) setSeasonalBest(json.data);
+   707→        }
+   708→      } catch { /* ignore */ }
+   709→      finally { setSeasonalBestLoading(false); }
+   710→    };
+   711→    fetchSeasonalBest();
+   712→  }, []);
+   713→
+   714→  return (
+   715→    <div className="space-y-6">
+   716→      {/* Hero Banner */}
+   717→      <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50">
+   718→        <CardContent className="p-5">
+   719→          <div className="flex items-center gap-4">
+   720→            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg flex-shrink-0">
+   721→              <ShoppingCart className="h-7 w-7 text-white" />
+   722→            </div>
+   723→            <div>
+   724→              <h2 className="text-lg font-bold text-emerald-900">Recommended Orders</h2>
+   725→              <p className="text-sm text-emerald-700">
+   726→                THE CORE IP — TrimedCast answers: &ldquo;Order <strong>what</strong>, <strong>how many</strong>, on <strong>what date</strong>?&rdquo;
+   727→              </p>
+   728→              <p className="text-xs text-emerald-600 mt-1">
+   729→                Calculated from: Lead time decomposition + CNY risk + BD seasonal demand + EOQ + Safety stock
+   730→              </p>
+   731→            </div>
+   732→          </div>
+   733→        </CardContent>
+   734→      </Card>
+   735→
+   736→      {/* Recommended Orders Table - THE PRIMARY OUTPUT */}
+   737→      <RecommendedOrdersTable />
+   738→
+   739→      {/* Seasonal Best Products */}
+   740→      <Card>
+   741→        <CardHeader className="pb-3">
+   742→          <div className="flex items-center gap-2">
+   743→            <Sparkles className="h-5 w-5 text-amber-500" />
+   744→            <CardTitle className="text-base">Seasonal Best Products</CardTitle>
+   745→          </div>
+   746→          <CardDescription>Top products predicted to sell best in the upcoming season</CardDescription>
+   747→        </CardHeader>
+   748→        <CardContent>
+   749→          {seasonalBestLoading ? (
+   750→            <div className="flex items-center justify-center py-8">
+   751→              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+   752→              <span className="ml-2 text-sm text-gray-500">Analyzing seasonal patterns...</span>
+   753→            </div>
+   754→          ) : seasonalBest && seasonalBest.products && seasonalBest.products.length > 0 ? (
+   755→            <div className="space-y-3">
+   756→              {seasonalBest.products.slice(0, 5).map((product, idx) => (
+   757→                <motion.div
+   758→                  key={product.productId}
+   759→                  initial={{ opacity: 0, x: -10 }}
+   760→                  animate={{ opacity: 1, x: 0 }}
+   761→                  transition={{ delay: idx * 0.05 }}
+   762→                  className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-100"
+   763→                >
+   764→                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+   765→                    idx === 0 ? 'bg-amber-100 text-amber-700' :
+   766→                    idx === 1 ? 'bg-gray-100 text-gray-600' :
+   767→                    idx === 2 ? 'bg-orange-100 text-orange-700' :
+   768→                    'bg-slate-50 text-slate-500'
+   769→                  }`}>
+   770→                    {idx + 1}
+   771→                  </div>
+   772→                  <div className="flex-1 min-w-0">
+   773→                    <div className="flex items-center gap-2">
+   774→                      <span className="font-medium text-sm text-gray-800 truncate">{product.productName}</span>
+   775→                      <Badge variant="outline" className="text-[9px] h-4">{product.productSku}</Badge>
+   776→                    </div>
+   777→                    <p className="text-xs text-gray-500">{product.category}</p>
+   778→                  </div>
+   779→                  <div className="text-right flex-shrink-0">
+   780→                    <p className="text-sm font-bold text-emerald-700">{Math.round(product.predictedDemand)} units</p>
+   781→                    <p className="text-[10px] text-gray-400">predicted demand</p>
+   782→                  </div>
+   783→                  <div className="text-right flex-shrink-0">
+   784→                    {product.stockGap > 0 ? (
+   785→                      <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">
+   786→                        Gap: {Math.round(product.stockGap)} units
+   787→                      </Badge>
+   788→                    ) : (
+   789→                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">
+   790→                        Stock OK
+   791→                      </Badge>
+   792→                    )}
+   793→                  </div>
+   794→                </motion.div>
+   795→              ))}
+   796→            </div>
+   797→          ) : (
+   798→            <div className="text-center py-8 text-gray-500">
+   799→              <Package className="h-10 w-10 mx-auto text-gray-300 mb-2" />
+   800→              <p className="text-sm">No seasonal predictions available yet</p>
+   801→              <p className="text-xs text-gray-400">Import sales history data first to enable seasonal analysis</p>
+   802→            </div>
+   803→          )}
+   804→        </CardContent>
+   805→      </Card>
+   806→
+   807→      {/* CNY Calendar - Supply Chain Disruption Planning */}
+   808→      <CNYCalendar />
+   809→
+   810→      {/* Category × Season Demand Matrix */}
+   811→      <CategorySeasonalGrid />
+   812→    </div>
+   813→  );
+   814→}
+   815→
+   816→// ============================================
+   817→// Main Page Component
+   818→// ============================================
+   819→
+   820→export default function Home() {
+   821→  const { currentStep, reset } = useETLStore();
+   822→  const { activeTab, setActiveTab } = useForecastStore();
+   823→
+   824→  return (
+   825→    <div className="min-h-screen flex flex-col bg-gray-50">
+   826→      {/* Header */}
+   827→      <header className="bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-lg">
+   828→        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+   829→          <div className="flex items-center justify-between">
+   830→            <div className="flex items-center gap-3">
+   831→              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-md">
+   832→                <Bike className="h-6 w-6 text-white" />
+   833→              </div>
+   834→              <div>
+   835→                <h1 className="text-xl font-bold tracking-tight">TrimedCast</h1>
+   836→                <p className="text-xs text-slate-400">Seasonal Demand & Inventory Forecasting</p>
+   837→              </div>
+   838→            </div>
+   839→            <div className="flex items-center gap-3">
+   840→              {activeTab === 'import' && currentStep > 0 && currentStep < 5 && (
+   841→                <Button variant="outline" size="sm" className="text-white border-slate-600 hover:bg-slate-700 hover:text-white" onClick={reset}>
+   842→                  <RotateCcw className="h-4 w-4 mr-1" />
+   843→                  New Import
+   844→                </Button>
+   845→              )}
+   846→              <Badge variant="outline" className="text-slate-400 border-slate-600 text-xs hidden sm:inline-flex">
+   847→                BD Motorcycle Parts
+   848→              </Badge>
+   849→            </div>
+   850→          </div>
+   851→        </div>
+   852→      </header>
+   853→
+   854→      {/* Main Content */}
+   855→      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+   856→        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'orders')} className="w-full">
+   857→          <TabsList className="grid w-full max-w-lg mx-auto mb-6 grid-cols-3">
+   858→            <TabsTrigger value="import" className="flex items-center gap-2">
+   859→              <Upload className="h-4 w-4" />
+   860→              <span className="hidden sm:inline">Import Data</span>
+   861→              <span className="sm:hidden">Import</span>
+   862→            </TabsTrigger>
+   863→            <TabsTrigger value="forecast" className="flex items-center gap-2">
+   864→              <BarChart3 className="h-4 w-4" />
+   865→              <span className="hidden sm:inline">Forecast</span>
+   866→              <span className="sm:hidden">Forecast</span>
+   867→            </TabsTrigger>
+   868→            <TabsTrigger value="orders" className="flex items-center gap-2">
+   869→              <ShoppingCart className="h-4 w-4" />
+   870→              <span className="hidden sm:inline">Order Triggers</span>
+   871→              <span className="sm:hidden">Orders</span>
+   872→            </TabsTrigger>
+   873→          </TabsList>
+   874→
+   875→          <TabsContent value="import">
+   876→            <AnimatePresence mode="wait">
+   877→              <motion.div
+   878→                key="import-tab"
+   879→                initial={{ opacity: 0, y: 10 }}
+   880→                animate={{ opacity: 1, y: 0 }}
+   881→                exit={{ opacity: 0, y: -10 }}
+   882→                transition={{ duration: 0.3 }}
+   883→              >
+   884→                <ImportDataTab />
+   885→              </motion.div>
+   886→            </AnimatePresence>
+   887→          </TabsContent>
+   888→
+   889→          <TabsContent value="forecast">
+   890→            <AnimatePresence mode="wait">
+   891→              <motion.div
+   892→                key="forecast-tab"
+   893→                initial={{ opacity: 0, y: 10 }}
+   894→                animate={{ opacity: 1, y: 0 }}
+   895→                exit={{ opacity: 0, y: -10 }}
+   896→                transition={{ duration: 0.3 }}
+   897→              >
+   898→                <ForecastDashboardTab />
+   899→              </motion.div>
+   900→            </AnimatePresence>
+   901→          </TabsContent>
+   902→
+   903→          <TabsContent value="orders">
+   904→            <AnimatePresence mode="wait">
+   905→              <motion.div
+   906→                key="orders-tab"
+   907→                initial={{ opacity: 0, y: 10 }}
+   908→                animate={{ opacity: 1, y: 0 }}
+   909→                exit={{ opacity: 0, y: -10 }}
+   910→                transition={{ duration: 0.3 }}
+   911→              >
+   912→                <OrderTriggersTab />
+   913→              </motion.div>
+   914→            </AnimatePresence>
+   915→          </TabsContent>
+   916→        </Tabs>
+   917→      </main>
+   918→
+   919→      {/* Footer */}
+   920→      <footer className="bg-white border-t border-gray-200 mt-auto">
+   921→        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+   922→          <p className="text-xs text-gray-500 text-center">
+   923→            TrimedCast &copy; 2024 | Seasonal Demand Forecasting for BD Motorcycle Parts
+   924→          </p>
+   925→        </div>
+   926→      </footer>
+   927→    </div>
+   928→  );
+   929→}
+   930→

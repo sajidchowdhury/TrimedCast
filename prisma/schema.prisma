@@ -114,10 +114,14 @@ model Product {
   unitCost          Float?
   sellingPrice      Float?
   unit              String   @default("piece") // piece, set, pair
-  minOrderQty       Int      @default(1)
+  minOrderQty       Int      @default(1)   // MOQ - supplier minimum order quantity
+  eoq               Int      @default(100) // Economic Order Quantity
+  moq               Int      @default(1)   // Supplier Minimum Order Quantity (alias for minOrderQty)
+  maxStock          Int      @default(500) // Maximum warehouse capacity for this SKU
   leadTimeDays      Int?     // override supplier lead time
   isSeasonal        Boolean  @default(false)
   seasonalityType   String?  // winter_peak, monsoon_dip, etc.
+  seasonWeight      Float?   // Custom seasonal weight override
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -337,12 +341,24 @@ model RecommendedOrder {
   productId       String
   orderDate       DateTime
   quantity        Int
+  suggestedQty    Int      @default(0)  // Suggested order quantity before constraints
   orderTrigger    String?  // reorder_point, seasonal_uplift, cny_urgency, stockout_risk
   totalLeadTime   Int?     // days
   reorderHitDate  DateTime?
+  expectedDeliveryDate DateTime? // When goods will be available for sale
+  urgency         String   @default("normal") // critical, high, normal, low
   priority        String   @default("normal") // urgent, high, normal, low
-  status          String   @default("pending") // pending, approved, converted, rejected
+  status          String   @default("pending") // pending, approved, converted, rejected, acknowledged, deferred, skipped
+  cnyRisk         Boolean  @default(false) // Whether this order has CNY risk
+  cnyStrategy     String?  // before_cny, after_cny, partial_order, air_escape, none
+  cnyDelayDays    Int      @default(0)  // Additional days due to CNY
+  shipmentMode    String   @default("sea") // sea, air
+  unitCost        Float?   // Cost per unit at time of calculation
+  totalCost       Float?   // quantity * unitCost
   justification   String?
+  constraintsApplied String? // JSON: list of applied constraints
+  timeline        String?  // JSON: full OrderTimeline milestones
+  pipelineSessionId String? // ID of the pipeline run that generated this
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -351,6 +367,9 @@ model RecommendedOrder {
 
   @@index([tenantId])
   @@index([orderDate])
+  @@index([priority])
+  @@index([status])
+  @@index([cnyRisk])
 }
 
 // --- ETL / Data Import ---
