@@ -35,6 +35,7 @@ import { ServiceLevelTable } from '@/components/forecast/service-level-table';
 import { SeasonalBestPanel } from '@/components/forecast/seasonal-best-panel';
 import { OrderTimelineGantt } from '@/components/forecast/order-timeline-gantt';
 import { CNYRiskDashboard } from '@/components/forecast/cny-risk-dashboard';
+import { ApiContractExplorer } from '@/components/api/api-contract-explorer';
 import {
   Loader2,
   AlertCircle,
@@ -63,6 +64,7 @@ import {
   Gauge,
   GitBranch,
   AlertOctagon,
+  Code2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -1110,8 +1112,8 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline')} className="w-full">
-          <TabsList className="grid w-full max-w-3xl mx-auto mb-6 grid-cols-6">
+        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline' | 'api')} className="w-full">
+          <TabsList className="grid w-full max-w-3xl mx-auto mb-6 grid-cols-7">
             <TabsTrigger value="import" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import Data</span>
@@ -1141,6 +1143,11 @@ export default function Home() {
               <GitBranch className="h-4 w-4" />
               <span className="hidden sm:inline">Pipeline</span>
               <span className="sm:hidden">Pipeline</span>
+            </TabsTrigger>
+            <TabsTrigger value="api" className="flex items-center gap-2">
+              <Code2 className="h-4 w-4" />
+              <span className="hidden sm:inline">API v1</span>
+              <span className="sm:hidden">API</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1227,6 +1234,20 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
               >
                 <PipelineTab />
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="api">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="api-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ApiContractExplorer />
               </motion.div>
             </AnimatePresence>
           </TabsContent>

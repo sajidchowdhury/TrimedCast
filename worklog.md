@@ -608,3 +608,36 @@ Stage Summary:
 - THE KILLER FEATURE: Order SKU-047 on June 22, 300 units, arrives Nov 15, total cost BDT 135,000
 - 3 new API routes, 2 enhanced routes, 3 new UI components
 - Pushed to GitHub: Session 9: Order Trigger Calculator (THE CORE IP) — COMPLETE
+
+---
+Task ID: 10
+Agent: Main Developer
+Task: Session 10 - Core API Endpoints (API Contract & Integration Map.md Sections 3.1-3.7)
+
+Work Log:
+- Created common API response format helpers (src/lib/api/response.ts): apiSuccess, apiCreated, apiPaginated, apiError, validationError, unauthorizedError, forbiddenError, notFoundError, conflictError, rateLimitError, parsePagination
+- Created authentication utilities (src/lib/api/auth.ts): JWT-like token generation/verification, in-memory token store, AuthContext, Role-Based Access Control with 5 roles, tenant scoping
+- Created audit logger (src/lib/api/audit.ts): createAuditLog for all mutations
+- Built Auth API routes: POST /api/v1/auth/register (tenant+user+settings), POST /api/v1/auth/login, POST /api/v1/auth/logout, GET /api/v1/auth/me
+- Built Products CRUD API: GET list (paginated, filtered, RBAC cost field masking), POST create, GET by id (with relations), PUT update, DELETE soft-delete
+- Built Inventory API: GET list, GET by id, PUT update stock, GET /stockout-risks (with daily consumption rate calculation)
+- Built Suppliers CRUD API: GET list (with product count), POST create, GET by id, PUT update, DELETE deactivate
+- Built Motorcycle Models CRUD API: GET list, POST create, GET by id, PUT update, DELETE soft-delete
+- Built Sales Orders CRUD API: GET list, POST create, GET by id, PUT update, DELETE cancel, PUT /fulfill (decrements inventory)
+- Built Purchase Orders CRUD API: GET list, POST create from recommended orders (auto-calculates timeline, CNY risk), GET by id, PUT update, DELETE cancel, PUT /status (validates transitions draft→sent→confirmed→in_transit→received, auto-increments inventory on receive)
+- Built Dashboard API: GET /api/v1/dashboard (aggregated KPIs, stockout risk, urgent orders, seasonal summary)
+- Enhanced seed route with motorcycle models, sales orders, purchase orders, forecast settings, SOP cycle
+- Built API Contract Explorer frontend component: 33 endpoints registered, Browse + Test tabs, auth token input, method-colored badges, path/query params, request body editor, live response viewer
+- Integrated API tab into main page with 7-tab navigation
+- All API endpoints tested and verified via curl
+
+Stage Summary:
+- 33 REST API v1 endpoints implemented across 8 sections: Auth, Dashboard, Products, Inventory, Suppliers, Motorcycle Models, Sales Orders, Purchase Orders
+- Common response format: { success, data, meta/errors }
+- Full RBAC with 5 roles: warehouse_manager, sales_manager, marketing_manager, finance, executive
+- Audit logging on all mutations
+- Tenant isolation enforced on all endpoints
+- Interactive API Contract Explorer with inline testing
+- Purchase Order status transitions validated (draft→sent→confirmed→in_transit→received)
+- Sales Order fulfillment auto-decrements inventory
+- Purchase Order receipt auto-increments inventory

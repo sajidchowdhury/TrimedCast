@@ -81,15 +81,20 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Create inventory for products
-    for (const product of products) {
+    const stockLevels = [150, 45, 80, 200, 25];
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      const currentStock = stockLevels[i] || Math.floor(Math.random() * 200) + 20;
+      const reserved = Math.floor(currentStock * 0.15);
       await db.inventory.upsert({
         where: { tenantId_productId: { tenantId: tenant.id, productId: product.id } },
-        update: {},
+        update: { currentStock, reservedStock: reserved, availableStock: currentStock - reserved },
         create: {
           tenantId: tenant.id,
           productId: product.id,
-          currentStock: Math.floor(Math.random() * 200) + 20,
-          reservedStock: Math.floor(Math.random() * 30),
+          currentStock,
+          reservedStock: reserved,
+          availableStock: currentStock - reserved,
           reorderPoint: 30,
           safetyStock: 15,
           maxStockLevel: 300,
@@ -97,9 +102,91 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Create motorcycle models
+    const models = await Promise.all([
+      db.motorcycleModel.upsert({
+        where: { tenantId_brand_model: { tenantId: tenant.id, brand: 'Honda', model: 'CD 70' } },
+        update: {},
+        create: { tenantId: tenant.id, brand: 'Honda', model: 'CD 70', ccRating: 70, segment: 'commuter' },
+      }),
+      db.motorcycleModel.upsert({
+        where: { tenantId_brand_model: { tenantId: tenant.id, brand: 'Bajaj', model: 'Discover 125' } },
+        update: {},
+        create: { tenantId: tenant.id, brand: 'Bajaj', model: 'Discover 125', ccRating: 125, segment: 'commuter' },
+      }),
+      db.motorcycleModel.upsert({
+        where: { tenantId_brand_model: { tenantId: tenant.id, brand: 'Bajaj', model: 'Pulsar 150' } },
+        update: {},
+        create: { tenantId: tenant.id, brand: 'Bajaj', model: 'Pulsar 150', ccRating: 150, segment: 'premium' },
+      }),
+      db.motorcycleModel.upsert({
+        where: { tenantId_brand_model: { tenantId: tenant.id, brand: 'Yamaha', model: 'FZ-S 150' } },
+        update: {},
+        create: { tenantId: tenant.id, brand: 'Yamaha', model: 'FZ-S 150', ccRating: 150, segment: 'premium' },
+      }),
+    ]);
+
+    // Create a few sales orders
+    const existingSOCount = await db.salesOrder.count({ where: { tenantId: tenant.id } });
+    if (existingSOCount === 0) {
+      await db.salesOrder.createMany({
+        data: [
+          { tenantId: tenant.id, orderNo: 'SO-00001', date: new Date('2025-01-15'), customerId: 'Rahim Auto', channel: 'retail', region: 'dhaka', totalAmount: 4250, status: 'delivered', items: JSON.stringify([{ productId: products[0].id, quantity: 5, price: 850 }]) },
+          { tenantId: tenant.id, orderNo: 'SO-00002', date: new Date('2025-02-20'), customerId: 'Karim Parts', channel: 'wholesale', region: 'chittagong', totalAmount: 8400, status: 'confirmed', items: JSON.stringify([{ productId: products[1].id, quantity: 30, price: 280 }]) },
+          { tenantId: tenant.id, orderNo: 'SO-00003', date: new Date('2025-03-10'), customerId: 'Salam Store', channel: 'retail', region: 'sylhet', totalAmount: 3250, status: 'pending', items: JSON.stringify([{ productId: products[2].id, quantity: 5, price: 650 }]) },
+        ],
+      });
+    }
+
+    // Create purchase orders
+    const existingPOCount = await db.purchaseOrder.count({ where: { tenantId: tenant.id } });
+    if (existingPOCount === 0) {
+      await db.purchaseOrder.createMany({
+        data: [
+          { tenantId: tenant.id, poNumber: 'PO-00001', supplierId: suppliers[0].id, orderDate: new Date('2025-01-05'), expectedDelivery: new Date('2025-04-05'), status: 'received', totalAmount: 45000, items: JSON.stringify([{ productId: products[0].id, quantity: 100, unitCost: 450 }]), leadTimeDays: 90 },
+          { tenantId: tenant.id, poNumber: 'PO-00002', supplierId: suppliers[1].id, orderDate: new Date('2025-02-15'), expectedDelivery: new Date('2025-05-20'), status: 'in_transit', totalAmount: 24000, items: JSON.stringify([{ productId: products[1].id, quantity: 200, unitCost: 120 }]), leadTimeDays: 95 },
+          { tenantId: tenant.id, poNumber: 'PO-00003', supplierId: suppliers[2].id, orderDate: new Date('2025-03-01'), expectedDelivery: new Date('2025-04-15'), status: 'confirmed', totalAmount: 19000, items: JSON.stringify([{ productId: products[3].id, quantity: 200, unitCost: 95 }]), leadTimeDays: 45 },
+        ],
+      });
+    }
+
+    // Create forecast settings
+    await db.forecastSetting.upsert({
+      where: { id: `fs-${tenant.id}` },
+      update: {},
+      create: {
+        id: `fs-${tenant.id}`,
+        tenantId: tenant.id,
+        model: 'prophet',
+        horizonDays: 90,
+        confidenceLevel: 0.95,
+      },
+    });
+
+    // Create an active SOP cycle
+    const existingCycle = await db.sopCycle.findFirst({ where: { tenantId: tenant.id, status: 'active' } });
+    if (!existingCycle) {
+      await db.sopCycle.create({
+        data: {
+          tenantId: tenant.id,
+          name: 'Monsoon 2025 S&OP',
+          periodStart: new Date('2025-06-01'),
+          periodEnd: new Date('2025-09-30'),
+          stage: 'validation',
+          status: 'active',
+        },
+      });
+    }
+
     return NextResponse.json({
       success: true,
-      data: { tenant, user, suppliers: suppliers.length, products: products.length },
+      data: {
+        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        user: { id: user.id, name: user.name, role: user.role },
+        suppliers: suppliers.length,
+        products: products.length,
+        motorcycle_models: models.length,
+      },
     });
   } catch (error) {
     return NextResponse.json(
