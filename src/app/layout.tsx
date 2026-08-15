@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -14,19 +15,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrimedCast - Excel Import & ETL Pipeline",
-  description: "Excel Import & ETL Pipeline for Bangladesh Motorcycle Parts Seasonal Demand Forecasting. Upload, map, validate, harmonize, and insert data with quality scoring.",
-  keywords: ["TrimedCast", "ETL", "Excel Import", "Bangladesh", "Motorcycle Parts", "Forecasting", "Data Pipeline"],
+  title: "TrimedCast — Seasonal Demand & Inventory Forecasting",
+  description: "Integrated Seasonal Demand & Inventory Forecasting System for Bangladesh Motorcycle Parts Businesses. Consensus forecasting, order triggers, S&OP lifecycle.",
+  keywords: ["TrimedCast", "Bangladesh", "Motorcycle Parts", "Forecasting", "Seasonal Demand", "Inventory", "S&OP", "EOQ", "Safety Stock"],
   authors: [{ name: "TrimedCast Team" }],
   openGraph: {
-    title: "TrimedCast - Excel Import & ETL Pipeline",
-    description: "Excel Import & ETL Pipeline for BD Motorcycle Parts Forecasting",
+    title: "TrimedCast — Seasonal Demand & Inventory Forecasting",
+    description: "Integrated forecasting system for BD motorcycle parts businesses",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TrimedCast - Excel Import & ETL Pipeline",
-    description: "Excel Import & ETL Pipeline for BD Motorcycle Parts Forecasting",
+    title: "TrimedCast — Seasonal Demand & Inventory Forecasting",
+    description: "Integrated forecasting system for BD motorcycle parts businesses",
   },
 };
 
@@ -40,8 +41,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
