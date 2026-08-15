@@ -20,6 +20,13 @@ import {
   DEFAULT_WEIGHTS,
 } from '@/lib/forecasting/models';
 import {
+  prophetEnhanced,
+  exponentialSmoothingAutoTuned,
+  enhancedEnsembleForecast,
+  consensusForecast,
+  type ProphetEnhancedConfig,
+} from '@/lib/forecasting/prophet-engine';
+import {
   calculateOrderTrigger,
   calculateTotalLeadTime,
   DEFAULT_LEAD_TIME,
@@ -75,20 +82,31 @@ export async function POST(request: NextRequest) {
     if (model === 'ensemble' || model === 'moving_average') {
       try { results.push(movingAverage(aggregatedSeries, 3, horizonDays)); modelNames.push('moving_average'); } catch {}
     }
+    // Use enhanced Prophet engine with BD seasonalities (Session 21)
     if (model === 'ensemble' || model === 'exponential_smoothing') {
-      try { results.push(exponentialSmoothing(aggregatedSeries, 0.3, 0.1, 0.2, horizonDays)); modelNames.push('exponential_smoothing'); } catch {}
+      try {
+        results.push(exponentialSmoothingAutoTuned(aggregatedSeries, horizonDays));
+        modelNames.push('exponential_smoothing_auto');
+      } catch {
+        try { results.push(exponentialSmoothing(aggregatedSeries, 0.3, 0.1, 0.2, horizonDays)); modelNames.push('exponential_smoothing'); } catch {}
+      }
     }
     if (model === 'ensemble' || model === 'seasonal_decomposition') {
       try { results.push(seasonalDecomposition(aggregatedSeries, horizonDays)); modelNames.push('seasonal_decomposition'); } catch {}
     }
-    if (model === 'ensemble' || model === 'prophet_like') {
-      try { results.push(prophetLike(aggregatedSeries, horizonDays)); modelNames.push('prophet_like'); } catch {}
+    if (model === 'ensemble' || model === 'prophet_like' || model === 'prophet_enhanced') {
+      try {
+        results.push(prophetEnhanced(aggregatedSeries, { horizonDays, includeHolidays: true, includeCNY: true }));
+        modelNames.push('prophet_enhanced');
+      } catch {
+        try { results.push(prophetLike(aggregatedSeries, horizonDays)); modelNames.push('prophet_like'); } catch {}
+      }
     }
 
     let forecast: ForecastResult;
     if (model === 'ensemble' && results.length > 1) {
-      const ensembleWeights: EnsembleWeights = weights || DEFAULT_WEIGHTS;
-      forecast = ensembleForecast(results, ensembleWeights);
+      // Use enhanced ensemble with BD-optimized weights
+      forecast = enhancedEnsembleForecast(results);
     } else if (results.length > 0) {
       forecast = results[results.length - 1];
     } else {

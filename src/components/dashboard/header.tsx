@@ -26,6 +26,8 @@ import {
 import { useDashboardStore, type DashboardPage } from '@/lib/dashboard/store';
 import { useTheme } from 'next-themes';
 import { AuditLogTriggerButton } from './audit-log-panel';
+import { AskAITriggerButton, AskAIPanel } from './ask-ai-panel';
+import { useAIStore } from '@/lib/dashboard/ai-store';
 
 const PAGE_LABELS: Record<DashboardPage, string> = {
   overview: 'Dashboard',
@@ -63,18 +65,17 @@ export function DashboardHeader() {
 
       <div className="flex-1" />
 
-      {/* Ask AI search bar */}
-      <div className="hidden md:flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5 max-w-xs w-full">
+      {/* Ask AI search bar (clickable — opens the Ask AI panel) */}
+      <button
+        onClick={() => useAIStore.getState().setIsOpen(true)}
+        className="hidden md:flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5 max-w-xs w-full hover:bg-muted/70 transition-colors cursor-pointer"
+      >
         <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <input
-          type="text"
-          placeholder="Ask AI... (e.g. stockout risk next 14 days)"
-          className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
-        />
+        <span className="text-sm text-muted-foreground truncate">Ask AI... (e.g. stockout risk next 14 days)</span>
         <kbd className="text-[10px] text-muted-foreground bg-background border border-border rounded px-1 py-0.5 shrink-0">
-          ⌘K
+          {typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent) ? '\u2318' : 'Ctrl+'}K
         </kbd>
-      </div>
+      </button>
 
       <div className="flex items-center gap-1 ml-2">
         {/* Refresh */}
@@ -99,6 +100,9 @@ export function DashboardHeader() {
           <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
 
+        {/* Ask AI */}
+        <AskAITriggerButton />
+
         {/* Audit Log */}
         <AuditLogTriggerButton />
 
@@ -110,6 +114,9 @@ export function DashboardHeader() {
           </Badge>
         </Button>
       </div>
+
+      {/* Ask AI Sheet Panel */}
+      <AskAIPanel />
     </header>
   );
 }

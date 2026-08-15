@@ -1422,3 +1422,97 @@ Stage Summary:
 - 6,474 lines added, 137 lines removed across 11 files
 - All UI/UX Specification Sections 4-7 implemented: Marketing Input (Promo Index), Operations Input (Safety Stock Controls), Sea vs Air Lead Time Toggle, Audit Log
 - Complete operational UI for all non-forecast modules
+
+---
+
+## Task ID: 1
+## Agent: AI Query + Prophet Engine + Auto-Recalibration Builder
+## Task: Build AI Query Backend + Enhanced Prophet Engine + Auto-Recalibration
+
+### Files Created:
+
+1. **`/src/lib/forecasting/prophet-engine.ts`** (830+ lines)
+   - BD Custom Seasonalities: `bd_winter` (period 121.75d, Fourier 3, prior_scale 15.0), `bd_monsoon` (period 121.75d, Fourier 3, prior_scale 12.0), `bd_pre_winter` (period 365.25d, Fourier 2, prior_scale 8.0)
+   - BD Holiday Effects: Eid ul-Fitr (-30%), Eid ul-Adha (-25%), Durga Puja (+10%), Pohela Boishakh (+8%), Independence Day (-5%)
+   - CNY Calendar: Jan 20 - Feb 20 shutdown, 10-day buffer, `before_cny`/`after_cny` strategies
+   - `prophetEnhanced()`: Full Prophet model with BD Fourier terms, holiday multipliers, CNY adjustment, configurable seasonality mode
+   - `consensusForecast()`: 60% quantitative + 40% qualitative (60% marketing + 40% sales within qualitative)
+   - `autoTuneAlpha()`: Cross-validated alpha sweep 0.1-0.9, returns best alpha + MAPE
+   - `exponentialSmoothingAutoTuned()`: ETS with auto-tuned alpha
+   - `enhancedEnsembleForecast()`: Weighted ensemble (55% prophet_enhanced, 25% seasonal_decomp, 15% exp_smoothing, 5% MA)
+   - `getSeasonalDemandProfile()`: 12-month demand profile with holiday effects + CNY risk
+   - `batchProphetForecast()`: Batch processing for multiple products
+   - Helper functions: `getCNYShutdownWindow()`, `isCNYShutdown()`, `isCNYRisk()`, `getCNYAdjustedOrderDate()`
+
+2. **`/src/lib/forecasting/auto-recalibration.ts`** (400+ lines)
+   - `calculateProductMape()`: MAPE/MAE/RMSE calculation from DB forecast vs actual sales
+   - `getConsecutiveBadPeriods()`: Detects N consecutive monthly periods with MAPE > threshold
+   - `checkRecalibration()`: Full recalibration check returning urgency (none/low/medium/high/critical)
+   - `batchRecalibrationCheck()`: Batch check with urgency distribution summary
+   - `executeRecalibration()`: Execute single product recalibration with audit log + model switch
+   - `batchExecuteRecalibration()`: Batch execution with max_products limit, sorted by urgency
+   - `getRecalibrationEvents()`: In-memory event log retrieval
+   - Default config: 15% MAPE threshold, 3 consecutive bad periods, 90-day lookback
+   - Smart recommendations based on MAPE ratio to threshold
+
+3. **`/src/app/api/v1/ai/query/route.ts`** (280+ lines)
+   - POST endpoint using z-ai-web-dev-sdk LLM
+   - TrimedCast-specific system prompt covering BD market, forecasting, inventory, order triggers, S&OP, supply chain
+   - Auto context type detection: stockout_risk, forecast_accuracy, order_timing, seasonal, general
+   - Data gathering functions for each context type (fetches from Prisma)
+   - Usage event tracking via UsageEvent model
+   - Tenant-aware with auth context support
+
+4. **`/src/app/api/v1/ai/conversation/route.ts`** (250+ lines)
+   - POST: Save conversation message to in-memory store
+   - GET: Retrieve conversation history (all sessions or specific session)
+   - DELETE: Clear session or all sessions for tenant
+   - Max 100 messages per session with smart trimming (preserves system messages)
+   - Session management with context_type and metadata support
+
+5. **`/src/app/api/v1/ai/recalibrate/route.ts`** (180+ lines)
+   - GET: Check recalibration status (single product or batch)
+   - POST: Trigger recalibration (single product or batch with execute_all flag)
+   - Supports target_model selection, mape_threshold override, category filter
+   - Returns events log, urgency distribution, actionable recommendations
+
+### Lint: All files pass ESLint with zero errors.
+### Dev Server: Running successfully on port 3000.
+
+---
+Task ID: 2
+Agent: UI Developer
+Task: Build Ask AI UI Component
+
+Work Log:
+- Created /src/lib/dashboard/ai-store.ts (Zustand store for AI)
+  - AIStore interface: isOpen, conversations, isLoading, error, currentQuery, sessionId, rate limiting
+  - submitQuery(): POST /api/v1/ai/query, adds user/assistant messages, fire-and-forget conversation persistence
+  - clearHistory(): DELETE /api/v1/ai/conversation, resets session
+  - loadHistory(): GET /api/v1/ai/conversation, loads messages from API
+  - reloadConversation(): pre-fills search bar with previous query
+  - Rate limit: 10 queries per 60 seconds
+  - Session management with sessionStorage
+
+- Created /src/components/dashboard/ask-ai-panel.tsx (Full Ask AI panel)
+  - AskAIPanel: Sheet component that slides from right
+  - Search bar with Cmd+K/Ctrl+K shortcut indicator, loading spinner
+  - 8 prompt template cards: Stockout Risk, MAPE Accuracy, CNY Timing, Winter Forecast, Top Products, Order Urgency, Cash Flow Impact, Seasonal Patterns
+  - Chat-like message display: user bubbles (right-aligned, primary), AI bubbles (left-aligned, muted, Markdown rendering)
+  - Context type badges: color-coded for stockout_risk, forecast_accuracy, order_timing, seasonal, general
+  - Conversation history sidebar: last 10 queries, click to reload, clear history
+  - Copy response button, Ask follow-up button on each AI response
+  - Error states: API unavailable, rate limit, empty query
+  - Loading dots animation (Framer Motion)
+  - Message slide-in animations (left for AI, right for user)
+  - Dark mode compatible, responsive design
+  - AskAITriggerButton: Brain icon button for header integration
+  - AskAIInlinePanel: Card-wrapped variant for embedding
+
+- Updated /src/components/dashboard/header.tsx
+  - Replaced static Ask AI search bar with clickable button that opens AI panel
+  - Added AskAITriggerButton (Brain icon) to action buttons
+  - Added AskAIPanel Sheet component for the slide-out panel
+  - Platform-aware keyboard shortcut display (Cmd vs Ctrl)
+
+All lint checks pass. Dev server compiles successfully.
