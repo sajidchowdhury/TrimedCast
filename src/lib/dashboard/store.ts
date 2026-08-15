@@ -87,6 +87,10 @@ interface DashboardStore {
   setRightPanelOpen: (open: boolean) => void;
   rightPanelContent: 'audit-log' | 'notifications' | null;
   setRightPanelContent: (content: 'audit-log' | 'notifications' | null) => void;
+
+  // Orders summary (shared across orders page)
+  ordersCnyAtRisk: number;
+  setOrdersCnyAtRisk: (count: number) => void;
 }
 
 const CACHE_TTL = 60_000; // 1 minute cache
@@ -132,4 +136,8 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
   rightPanelContent: null,
   setRightPanelContent: (content) => set({ rightPanelContent: content, rightPanelOpen: content !== null }),
+
+  // Orders summary
+  ordersCnyAtRisk: 0,
+  setOrdersCnyAtRisk: (count) => set({ ordersCnyAtRisk: count }),
 }));

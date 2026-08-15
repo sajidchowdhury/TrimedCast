@@ -1,21 +1,43 @@
 'use client';
 
 // ============================================
-// Orders Page — Recommended Orders + Order Triggers
+// Orders Page — Session 19 enhanced
+// THE PRIMARY OUTPUT — visual "when/what/how much to order"
+// Executive Summary + CNY Banner + Orders Table + Gantt + CNY Risk
 // ============================================
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { RecommendedOrdersTable } from '@/components/forecast/recommended-orders-table';
-import { OrderTimelineGantt } from '@/components/forecast/order-timeline-gantt';
-import { CNYRiskDashboard } from '@/components/forecast/cny-risk-dashboard';
-import { SeasonalBestPanel } from '@/components/forecast/seasonal-best-panel';
-import { ShoppingCart, AlertTriangle, TrendingUp, Package } from 'lucide-react';
 import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+
+// Session 19 dashboard components
+import { ExecutiveSummaryCard } from '../executive-summary-card';
+import { CNYRiskBanner } from '../cny-risk-banner';
+import { DashboardOrdersTable } from '../dashboard-orders-table';
+import { DashboardOrderTimelineGantt } from '../dashboard-gantt';
+
+// Existing components
+import { CNYCalendar } from '@/components/forecast/cny-calendar';
+import { SeasonalBestPanel } from '@/components/forecast/seasonal-best-panel';
+import { CNYRiskDashboard } from '@/components/forecast/cny-risk-dashboard';
+
+import {
+  ShoppingCart,
+  AlertTriangle,
+  TrendingUp,
+  Clock,
+  Package,
+  BarChart3,
+  GitBranch,
+} from 'lucide-react';
+import { useDashboardStore } from '@/lib/dashboard/store';
+import { cn } from '@/lib/utils';
 
 export function OrdersPage() {
-  const [tab, setTab] = useState<'recommended' | 'timeline' | 'cny' | 'seasonal'>('recommended');
+  const [tab, setTab] = useState<'orders' | 'timeline' | 'cny' | 'seasonal'>('orders');
+  const { ordersCnyAtRisk } = useDashboardStore();
 
   return (
     <div className="space-y-5">
@@ -30,11 +52,17 @@ export function OrdersPage() {
         </div>
       </div>
 
+      {/* Executive Summary Card */}
+      <ExecutiveSummaryCard />
+
+      {/* CNY Risk Banner */}
+      <CNYRiskBanner cnyAtRiskCount={ordersCnyAtRisk} />
+
       {/* Tab navigation */}
-      <div className="flex items-center gap-2 border-b border-border pb-2">
+      <div className="flex items-center gap-1 border-b border-border pb-2">
         {[
-          { key: 'recommended' as const, label: 'Recommended Orders', icon: ShoppingCart },
-          { key: 'timeline' as const, label: 'Order Timeline', icon: Package },
+          { key: 'orders' as const, label: 'Recommended Orders', icon: ShoppingCart },
+          { key: 'timeline' as const, label: 'Order Timeline', icon: GitBranch },
           { key: 'cny' as const, label: 'CNY Risk', icon: AlertTriangle },
           { key: 'seasonal' as const, label: 'Seasonal Best', icon: TrendingUp },
         ].map((t) => (
@@ -51,11 +79,31 @@ export function OrdersPage() {
         ))}
       </div>
 
-      {/* Content */}
-      {tab === 'recommended' && <RecommendedOrdersTable />}
-      {tab === 'timeline' && <OrderTimelineGantt />}
-      {tab === 'cny' && <CNYRiskDashboard />}
-      {tab === 'seasonal' && <SeasonalBestPanel />}
+      {/* Tab content */}
+      {tab === 'orders' && (
+        <div className="space-y-4">
+          {/* Recommended Orders Table with filtering and Convert to PO */}
+          <DashboardOrdersTable />
+        </div>
+      )}
+
+      {tab === 'timeline' && (
+        <div className="space-y-4">
+          {/* Order Timeline Gantt chart */}
+          <DashboardOrderTimelineGantt />
+        </div>
+      )}
+
+      {tab === 'cny' && (
+        <div className="space-y-4">
+          <CNYCalendar />
+          <CNYRiskDashboard />
+        </div>
+      )}
+
+      {tab === 'seasonal' && (
+        <SeasonalBestPanel />
+      )}
     </div>
   );
 }
