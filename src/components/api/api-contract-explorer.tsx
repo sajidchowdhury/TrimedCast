@@ -123,6 +123,12 @@ const API_ENDPOINTS: ApiEndpoint[] = [
   { method: 'GET', path: '/api/v1/users', description: 'List tenant users', section: 'Users', queryParams: ['page', 'per_page'], rbac: 'warehouse_manager' },
   { method: 'POST', path: '/api/v1/users', description: 'Create new user', section: 'Users', rbac: 'warehouse_manager', requestBody: '{\n  "name": "John",\n  "email": "john@shop.com",\n  "password": "SecurePass123!",\n  "role": "marketing_manager"\n}' },
   { method: 'PUT', path: '/api/v1/users/{id}/role', description: 'Update user role', section: 'Users', rbac: 'warehouse_manager', requestBody: '{ "role": "marketing_manager" }' },
+
+  // Security
+  { method: 'GET', path: '/api/v1/security/permissions', description: 'Current user permissions + restricted fields + capabilities', section: 'Security', rbac: 'Authenticated' },
+  { method: 'GET', path: '/api/v1/security/roles', description: 'All 5 roles with hierarchy + permissions + restrictions', section: 'Security', rbac: 'warehouse_manager, executive' },
+  { method: 'GET', path: '/api/v1/security/audit-summary', description: 'Audit activity summary for tenant', section: 'Security', queryParams: ['days'], rbac: 'WM, executive, finance' },
+  { method: 'GET', path: '/api/v1/security/rate-limit-status', description: 'Current rate limit usage per category', section: 'Security', rbac: 'Authenticated' },
 ];
 
 // --- Method Color Map ---
@@ -151,6 +157,7 @@ const SECTION_ICONS: Record<string, string> = {
   'Audit Log': '📝',
   'Forecast Settings': '⚙️',
   Users: '👥',
+  Security: '🛡️',
 };
 
 interface ApiResponse {

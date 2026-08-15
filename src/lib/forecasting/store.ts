@@ -160,13 +160,13 @@ export interface ForecastStore {
   horizonDays: number;
 
   // Active tab
-  activeTab: 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline' | 'api';
+  activeTab: 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline' | 'api' | 'security';
 
   // Error
   error: string | null;
 
   // Actions
-  setActiveTab: (tab: 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline' | 'api') => void;
+  setActiveTab: (tab: 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline' | 'api' | 'security') => void;
   setSelectedProductId: (id: string | null) => void;
   setShippingMethod: (method: 'sea' | 'air') => void;
   fetchProducts: () => Promise<void>;

@@ -817,3 +817,97 @@ All endpoints:
 - Use createAuditLog for mutation audit trail
 - Follow Next.js App Router route handler patterns
 - ESLint passes cleanly
+
+---
+Task ID: 4
+Agent: RBAC Security Developer
+Task: Session 13 - RBAC + Security Enforcement System
+
+Work Log:
+- Created /src/lib/api/rbac.ts (~300 lines): Comprehensive RBAC permission matrix
+  - Role hierarchy: executive(0), warehouse_manager(1), sales_manager(2), marketing_manager(3), finance(4)
+  - 5 roles with granular resource.action permissions (product, inventory, sales_order, purchase_order, supplier, forecast, forecast_settings, promo_event, promo_index, sop, user, audit_log, financial_data, import, dashboard)
+  - warehouse_manager: full access to ALL permissions (60+ permissions)
+  - sales_manager: sales_order CRUD, read-only on product/inventory/forecast (field-restricted), no create/update on most resources
+  - marketing_manager: promo_event + promo_index CRUD, read-only elsewhere (field-restricted)
+  - finance: STRICTLY READ-ONLY across all resources including audit_log + financial_data
+  - executive: strategic oversight with approve/override on forecasts + SOP, export on all, no create/update/delete on operational data
+  - Governance note validation: required for forecast.approve, forecast.update, sop.advance, sop.override (min 10 chars)
+  - Exports: getRoleHierarchy, getRolePermissions, hasGranularPermission (with wildcard support), canViewFinancials, canViewSupplierContracts, canApproveForecasts, isReadOnlyRole, isOperationalRole, getRestrictedFields, validateGovernanceNote, isValidRole, getAllPermissions, getRolesWithPermission, compareRoles, canWriteResource, getRoleSummary
+- Created /src/lib/api/field-security.ts (~240 lines): Field-level security module
+  - 9 sensitive fields: unit_cost_bdt, margin_bdt, margin_pct, supplier_unit_price, supplier_contract_terms, supplier_payment_terms, eoq_total_cost, po_total_value_bdt, inventory_value_bdt
+  - sales_manager + marketing_manager: restricted from all 9 financial/contract fields
+  - finance: restricted from supplier_contract_terms, supplier_payment_terms only
+  - stripRestrictedFields(): removes restricted fields from single object
+  - stripRestrictedFieldsFromArray(): batch strip for arrays
+  - maskRestrictedFields(): replaces with "REDACTED" instead of removal (for audit/display)
+  - getFieldVisibility(): returns visible vs restricted field lists for a role
+  - Deep variants: deepStripRestrictedFields, deepMaskRestrictedFields for nested objects
+  - Helpers: isFieldRestricted, getFieldCategory, createFieldFilter (for UI table column filtering)
+- Created /src/lib/api/rate-limit.ts (~230 lines): In-memory sliding window rate limiter
+  - 5 rate limit categories: api(60/min), ai(20/min), forecast(10/min), import(5/min), global(100/min per IP)
+  - Fixed-window algorithm with automatic window reset after 60s
+  - checkRateLimit(): returns {allowed, remaining, resetAt}
+  - getRateLimitHeaders(): standard X-RateLimit-Limit/Remaining/Reset headers
+  - resetRateLimit(): per-key reset (for testing)
+  - Auto-cleanup timer every 2 minutes to prevent memory leaks (with .unref() for Node.js)
+  - Monitoring helpers: getRateLimitUsage, getActiveRateLimitCount, clearAllRateLimits
+- ESLint passes cleanly
+- All modules integrate with existing auth.ts Role type and patterns
+
+---
+Task ID: 9
+Agent: Security API Developer
+Task: Session 13 - Security API Endpoints & Dashboard
+
+Work Log:
+- Created /src/lib/api/rbac.ts (200+ lines): Complete RBAC module
+  - 5-role hierarchy: warehouse_manager (L1), sales_manager (L2), marketing_manager (L3), finance (L4), executive (L5)
+  - ROLE_PERMISSIONS: Full permission mapping for all 5 roles
+  - FIELD_SECURITY: Field-level restrictions per role (sales_manager has 9 restricted, marketing_manager has 10, others have 0)
+  - ROLE_RATE_LIMITS: Per-role rate limits for api/forecast/import categories
+  - Helper functions: getRoleHierarchy(), getRolePermissions(), getRestrictedFields(), canViewFinancials(), canViewSupplierContracts(), canApproveForecasts(), isReadOnlyRole(), isOperationalRole(), hasPermission(), isFieldRestricted(), getAllRoles(), getRoleInfo()
+  - Rate limit tracking: In-memory rate limit store with 1-hour sliding window, checkRateLimit(), getRateLimitStatus()
+  - FINANCIAL_FIELDS: 11 sensitive financial/supplier fields catalog
+
+- Created /src/app/api/v1/security/permissions/route.ts: GET Current User Permissions
+  - Requires Bearer token auth
+  - Returns: role, hierarchy_level, permissions[], restricted_fields[], can_view_financials, can_view_supplier_contracts, can_approve_forecasts, is_read_only, is_operational
+
+- Created /src/app/api/v1/security/roles/route.ts: GET All Roles Info
+  - Requires auth + warehouse_manager or executive RBAC
+  - Returns all 5 roles with full capabilities (permissions, restricted fields, rate limits, role type flags)
+
+- Created /src/app/api/v1/security/audit-summary/route.ts: GET Audit Summary
+  - Requires auth + warehouse_manager, executive, or finance RBAC
+  - Query param: days (default 30, max 365)
+  - Returns: period_days, total_actions, by_action_type, by_entity, top_users (top 10), recent_critical_actions (last 20 create/delete/approve/reject)
+
+- Created /src/app/api/v1/security/rate-limit-status/route.ts: GET Rate Limit Status
+  - Requires auth
+  - Returns: role, rate_limits (configured limits), usage (current per-category usage with remaining counts), window_minutes
+
+- Created /src/components/api/security-panel.tsx (350+ lines): Security Dashboard Component
+  - 5 tabs: Roles & Permissions, Field Security, Rate Limits, Audit Summary, Best Practices
+  - Roles tab: Hierarchy overview with level indicators, detailed per-role cards with color-coded permission badges and restricted field lists
+  - Field Security tab: Full matrix table (11 fields × 5 roles) with Visible/Hidden badges, capability summary cards for financials/contracts/approval
+  - Rate Limits tab: Configuration table with progress bars, per-category detail cards
+  - Audit Summary tab: Tracked actions (9 types with color coding), tracked entities, audit record schema, access control visualization
+  - Best Practices tab: 8 enforced security controls with icons, authentication notes, production recommendations
+  - Uses shadcn/ui: Card, Badge, Tabs, ScrollArea, Table, Progress, Separator
+  - Color-coded badges: Admin=red, Operational=amber, Read-Only=sky, CRUD=emerald, Approve=violet, Manage=orange, Generate=pink, Read=outline
+
+- Updated /src/lib/forecasting/store.ts: Added 'security' to activeTab type union
+- Updated /src/app/page.tsx: Added Security tab (8th tab) with Shield icon, integrated SecurityPanel component with animation
+
+Files Modified:
+- /src/lib/api/rbac.ts (new)
+- /src/app/api/v1/security/permissions/route.ts (new)
+- /src/app/api/v1/security/roles/route.ts (new)
+- /src/app/api/v1/security/audit-summary/route.ts (new)
+- /src/app/api/v1/security/rate-limit-status/route.ts (new)
+- /src/components/api/security-panel.tsx (new)
+- /src/lib/forecasting/store.ts (modified - added security tab type)
+- /src/app/page.tsx (modified - added security tab + SecurityPanel import)
+
+Status: Complete. Lint passed. Dev server running without errors.
