@@ -1,0 +1,922 @@
+     1→// ============================================
+     2→// TrimedCast Advanced Forecasting Models
+     3→// Session 7: Prophet + Seasonal Enhancements
+     4→// ============================================
+     5→
+     6→import {
+     7→  type TimeSeriesPoint,
+     8→  type ForecastPoint,
+     9→  type ForecastResult,
+    10→  type ForecastMetrics,
+    11→  type BDSeason,
+    12→  getBDSeason,
+    13→  getSeasonMultiplier,
+    14→  calculateMetrics,
+    15→} from './models';
+    16→
+    17→// ============================================
+    18→// 1. OLS Solver (exported for reuse)
+    19→// ============================================
+    20→
+    21→export function olsSolve(X: number[][], y: number[]): number[] {
+    22→  const m = X[0].length;
+    23→  const XtX: number[][] = Array.from({ length: m }, () => Array(m).fill(0));
+    24→  const Xty: number[] = Array(m).fill(0);
+    25→  for (let i = 0; i < X.length; i++) {
+    26→    for (let j = 0; j < m; j++) {
+    27→      Xty[j] += X[i][j] * y[i];
+    28→      for (let k = 0; k < m; k++) XtX[j][k] += X[i][j] * X[i][k];
+    29→    }
+    30→  }
+    31→  const aug = XtX.map((row, i) => [...row, Xty[i]]);
+    32→  for (let col = 0; col < m; col++) {
+    33→    let maxRow = col;
+    34→    for (let row = col + 1; row < m; row++) if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) maxRow = row;
+    35→    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    36→    if (Math.abs(aug[col][col]) < 1e-10) continue;
+    37→    for (let row = col + 1; row < m; row++) {
+    38→      const factor = aug[row][col] / aug[col][col];
+    39→      for (let k = col; k <= m; k++) aug[row][k] -= factor * aug[col][k];
+    40→    }
+    41→  }
+    42→  const result = Array(m).fill(0);
+    43→  for (let i = m - 1; i >= 0; i--) {
+    44→    if (Math.abs(aug[i][i]) < 1e-10) continue;
+    45→    result[i] = aug[i][m];
+    46→    for (let j = i + 1; j < m; j++) result[i] -= aug[i][j] * result[j];
+    47→    result[i] /= aug[i][i];
+    48→  }
+    49→  return result;
+    50→}
+    51→
+    52→// ============================================
+    53→// 2. BD Holiday Calendar with Exact Dates
+    54→// ============================================
+    55→
+    56→export interface BDHolidayExact {
+    57→  name: string;
+    58→  nameBn: string;
+    59→  type: 'religious' | 'national' | 'cultural';
+    60→  dates: Record<number, { start: string; end: string }>; // year -> {start, end} ISO date strings
+    61→  demandEffect: number; // -0.3 to +0.15 (negative = demand drop, positive = demand uplift)
+    62→}
+    63→
+    64→export const BD_HOLIDAY_CALENDAR: BDHolidayExact[] = [
+    65→  {
+    66→    name: 'Eid ul-Fitr',
+    67→    nameBn: 'ঈদুল ফিতর',
+    68→    type: 'religious',
+    69→    dates: {
+    70→      2024: { start: '2024-04-10', end: '2024-04-12' },
+    71→      2025: { start: '2025-03-30', end: '2025-04-01' },
+    72→      2026: { start: '2026-03-20', end: '2026-03-22' },
+    73→      2027: { start: '2027-03-09', end: '2027-03-11' },
+    74→    },
+    75→    demandEffect: 0.15,
+    76→  },
+    77→  {
+    78→    name: 'Eid ul-Adha',
+    79→    nameBn: 'ঈদুল আযহা',
+    80→    type: 'religious',
+    81→    dates: {
+    82→      2024: { start: '2024-06-17', end: '2024-06-19' },
+    83→      2025: { start: '2025-06-06', end: '2025-06-08' },
+    84→      2026: { start: '2026-05-26', end: '2026-05-28' },
+    85→      2027: { start: '2027-05-16', end: '2027-05-18' },
+    86→    },
+    87→    demandEffect: 0.10,
+    88→  },
+    89→  {
+    90→    name: 'Durga Puja',
+    91→    nameBn: 'দুর্গা পূজা',
+    92→    type: 'religious',
+    93→    dates: {
+    94→      2024: { start: '2024-10-10', end: '2024-10-13' },
+    95→      2025: { start: '2025-09-29', end: '2025-10-02' },
+    96→      2026: { start: '2026-09-18', end: '2026-09-21' },
+    97→      2027: { start: '2027-10-07', end: '2027-10-10' },
+    98→    },
+    99→    demandEffect: 0.08,
+   100→  },
+   101→  {
+   102→    name: 'Independence Day',
+   103→    nameBn: 'স্বাধীনতা দিবস',
+   104→    type: 'national',
+   105→    dates: {
+   106→      2024: { start: '2024-03-26', end: '2024-03-26' },
+   107→      2025: { start: '2025-03-26', end: '2025-03-26' },
+   108→      2026: { start: '2026-03-26', end: '2026-03-26' },
+   109→      2027: { start: '2027-03-26', end: '2027-03-26' },
+   110→    },
+   111→    demandEffect: -0.05,
+   112→  },
+   113→  {
+   114→    name: 'Pohela Boishakh',
+   115→    nameBn: 'পহেলা বৈশাখ',
+   116→    type: 'cultural',
+   117→    dates: {
+   118→      2024: { start: '2024-04-14', end: '2024-04-14' },
+   119→      2025: { start: '2025-04-14', end: '2025-04-14' },
+   120→      2026: { start: '2026-04-14', end: '2026-04-14' },
+   121→      2027: { start: '2027-04-14', end: '2027-04-14' },
+   122→    },
+   123→    demandEffect: 0.10,
+   124→  },
+   125→];
+   126→
+   127→/** Prophet-compatible holiday definition for a given year */
+   128→export interface ProphetHoliday {
+   129→  holiday: string;
+   130→  ds: string;   // date string
+   131→  lower_window: number;
+   132→  upper_window: number;
+   133→}
+   134→
+   135→export function getHolidaysForYear(year: number): ProphetHoliday[] {
+   136→  const holidays: ProphetHoliday[] = [];
+   137→  for (const h of BD_HOLIDAY_CALENDAR) {
+   138→    const dateRange = h.dates[year];
+   139→    if (!dateRange) continue;
+   140→    const startDate = new Date(dateRange.start);
+   141→    const endDate = new Date(dateRange.end);
+   142→    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+   143→      holidays.push({
+   144→        holiday: h.name,
+   145→        ds: d.toISOString().split('T')[0],
+   146→        lower_window: -1,
+   147→        upper_window: 1,
+   148→      });
+   149→    }
+   150→  }
+   151→  return holidays;
+   152→}
+   153→
+   154→/**
+   155→ * Adjusts a predicted value based on holiday proximity.
+   156→ * Uses a linear decay over a 3-day window around the holiday.
+   157→ */
+   158→export function applyHolidayEffect(predicted: number, date: string | Date): { adjusted: number; activeHolidays: string[] } {
+   159→  const targetDate = typeof date === 'string' ? new Date(date) : date;
+   160→  const targetMs = targetDate.getTime();
+   161→  const activeHolidays: string[] = [];
+   162→  let totalEffect = 0;
+   163→
+   164→  for (const h of BD_HOLIDAY_CALENDAR) {
+   165→    for (const year of Object.keys(h.dates)) {
+   166→      const range = h.dates[Number(year)];
+   167→      const startMs = new Date(range.start).getTime();
+   168→      const endMs = new Date(range.end).getTime();
+   169→      const dayMs = 86400000;
+   170→
+   171→      // Check proximity: within holiday range or within ±3 days
+   172→      const threeDaysBefore = startMs - 3 * dayMs;
+   173→      const threeDaysAfter = endMs + 3 * dayMs;
+   174→
+   175→      if (targetMs >= threeDaysBefore && targetMs <= threeDaysAfter) {
+   176→        activeHolidays.push(h.name);
+   177→
+   178→        if (targetMs >= startMs && targetMs <= endMs) {
+   179→          // During holiday: full effect
+   180→          totalEffect += h.demandEffect;
+   181→        } else if (targetMs < startMs) {
+   182→          // Before holiday: linear ramp-up over 3 days
+   183→          const daysBefore = (startMs - targetMs) / dayMs;
+   184→          totalEffect += h.demandEffect * (1 - daysBefore / 3);
+   185→        } else {
+   186→          // After holiday: linear decay over 3 days
+   187→          const daysAfter = (targetMs - endMs) / dayMs;
+   188→          totalEffect += h.demandEffect * (1 - daysAfter / 3);
+   189→        }
+   190→      }
+   191→    }
+   192→  }
+   193→
+   194→  const adjusted = Math.max(0, predicted * (1 + totalEffect));
+   195→  return { adjusted, activeHolidays };
+   196→}
+   197→
+   198→// ============================================
+   199→// 3. Prophet Model with BD Custom Seasonalities
+   200→// ============================================
+   201→
+   202→export interface ProphetBDSeasonalComponent {
+   203→  name: string;
+   204→  period: number;
+   205→  fourierOrder: number;
+   206→  activeMonths: number[];
+   207→}
+   208→
+   209→export const PROPHET_BD_SEASONALITIES: ProphetBDSeasonalComponent[] = [
+   210→  {
+   211→    name: 'yearly',
+   212→    period: 365.25,
+   213→    fourierOrder: 3,
+   214→    activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], // always active
+   215→  },
+   216→  {
+   217→    name: 'bd_winter',
+   218→    period: 365.25 / 3, // ~121.75 days
+   219→    fourierOrder: 3,
+   220→    activeMonths: [11, 12, 1, 2], // active Nov–Feb
+   221→  },
+   222→  {
+   223→    name: 'bd_monsoon',
+   224→    period: 365.25 / 3,
+   225→    fourierOrder: 3,
+   226→    activeMonths: [6, 7, 8, 9], // active Jun–Sep
+   227→  },
+   228→  {
+   229→    name: 'bd_pre_winter',
+   230→    period: 365.25,
+   231→    fourierOrder: 2,
+   232→    activeMonths: [10], // active Oct only
+   233→  },
+   234→];
+   235→
+   236→/**
+   237→ * Build Fourier regressors for a given day index and month.
+   238→ * Only includes seasonalities active in that month.
+   239→ */
+   240→function buildFourierRow(dayIndex: number, month: number, seasonalities: ProphetBDSeasonalComponent[]): number[] {
+   241→  const row: number[] = [];
+   242→  for (const s of seasonalities) {
+   243→    if (!s.activeMonths.includes(month)) {
+   244→      // Not active: fill with zeros
+   245→      for (let k = 1; k <= s.fourierOrder; k++) {
+   246→        row.push(0);
+   247→        row.push(0);
+   248→      }
+   249→    } else {
+   250→      for (let k = 1; k <= s.fourierOrder; k++) {
+   251→        row.push(Math.sin(2 * Math.PI * k * dayIndex / s.period));
+   252→        row.push(Math.cos(2 * Math.PI * k * dayIndex / s.period));
+   253→      }
+   254→    }
+   255→  }
+   256→  return row;
+   257→}
+   258→
+   259→export function prophetBD(
+   260→  data: TimeSeriesPoint[],
+   261→  horizonDays: number = 90,
+   262→  seasonalityMode: 'additive' | 'multiplicative' = 'multiplicative',
+   263→  includeHolidays: boolean = true,
+   264→): ForecastResult {
+   265→  if (data.length < 4) throw new Error('Need at least 4 data points for Prophet BD model');
+   266→
+   267→  const values = data.map(d => d.value);
+   268→  const n = values.length;
+   269→  const startDate = new Date(data[0].date);
+   270→  const seasonalities = PROPHET_BD_SEASONALITIES;
+   271→
+   272→  // Build design matrix: [1, t, fourier_terms...]
+   273→  const X: number[][] = [];
+   274→  const y: number[] = [];
+   275→  for (let i = 0; i < n; i++) {
+   276→    const date = new Date(data[i].date);
+   277→    const month = date.getMonth() + 1;
+   278→    const dayIndex = Math.round((date.getTime() - startDate.getTime()) / 86400000);
+   279→    const fourierRow = buildFourierRow(dayIndex, month, seasonalities);
+   280→    X.push([1, dayIndex, ...fourierRow]);
+   281→    y.push(values[i]);
+   282→  }
+   283→
+   284→  const coeffs = olsSolve(X, y);
+   285→
+   286→  // Compute fitted values
+   287→  const fitted: number[] = [];
+   288→  for (let i = 0; i < n; i++) {
+   289→    fitted.push(X[i].reduce((sum, x, j) => sum + x * coeffs[j], 0));
+   290→  }
+   291→
+   292→  const residuals = values.map((v, i) => v - fitted[i]);
+   293→  const residualStdDev = Math.sqrt(residuals.reduce((s, r) => s + r * r, 0) / residuals.length);
+   294→
+   295→  // Forecast
+   296→  const lastDate = new Date(data[data.length - 1].date);
+   297→  const points: ForecastPoint[] = [];
+   298→  const seasonalComponents: Record<string, number[]> = {
+   299→    yearly: [],
+   300→    bd_winter: [],
+   301→    bd_monsoon: [],
+   302→    bd_pre_winter: [],
+   303→  };
+   304→
+   305→  for (let i = 1; i <= horizonDays; i++) {
+   306→    const date = new Date(lastDate);
+   307→    date.setDate(date.getDate() + i);
+   308→    const month = date.getMonth() + 1;
+   309→    const season = getBDSeason(month);
+   310→    const dayIndex = Math.round((date.getTime() - startDate.getTime()) / 86400000);
+   311→    const fourierRow = buildFourierRow(dayIndex, month, seasonalities);
+   312→    const row = [1, dayIndex, ...fourierRow];
+   313→
+   314→    let predicted = row.reduce((sum, x, j) => sum + x * coeffs[j], 0);
+   315→
+   316→    // Extract seasonal component contributions
+   317→    let colOffset = 2; // skip intercept + trend
+   318→    for (const s of seasonalities) {
+   319→      let componentVal = 0;
+   320→      for (let k = 1; k <= s.fourierOrder; k++) {
+   321→        const sinCoeff = coeffs[colOffset];
+   322→        const cosCoeff = coeffs[colOffset + 1];
+   323→        componentVal += sinCoeff * row[colOffset] + cosCoeff * row[colOffset + 1];
+   324→        colOffset += 2;
+   325→      }
+   326→      seasonalComponents[s.name].push(componentVal);
+   327→    }
+   328→
+   329→    // Apply multiplicative seasonality mode
+   330→    if (seasonalityMode === 'multiplicative') {
+   331→      const seasonMult = getSeasonMultiplier(month);
+   332→      predicted *= seasonMult;
+   333→    }
+   334→
+   335→    // Apply holiday effects
+   336→    if (includeHolidays) {
+   337→      const { adjusted } = applyHolidayEffect(predicted, date);
+   338→      predicted = adjusted;
+   339→    }
+   340→
+   341→    predicted = Math.max(0, Math.round(predicted));
+   342→    const uncertainty = residualStdDev * Math.sqrt(1 + i * 0.1);
+   343→
+   344→    points.push({
+   345→      date: date.toISOString().split('T')[0],
+   346→      predicted,
+   347→      lowerBound: Math.max(0, Math.round(predicted - 1.96 * uncertainty)),
+   348→      upperBound: Math.round(predicted + 1.96 * uncertainty),
+   349→      season: season.season,
+   350→      confidence: Math.max(0.5, 0.95 - i * 0.001),
+   351→    });
+   352→  }
+   353→
+   354→  return {
+   355→    model: 'prophet_bd',
+   356→    points,
+   357→    metrics: calculateMetrics(data, fitted.map((f, i) => ({ ...data[i], value: f }))),
+   358→    params: {
+   359→      seasonalities: seasonalities.map(s => ({ name: s.name, period: s.period, fourierOrder: s.fourierOrder, activeMonths: s.activeMonths })),
+   360→      seasonalityMode,
+   361→      includeHolidays,
+   362→      horizonDays,
+   363→      seasonalComponents,
+   364→    },
+   365→  };
+   366→}
+   367→
+   368→// ============================================
+   369→// 4. Exponential Smoothing with Auto-Tune Alpha
+   370→// ============================================
+   371→
+   372→export interface AutoTuneResult {
+   373→  bestAlpha: number;
+   374→  bestBeta: number;
+   375→  bestGamma: number;
+   376→  bestMape: number;
+   377→  backtestMetrics: ForecastMetrics;
+   378→  alphaTrials: { alpha: number; mape: number }[];
+   379→}
+   380→
+   381→/**
+   382→ * Single exponential smoothing (SES) forecast for a given alpha.
+   383→ */
+   384→function sesForecast(values: number[], alpha: number, horizon: number): { fitted: number[]; forecast: number[] } {
+   385→  const fitted: number[] = [values[0]];
+   386→  let level = values[0];
+   387→  for (let i = 1; i < values.length; i++) {
+   388→    level = alpha * values[i] + (1 - alpha) * level;
+   389→    fitted.push(level);
+   390→  }
+   391→  const forecast = Array(horizon).fill(level);
+   392→  return { fitted, forecast };
+   393→}
+   394→
+   395→/**
+   396→ * Holt-Winters (double + triple exponential smoothing).
+   397→ */
+   398→function holtWintersForecast(
+   399→  values: number[],
+   400→  alpha: number,
+   401→  beta: number,
+   402→  gamma: number,
+   403→  seasonLength: number,
+   404→  horizon: number,
+   405→): { fitted: number[]; forecast: number[] } {
+   406→  if (values.length < seasonLength * 2) {
+   407→    return sesForecast(values, alpha, horizon);
+   408→  }
+   409→
+   410→  // Initialize
+   411→  let level = values.slice(0, seasonLength).reduce((a, b) => a + b, 0) / seasonLength;
+   412→  let trend = (values.slice(seasonLength, seasonLength * 2).reduce((a, b) => a + b, 0) -
+   413→    values.slice(0, seasonLength).reduce((a, b) => a + b, 0)) / (seasonLength * seasonLength);
+   414→
+   415→  const seasonalIndices: number[] = [];
+   416→  const overallAvg = values.slice(0, seasonLength).reduce((a, b) => a + b, 0) / seasonLength;
+   417→  for (let i = 0; i < seasonLength; i++) {
+   418→    seasonalIndices.push(overallAvg > 0 ? values[i] / overallAvg : 1);
+   419→  }
+   420→  // Normalize
+   421→  const sAvg = seasonalIndices.reduce((a, b) => a + b, 0) / seasonLength;
+   422→  for (let i = 0; i < seasonLength; i++) seasonalIndices[i] /= sAvg;
+   423→
+   424→  const fitted: number[] = [];
+   425→  for (let i = 0; i < values.length; i++) {
+   426→    const sIdx = i % seasonLength;
+   427→    const oneStep = (level + trend) * seasonalIndices[sIdx];
+   428→    fitted.push(oneStep);
+   429→
+   430→    const prevLevel = level;
+   431→    const prevTrend = trend;
+   432→    level = alpha * (values[i] / seasonalIndices[sIdx]) + (1 - alpha) * (prevLevel + prevTrend);
+   433→    trend = beta * (level - prevLevel) + (1 - beta) * prevTrend;
+   434→    seasonalIndices[sIdx] = gamma * (values[i] / Math.max(level, 0.001)) + (1 - gamma) * seasonalIndices[sIdx];
+   435→  }
+   436→
+   437→  const forecast: number[] = [];
+   438→  for (let i = 1; i <= horizon; i++) {
+   439→    const sIdx = (values.length + i - 1) % seasonLength;
+   440→    forecast.push((level + trend * i) * seasonalIndices[sIdx]);
+   441→  }
+   442→
+   443→  return { fitted, forecast };
+   444→}
+   445→
+   446→/** Compute MAPE between actual and fitted values */
+   447→function computeMape(actual: number[], fitted: number[]): number {
+   448→  let sum = 0;
+   449→  let count = 0;
+   450→  for (let i = 0; i < Math.min(actual.length, fitted.length); i++) {
+   451→    if (actual[i] !== 0) {
+   452→      sum += Math.abs((actual[i] - fitted[i]) / actual[i]);
+   453→      count++;
+   454→    }
+   455→  }
+   456→  return count > 0 ? (sum / count) * 100 : Infinity;
+   457→}
+   458→
+   459→export function exponentialSmoothingAutoTune(
+   460→  data: TimeSeriesPoint[],
+   461→  horizonDays: number = 90,
+   462→  mode: 'ses' | 'holt' | 'holt_winters' = 'holt_winters',
+   463→): ForecastResult & { autoTune: AutoTuneResult } {
+   464→  if (data.length < 4) throw new Error('Need at least 4 data points for auto-tune ETS');
+   465→
+   466→  const values = data.map(d => d.value);
+   467→  const n = values.length;
+   468→
+   469→  // 80/20 split for backtesting
+   470→  const splitIdx = Math.floor(n * 0.8);
+   471→  const trainValues = values.slice(0, splitIdx);
+   472→  const testValues = values.slice(splitIdx);
+   473→
+   474→  const seasonLength = 4; // quarterly seasonality for BD
+   475→  const alphaTrials: { alpha: number; mape: number }[] = [];
+   476→  let bestAlpha = 0.3;
+   477→  let bestBeta = 0.1;
+   478→  let bestGamma = 0.2;
+   479→  let bestMape = Infinity;
+   480→
+   481→  // Auto-tune alpha from 0.1 to 0.9
+   482→  for (let a = 0.1; a <= 0.9; a += 0.1) {
+   483→    const alpha = Math.round(a * 10) / 10;
+   484→    let fitted: number[];
+   485→
+   486→    if (mode === 'ses') {
+   487→      const result = sesForecast(trainValues, alpha, testValues.length);
+   488→      fitted = result.forecast.slice(0, testValues.length);
+   489→    } else if (mode === 'holt') {
+   490→      const result = holtWintersForecast(trainValues, alpha, 0.1, 0.0, 1, testValues.length);
+   491→      fitted = result.forecast.slice(0, testValues.length);
+   492→    } else {
+   493→      const result = holtWintersForecast(trainValues, alpha, 0.1, 0.2, seasonLength, testValues.length);
+   494→      fitted = result.forecast.slice(0, testValues.length);
+   495→    }
+   496→
+   497→    const mape = computeMape(testValues, fitted);
+   498→    alphaTrials.push({ alpha, mape });
+   499→
+   500→    if (mape < bestMape) {
+   501→      bestMape = mape;
+   502→      bestAlpha = alpha;
+   503→    }
+   504→  }
+   505→
+   506→  // Further tune beta and gamma for Holt-Winters
+   507→  if (mode === 'holt' || mode === 'holt_winters') {
+   508→    for (let b = 0.05; b <= 0.5; b += 0.05) {
+   509→      const beta = Math.round(b * 100) / 100;
+   510→      const gamma = mode === 'holt_winters' ? 0.2 : 0;
+   511→      const result = holtWintersForecast(trainValues, bestAlpha, beta, gamma, mode === 'holt_winters' ? seasonLength : 1, testValues.length);
+   512→      const mape = computeMape(testValues, result.forecast.slice(0, testValues.length));
+   513→      if (mape < bestMape) {
+   514→        bestMape = mape;
+   515→        bestBeta = beta;
+   516→      }
+   517→    }
+   518→  }
+   519→
+   520→  if (mode === 'holt_winters') {
+   521→    for (let g = 0.05; g <= 0.5; g += 0.05) {
+   522→      const gamma = Math.round(g * 100) / 100;
+   523→      const result = holtWintersForecast(trainValues, bestAlpha, bestBeta, gamma, seasonLength, testValues.length);
+   524→      const mape = computeMape(testValues, result.forecast.slice(0, testValues.length));
+   525→      if (mape < bestMape) {
+   526→        bestMape = mape;
+   527→        bestGamma = gamma;
+   528→      }
+   529→    }
+   530→  }
+   531→
+   532→  // Fit full model with best params
+   533→  const { fitted: fullFitted, forecast } = mode === 'ses'
+   534→    ? sesForecast(values, bestAlpha, horizonDays)
+   535→    : holtWintersForecast(values, bestAlpha, bestBeta, mode === 'holt_winters' ? bestGamma : 0, mode === 'holt_winters' ? seasonLength : 1, horizonDays);
+   536→
+   537→  const residuals = values.map((v, i) => v - fullFitted[i]);
+   538→  const residualStdDev = Math.sqrt(residuals.reduce((s, r) => s + r * r, 0) / residuals.length);
+   539→
+   540→  const lastDate = new Date(data[data.length - 1].date);
+   541→  const points: ForecastPoint[] = [];
+   542→
+   543→  for (let i = 0; i < horizonDays; i++) {
+   544→    const date = new Date(lastDate);
+   545→    date.setDate(date.getDate() + i + 1);
+   546→    const month = date.getMonth() + 1;
+   547→    const season = getBDSeason(month);
+   548→
+   549→    const predicted = Math.max(0, Math.round(forecast[i]));
+   550→    const uncertainty = residualStdDev * Math.sqrt(1 + (i + 1));
+   551→
+   552→    points.push({
+   553→      date: date.toISOString().split('T')[0],
+   554→      predicted,
+   555→      lowerBound: Math.max(0, Math.round(predicted - 1.96 * uncertainty)),
+   556→      upperBound: Math.round(predicted + 1.96 * uncertainty),
+   557→      season: season.season,
+   558→      confidence: Math.max(0.5, 0.95 - (i + 1) * 0.002),
+   559→    });
+   560→  }
+   561→
+   562→  const backtestMetrics: ForecastMetrics = {
+   563→    mape: Math.round(bestMape * 100) / 100,
+   564→    mae: 0,
+   565→    rmse: 0,
+   566→    bias: 0,
+   567→  };
+   568→
+   569→  // Compute backtest MAE, RMSE, bias
+   570→  const backtestFitted = mode === 'ses'
+   571→    ? sesForecast(trainValues, bestAlpha, testValues.length).forecast.slice(0, testValues.length)
+   572→    : holtWintersForecast(trainValues, bestAlpha, bestBeta, mode === 'holt_winters' ? bestGamma : 0, mode === 'holt_winters' ? seasonLength : 1, testValues.length).forecast.slice(0, testValues.length);
+   573→
+   574→  let sumAE = 0, sumSE = 0, sumE = 0;
+   575→  for (let i = 0; i < testValues.length; i++) {
+   576→    const err = testValues[i] - (backtestFitted[i] || 0);
+   577→    sumAE += Math.abs(err);
+   578→    sumSE += err * err;
+   579→    sumE += err;
+   580→  }
+   581→  backtestMetrics.mae = Math.round((sumAE / testValues.length) * 100) / 100;
+   582→  backtestMetrics.rmse = Math.round(Math.sqrt(sumSE / testValues.length) * 100) / 100;
+   583→  backtestMetrics.bias = Math.round((sumE / testValues.length) * 100) / 100;
+   584→
+   585→  return {
+   586→    model: 'ets_autotune',
+   587→    points,
+   588→    metrics: calculateMetrics(data, fullFitted.map((f, i) => ({ ...data[i], value: f }))),
+   589→    params: {
+   590→      mode,
+   591→      bestAlpha,
+   592→      bestBeta: mode !== 'ses' ? bestBeta : undefined,
+   593→      bestGamma: mode === 'holt_winters' ? bestGamma : undefined,
+   594→      horizonDays,
+   595→    },
+   596→    autoTune: {
+   597→      bestAlpha,
+   598→      bestBeta,
+   599→      bestGamma,
+   600→      bestMape: Math.round(bestMape * 100) / 100,
+   601→      backtestMetrics,
+   602→      alphaTrials,
+   603→    },
+   604→  };
+   605→}
+   606→
+   607→// ============================================
+   608→// 5. Multi-Linear Regression Model
+   609→// D(F) = β₀ + β₁(Price) + β₂(PromoIndex)
+   610→// ============================================
+   611→
+   612→export interface RegressionDataPoint {
+   613→  date: string;
+   614→  price: number;
+   615→  promoIndex: number;
+   616→  qtySold: number;
+   617→}
+   618→
+   619→export interface RegressionResult {
+   620→  beta0: number;
+   621→  beta1: number;
+   622→  beta2: number;
+   623→  rSquared: number;
+   624→  pValues: { beta0: number; beta1: number; beta2: number };
+   625→  confidence: 'high' | 'medium' | 'low';
+   626→  validationNotes: string[];
+   627→}
+   628→
+   629→export function regressionModel(data: RegressionDataPoint[]): RegressionResult {
+   630→  if (data.length < 3) throw new Error('Need at least 3 data points for regression');
+   631→
+   632→  // OLS: y = β₀ + β₁*Price + β₂*PromoIndex
+   633→  const X: number[][] = data.map(d => [1, d.price, d.promoIndex]);
+   634→  const y: number[] = data.map(d => d.qtySold);
+   635→
+   636→  const coeffs = olsSolve(X, y);
+   637→  const beta0 = coeffs[0];
+   638→  const beta1 = coeffs[1];
+   639→  const beta2 = coeffs[2];
+   640→
+   641→  // Compute R²
+   642→  const yMean = y.reduce((a, b) => a + b, 0) / y.length;
+   643→  const yPred = X.map(row => row.reduce((sum, x, j) => sum + x * coeffs[j], 0));
+   644→  const ssTotal = y.reduce((sum, yi) => sum + (yi - yMean) ** 2, 0);
+   645→  const ssResidual = y.reduce((sum, yi, i) => sum + (yi - yPred[i]) ** 2, 0);
+   646→  const rSquared = ssTotal > 0 ? 1 - ssResidual / ssTotal : 0;
+   647→
+   648→  // Approximate p-values using t-statistics
+   649→  const n = data.length;
+   650→  const k = 3; // number of coefficients
+   651→  const mse = ssResidual / Math.max(n - k, 1);
+   652→
+   653→  // Compute (X'X)^{-1} diagonal for standard errors
+   654→  const XtX: number[][] = Array.from({ length: k }, () => Array(k).fill(0));
+   655→  for (let i = 0; i < X.length; i++) {
+   656→    for (let j = 0; j < k; j++) {
+   657→      for (let l = 0; l < k; l++) {
+   658→        XtX[j][l] += X[i][j] * X[i][l];
+   659→      }
+   660→    }
+   661→  }
+   662→
+   663→  // Invert XtX to get variance-covariance matrix (using Gauss-Jordan)
+   664→  const aug = XtX.map((row, i) => {
+   665→    const identityRow = Array(k).fill(0);
+   666→    identityRow[i] = 1;
+   667→    return [...row, ...identityRow];
+   668→  });
+   669→  for (let col = 0; col < k; col++) {
+   670→    let maxRow = col;
+   671→    for (let row = col + 1; row < k; row++) if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) maxRow = row;
+   672→    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+   673→    if (Math.abs(aug[col][col]) < 1e-10) continue;
+   674→    const pivot = aug[col][col];
+   675→    for (let j = 0; j < 2 * k; j++) aug[col][j] /= pivot;
+   676→    for (let row = 0; row < k; row++) {
+   677→      if (row === col) continue;
+   678→      const factor = aug[row][col];
+   679→      for (let j = 0; j < 2 * k; j++) aug[row][j] -= factor * aug[col][j];
+   680→    }
+   681→  }
+   682→  // Diagonal of inverse = variance of coefficients
+   683→  const seBeta0 = Math.sqrt(Math.max(0, mse * aug[0][k]));
+   684→  const seBeta1 = Math.sqrt(Math.max(0, mse * aug[1][k + 1]));
+   685→  const seBeta2 = Math.sqrt(Math.max(0, mse * aug[2][k + 2]));
+   686→
+   687→  // t-statistics
+   688→  const tBeta0 = seBeta0 > 0 ? beta0 / seBeta0 : 0;
+   689→  const tBeta1 = seBeta1 > 0 ? beta1 / seBeta1 : 0;
+   690→  const tBeta2 = seBeta2 > 0 ? beta2 / seBeta2 : 0;
+   691→
+   692→  // Approximate two-tailed p-value from t-distribution (using normal approx)
+   693→  const tToPvalue = (t: number): number => {
+   694→    const absT = Math.abs(t);
+   695→    // Approximation for two-tailed p-value
+   696→    const p = 2 * (1 - normalCDF(absT));
+   697→    return Math.min(1, Math.max(0, p));
+   698→  };
+   699→
+   700→  const pValues = {
+   701→    beta0: tToPvalue(tBeta0),
+   702→    beta1: tToPvalue(tBeta1),
+   703→    beta2: tToPvalue(tBeta2),
+   704→  };
+   705→
+   706→  // Validation
+   707→  const validationNotes: string[] = [];
+   708→  let confidence: 'high' | 'medium' | 'low' = 'high';
+   709→
+   710→  if (rSquared < 0.3) {
+   711→    validationNotes.push(`R² = ${rSquared.toFixed(3)} is below 0.3 threshold — model has low explanatory power`);
+   712→    confidence = 'low';
+   713→  } else if (rSquared < 0.5) {
+   714→    validationNotes.push(`R² = ${rSquared.toFixed(3)} is moderate — model explains some variance`);
+   715→    confidence = 'medium';
+   716→  } else {
+   717→    validationNotes.push(`R² = ${rSquared.toFixed(3)} is good — model explains most variance`);
+   718→  }
+   719→
+   720→  if (beta1 >= 0) {
+   721→    validationNotes.push('β₁ (Price) should be negative — higher price should reduce demand');
+   722→    confidence = confidence === 'high' ? 'medium' : 'low';
+   723→  } else {
+   724→    validationNotes.push('β₁ (Price) is negative as expected — demand decreases with price');
+   725→  }
+   726→
+   727→  if (beta2 <= 0) {
+   728→    validationNotes.push('β₂ (PromoIndex) should be positive — promotions should increase demand');
+   729→    confidence = confidence === 'high' ? 'medium' : 'low';
+   730→  } else {
+   731→    validationNotes.push('β₂ (PromoIndex) is positive as expected — promotions increase demand');
+   732→  }
+   733→
+   734→  if (pValues.beta1 > 0.05) {
+   735→    validationNotes.push('β₁ is not statistically significant (p > 0.05)');
+   736→  }
+   737→  if (pValues.beta2 > 0.05) {
+   738→    validationNotes.push('β₂ is not statistically significant (p > 0.05)');
+   739→  }
+   740→
+   741→  return {
+   742→    beta0: Math.round(beta0 * 100) / 100,
+   743→    beta1: Math.round(beta1 * 100) / 100,
+   744→    beta2: Math.round(beta2 * 100) / 100,
+   745→    rSquared: Math.round(rSquared * 1000) / 1000,
+   746→    pValues: {
+   747→      beta0: Math.round(pValues.beta0 * 1000) / 1000,
+   748→      beta1: Math.round(pValues.beta1 * 1000) / 1000,
+   749→      beta2: Math.round(pValues.beta2 * 1000) / 1000,
+   750→    },
+   751→    confidence,
+   752→    validationNotes,
+   753→  };
+   754→}
+   755→
+   756→/** Predict demand from regression coefficients */
+   757→export function regressionPredict(model: RegressionResult, price: number, promoIndex: number): number {
+   758→  return Math.max(0, Math.round(model.beta0 + model.beta1 * price + model.beta2 * promoIndex));
+   759→}
+   760→
+   761→/** Standard normal CDF approximation */
+   762→function normalCDF(x: number): number {
+   763→  const a1 = 0.254829592;
+   764→  const a2 = -0.284496736;
+   765→  const a3 = 1.421413741;
+   766→  const a4 = -1.453152027;
+   767→  const a5 = 1.061405429;
+   768→  const p = 0.3275911;
+   769→  const sign = x < 0 ? -1 : 1;
+   770→  x = Math.abs(x) / Math.sqrt(2);
+   771→  const t = 1.0 / (1.0 + p * x);
+   772→  const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+   773→  return 0.5 * (1.0 + sign * y);
+   774→}
+   775→
+   776→// ============================================
+   777→// 6. Consensus Forecast Logic
+   778→// ============================================
+   779→
+   780→export interface MarketingAdjustment {
+   781→  promoUplift: number;   // e.g., 0.15 for 15% uplift
+   782→  eventImpact: number;   // e.g., 0.10 for 10% event impact
+   783→  description: string;
+   784→}
+   785→
+   786→export interface ConsensusStage {
+   787→  name: string;
+   788→  value: number;
+   789→  adjustment: number;
+   790→  note: string;
+   791→}
+   792→
+   793→export interface ConsensusResult {
+   794→  finalForecast: number;
+   795→  stages: ConsensusStage[];
+   796→  governanceNotes: string[];
+   797→  bestModel: string;
+   798→}
+   799→
+   800→export function consensusForecast(params: {
+   801→  baselineForecast: number;
+   802→  baselineModel: string;
+   803→  seasonalMultiplier: number;
+   804→  seasonalModel: string;
+   805→  marketingAdjustments?: MarketingAdjustment;
+   806→  salesOverride?: number;
+   807→  salesOverrideWeight?: number; // 0-1, how much to trust sales override
+   808→}): ConsensusResult {
+   809→  const {
+   810→    baselineForecast,
+   811→    baselineModel,
+   812→    seasonalMultiplier,
+   813→    seasonalModel,
+   814→    marketingAdjustments,
+   815→    salesOverride,
+   816→    salesOverrideWeight = 0.3,
+   817→  } = params;
+   818→
+   819→  const stages: ConsensusStage[] = [];
+   820→  const governanceNotes: string[] = [];
+   821→
+   822→  // Stage 1: Baseline
+   823→  const baselineValue = baselineForecast;
+   824→  stages.push({
+   825→    name: 'Baseline',
+   826→    value: baselineValue,
+   827→    adjustment: 0,
+   828→    note: `Baseline from ${baselineModel}: ${baselineValue.toFixed(1)} units`,
+   829→  });
+   830→
+   831→  // Stage 2: Apply seasonal multiplier
+   832→  const afterSeasonal = baselineValue * seasonalMultiplier;
+   833→  stages.push({
+   834→    name: 'Seasonal Adjustment',
+   835→    value: afterSeasonal,
+   836→    adjustment: afterSeasonal - baselineValue,
+   837→    note: `Seasonal multiplier from ${seasonalModel}: ×${seasonalMultiplier.toFixed(3)} (${seasonalMultiplier > 1 ? 'uplift' : 'dip'})`,
+   838→  });
+   839→
+   840→  // Stage 3: Apply marketing adjustments
+   841→  let afterMarketing = afterSeasonal;
+   842→  if (marketingAdjustments) {
+   843→    const totalMarketingUplift = 1 + marketingAdjustments.promoUplift + marketingAdjustments.eventImpact;
+   844→    afterMarketing = afterSeasonal * totalMarketingUplift;
+   845→    stages.push({
+   846→      name: 'Marketing Adjustment',
+   847→      value: afterMarketing,
+   848→      adjustment: afterMarketing - afterSeasonal,
+   849→      note: `Promo uplift: +${(marketingAdjustments.promoUplift * 100).toFixed(1)}%, Event impact: +${(marketingAdjustments.eventImpact * 100).toFixed(1)}% — ${marketingAdjustments.description}`,
+   850→    });
+   851→    governanceNotes.push(`Marketing applied: promo +${(marketingAdjustments.promoUplift * 100).toFixed(1)}%, event +${(marketingAdjustments.eventImpact * 100).toFixed(1)}%`);
+   852→  } else {
+   853→    governanceNotes.push('No marketing adjustments applied');
+   854→  }
+   855→
+   856→  // Stage 4: Sales team override
+   857→  let finalValue = afterMarketing;
+   858→  if (salesOverride !== undefined && salesOverride !== null) {
+   859→    // Weighted blend: (1-w)*model + w*override
+   860→    finalValue = (1 - salesOverrideWeight) * afterMarketing + salesOverrideWeight * salesOverride;
+   861→    stages.push({
+   862→      name: 'Sales Override Blend',
+   863→      value: finalValue,
+   864→      adjustment: finalValue - afterMarketing,
+   865→      note: `Sales override: ${salesOverride.toFixed(1)} units (weight: ${(salesOverrideWeight * 100).toFixed(0)}%) — blended with model forecast`,
+   866→    });
+   867→    governanceNotes.push(`Sales override blended at ${(salesOverrideWeight * 100).toFixed(0)}% weight: model=${afterMarketing.toFixed(1)}, override=${salesOverride.toFixed(1)}`);
+   868→  } else {
+   869→    governanceNotes.push('No sales team override provided');
+   870→  }
+   871→
+   872→  // Determine best model attribution
+   873→  const bestModel = salesOverride ? `${seasonalModel} + sales_override` : seasonalModel;
+   874→
+   875→  return {
+   876→    finalForecast: Math.round(finalValue),
+   877→    stages,
+   878→    governanceNotes,
+   879→    bestModel,
+   880→  };
+   881→}
+   882→
+   883→// ============================================
+   884→// 7. Helper: Generate ForecastResult from Consensus
+   885→// ============================================
+   886→
+   887→export function consensusToForecastResult(
+   888→  data: TimeSeriesPoint[],
+   889→  consensusPerDay: { date: string; value: number; season: BDSeason }[],
+   890→  horizonDays: number,
+   891→): ForecastResult {
+   892→  const values = data.map(d => d.value);
+   893→  const avg = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+   894→  const stdDev = values.length > 1
+   895→    ? Math.sqrt(values.reduce((s, v) => s + (v - avg) ** 2, 0) / values.length)
+   896→    : avg * 0.2;
+   897→
+   898→  const points: ForecastPoint[] = consensusPerDay.slice(0, horizonDays).map((c, i) => ({
+   899→    date: c.date,
+   900→    predicted: Math.round(c.value),
+   901→    lowerBound: Math.max(0, Math.round(c.value - 1.96 * stdDev * Math.sqrt(1 + i * 0.05))),
+   902→    upperBound: Math.round(c.value + 1.96 * stdDev * Math.sqrt(1 + i * 0.05)),
+   903→    season: c.season,
+   904→    confidence: Math.max(0.5, 0.95 - i * 0.001),
+   905→  }));
+   906→
+   907→  // Rough metrics — consensus vs historical average
+   908→  const metrics: ForecastMetrics = {
+   909→    mape: stdDev > 0 && avg > 0 ? Math.round((stdDev / avg) * 10000) / 100 : 0,
+   910→    mae: Math.round(stdDev * 100) / 100,
+   911→    rmse: Math.round(stdDev * 100) / 100,
+   912→    bias: 0,
+   913→  };
+   914→
+   915→  return {
+   916→    model: 'consensus',
+   917→    points,
+   918→    metrics,
+   919→    params: { horizonDays, consensusStages: consensusPerDay.length },
+   920→  };
+   921→}
+   922→
