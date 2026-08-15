@@ -351,3 +351,54 @@ Stage Summary:
 - Multi-linear regression with statistical validation
 - Consensus forecast with 4-stage documented pipeline
 - Pushed to GitHub: Session 7: Prophet + Seasonal Forecasting — ADVANCED MODELS
+
+---
+Task ID: 6
+Agent: Frontend Styling Expert
+Task: Build EOQ Safety Stock UI (Session 8)
+
+Work Log:
+- Created /src/components/forecast/service-level-table.tsx: Compact reference card component
+  - Displays SERVICE_LEVEL_TABLE from eoq-safety-stock.ts: 5 rows (90%, 95%, 97.5%, 99%, 99.9%) → k factors (1.28, 1.65, 1.96, 2.33, 3.09)
+  - Color-coded rows: green (95%, standard), orange (97.5%, high-turnover), amber (99%, critical), red (99.9%, life-critical)
+  - Left border color coding per urgency level
+  - BD-specific notes section: default 95% for BD import supply chains, 99% for brake assemblies, 99.9% for life-critical parts, sea route amplification note
+  - Formula reference bar: SS = (EOQ/R) + (MAE × μt × σLT) × k | ROP = (d̄ × LT) + SS
+  - Framer-motion staggered row entrance animations
+  - Uses shadcn/ui Card, Table, Badge; lucide-react Shield, Info icons
+- Created /src/components/forecast/eoq-safety-stock-panel.tsx: Main dashboard panel (1136 lines)
+  - Summary Stats Row: 5 cards (Products Analyzed, Total Annual Cost BDT, Avg MAPE, Need Recalibration with action badge, Service Level with k factor)
+  - Configuration Controls: Product selector dropdown (with "Calculate All" option), Service Level dropdown (5 levels with k display), Shipment Mode toggle (Sea/Air switch), MAPE Threshold input (default 10%), Ordering Cost input (default 500 BDT), Holding Cost % input (default 20%), Calculate button
+  - Results Table (desktop): 11 columns (Expand, SKU, Product Name, Category, EOQ, SS, ROP, Orders/Yr, Annual Cost, MAPE, Recalibration Status) with color-coded left borders (red=critical, orange=high, emerald=healthy)
+  - Mobile Card View: Compact cards with key metrics grid, MAPE display, recalibration badge
+  - Expanded Detail Panel (AnimatePresence expand/collapse):
+    - EOQ Section: unconstrained vs constrained EOQ, order cycle, cost savings vs MOQ, constraints applied badges, cost breakdown (ordering + holding = total)
+    - Safety Stock Section: cycle stock component (EOQ/R), uncertainty component, σ_LT, k factor, MAE used (normalized flag), daily demand, lead time
+    - Lead Time Stats: 7-stat grid (mean, σ, min, max, median, CV, data points), default data warning
+    - Error Metrics: MAPE, MAE, RMSE, Bias (under/over), accuracy rating badge, within 10%/20%, Theil's U, data points
+    - Recalibration: urgency badge, needs/healthy status, recommendation text, suggested actions with Zap icons
+    - Sensitivity Analysis: mini table (Service Level → k → SS → ROP → Total Cost) with "Current" badge highlighting active level, auto-fetched from /api/forecast/sensitivity
+  - States: loading skeleton (5 summary cards + controls + 6 table rows), error with retry button, empty with Calculator icon
+  - Framer-motion: container stagger animation, item fade+slide, expand/collapse height animation
+  - Responsive: desktop table + expanded panel, mobile card layout
+  - Fetches from: POST /api/forecast/eoq, POST /api/forecast/sensitivity, GET /api/forecast/products
+  - Uses tenantId 'demo-bd-motors', auto-calculates on mount
+- Updated /src/lib/forecasting/store.ts: Added 'eoq' to activeTab type ('import' | 'forecast' | 'advanced' | 'eoq' | 'orders')
+- Updated /src/lib/forecasting/eoq-safety-stock.ts: Exported DEFAULT_ORDERING_COST_BDT, DEFAULT_HOLDING_COST_PCT, DEFAULT_REVIEW_PERIOD_DAYS (previously const, now export const) for API route imports
+- Updated /src/app/page.tsx:
+  - Added imports for EOQSafetyStockPanel and ServiceLevelTable
+  - Added Gauge icon from lucide-react
+  - Changed TabsList to grid-cols-5 with max-w-2xl
+  - Added "EOQ & SS" tab trigger with Gauge icon (sm:hidden shows "EOQ")
+  - Added TabsContent for "eoq" tab: EOQSafetyStockPanel + ServiceLevelTable below
+  - Updated activeTab type cast to include 'eoq'
+- Zero lint errors, Next.js build succeeds
+
+Stage Summary:
+- Complete EOQ & Safety Stock dashboard UI with full calculation, display, and interaction
+- 2 new components: eoq-safety-stock-panel.tsx (main panel), service-level-table.tsx (reference card)
+- 5-tab dashboard: Import Data | Forecast | Advanced | EOQ & SS | Order Triggers
+- Full expand/collapse detail view with EOQ breakdown, SS formula components, lead time stats, error metrics, recalibration, sensitivity analysis
+- Responsive: desktop table + mobile cards
+- Framer-motion animations throughout
+- Zero lint errors, build succeeds

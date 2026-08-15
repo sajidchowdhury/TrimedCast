@@ -30,6 +30,8 @@ import { CNYCalendar } from '@/components/forecast/cny-calendar';
 import { CategorySeasonalGrid } from '@/components/forecast/category-seasonal-grid';
 import { StockProjection } from '@/components/forecast/stock-projection';
 import { AdvancedForecastPanel } from '@/components/forecast/advanced-forecast-panel';
+import { EOQSafetyStockPanel } from '@/components/forecast/eoq-safety-stock-panel';
+import { ServiceLevelTable } from '@/components/forecast/service-level-table';
 import {
   Loader2,
   AlertCircle,
@@ -55,6 +57,7 @@ import {
   ShoppingCart,
   Sparkles,
   Brain,
+  Gauge,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -938,8 +941,8 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'orders')} className="w-full">
-          <TabsList className="grid w-full max-w-xl mx-auto mb-6 grid-cols-4">
+        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders')} className="w-full">
+          <TabsList className="grid w-full max-w-2xl mx-auto mb-6 grid-cols-5">
             <TabsTrigger value="import" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import Data</span>
@@ -954,6 +957,11 @@ export default function Home() {
               <Brain className="h-4 w-4" />
               <span className="hidden sm:inline">Advanced</span>
               <span className="sm:hidden">Adv.</span>
+            </TabsTrigger>
+            <TabsTrigger value="eoq" className="flex items-center gap-2">
+              <Gauge className="h-4 w-4" />
+              <span className="hidden sm:inline">EOQ & SS</span>
+              <span className="sm:hidden">EOQ</span>
             </TabsTrigger>
             <TabsTrigger value="orders" className="flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
@@ -1000,6 +1008,23 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
               >
                 <AdvancedForecastTab />
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="eoq">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="eoq-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <EOQSafetyStockPanel />
+                <div className="mt-5">
+                  <ServiceLevelTable />
+                </div>
               </motion.div>
             </AnimatePresence>
           </TabsContent>
