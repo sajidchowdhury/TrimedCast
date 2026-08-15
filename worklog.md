@@ -1,4 +1,47 @@
 ---
+Task ID: 8
+Agent: Main Developer
+Task: Session 8 - EOQ + Safety Stock Calculator
+
+Work Log:
+- Created /src/lib/forecasting/eoq-safety-stock.ts (500+ lines): Complete Session 8 engine
+  - calculateEOQWithConstraints(): EOQ with 4 constraints (MOQ, max_stock, warehouse capacity, current stock), cost breakdown, MOQ savings comparison
+  - calculateSafetyStockEnhanced(): TrimedCast formula SS = (EOQ/R) + (MAE × μₜ × σ_LT) × k with MAE normalization to daily rate
+  - calculateLeadTimeStats(): σ_LT from purchase_history actual_lead_time_days, defaults for sea (15 days) and air (5 days), min 5 data points, CV calculation
+  - getSafetyFactor(): Service level → k mapping with linear interpolation (90%→1.28, 95%→1.65, 97.5%→1.96, 99%→2.33, 99.9%→3.09)
+  - calculateErrorMetrics(): MAPE, MAE, MSE, RMSE, bias, accuracy rating, % within 10/20%, Theil's U, max error
+  - checkRecalibration(): Auto-recalibration trigger with 5 urgency levels (none/low/medium/high/critical), suggested actions
+  - calculateBatchEOQSafetyStock(): Main entry point for batch processing
+  - runServiceLevelSensitivity(): Sensitivity analysis across service levels
+- Created /src/app/api/forecast/eoq/route.ts: Batch EOQ + Safety Stock API (POST) - calculates for all/specified products, updates inventory SS/ROP in DB
+- Created /src/app/api/forecast/lead-time-stats/route.ts: Lead Time Statistics API (GET) - per-product or all-products σ_LT stats
+- Created /src/app/api/forecast/recalibration-status/route.ts: Recalibration Status API (GET + POST) - checks MAPE thresholds, creates audit logs
+- Created /src/app/api/forecast/sensitivity/route.ts: Sensitivity Analysis API (POST) - service level sweep per product
+- Created /src/components/forecast/eoq-safety-stock-panel.tsx: Main EOQ & SS dashboard panel
+  - 5 summary stat cards, configuration controls (service level, shipping mode, MAPE threshold, ordering cost, holding cost %)
+  - Results table with 11 columns, color-coded rows, expandable detail panels
+  - Expanded detail: EOQ breakdown, SS formula components, Lead Time stats, Error Metrics, Recalibration, Sensitivity Analysis
+  - Responsive: desktop table + mobile card view
+  - Loading/error/empty states, framer-motion animations
+- Created /src/components/forecast/service-level-table.tsx: Service Level → k mapping reference card
+- Updated /src/lib/forecasting/store.ts: Added 'eoq' to activeTab type
+- Updated /src/app/page.tsx: 5-tab dashboard (Import | Forecast | Advanced | EOQ & SS | Order Triggers)
+- Tested all 4 API routes end-to-end: batch EOQ (7 products), lead-time-stats (defaults working), recalibration-status, sensitivity (6 service levels)
+- Browser verified: EOQ tab renders with data, expandable details, Calculate All button, service level dropdown, Sea/Air toggle
+- Zero lint errors, pushed to GitHub
+
+Stage Summary:
+- Complete EOQ + Safety Stock engine per Session 8 specification
+- EOQ with constraints (MOQ, max_stock, warehouse capacity) - all 4 constraints implemented
+- Safety Stock with TrimedCast formula: SS = (EOQ/R) + (MAE × μₜ × σ_LT) × k
+- σ_LT from purchase_history with fallback defaults (sea: 15 days, air: 5 days)
+- Service level → safety factor k mapping with interpolation
+- Enhanced error metrics (MAPE, MAE, MSE, RMSE, bias, Theil's U)
+- Auto-recalibration trigger when MAPE > 10% with 5 urgency levels
+- 4 new API routes, 2 new UI components, 5-tab dashboard
+- Pushed to GitHub: Session 8: EOQ + Safety Stock Calculator — COMPLETE
+
+---
 Task ID: 4
 Agent: Main Developer
 Task: Update Prisma schema with TrimedCast ETL tables
