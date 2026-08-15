@@ -1249,3 +1249,30 @@ Stage Summary:
 - Forecast vs Actual comparison chart integrated into dashboard
 - Product selector with stock details
 - Enhanced forecast page with 3 views and season filtering
+
+---
+Task ID: 19
+Agent: Main Developer
+Task: Session 19 — Recommended Orders Table + Order Timeline (UI/UX Specification.md Section 9 + Order Trigger.md Section 7)
+
+Work Log:
+- Read Session 19 specs from roadmap and Order Trigger & Lead Time Logic.md Section 7
+- Explored existing order components: recommended-orders-table.tsx (870 lines), order-timeline-gantt.tsx (626 lines), order-timeline.tsx (756 lines), cny-risk-dashboard.tsx (446 lines), cny-calendar.tsx (522 lines)
+- Identified gaps: Gantt and CNY components rendered without data props, no executive summary, no CNY banner
+- Created executive-summary-card.tsx — 4 stat cards from /api/v1/recommended-orders/summary: Total Orders, Total Spend (BDT), CNY at Risk, Urgency Mix. Shares CNY count via store.
+- Created cny-risk-banner.tsx — Auto-detects CNY status (active/approaching/safe), dismissible, color-coded, rush deadline countdown
+- Created dashboard-orders-table.tsx — Paginated table from /api/v1/recommended-orders, 3 filters (urgency/season/status), Convert to PO action, CNY/air badges, animated rows
+- Created dashboard-gantt.tsx — Horizontal Gantt per product with Mfg(blue)→Ship(green)→Customs(amber) segments, trigger▼/available✓ markers, month headers, urgency filter, animated bars
+- Enhanced orders-page.tsx — Executive Summary + CNY Banner + 4 tabs (Orders/Timeline/CNY/Seasonal)
+- Updated dashboard store with ordersCnyAtRisk shared state
+- Fixed lint error: replaced useEffect+setState in CNY banner with useMemo+pure computation
+- Verified: lint passes, GET / 200
+- Committed and pushed to GitHub (0bcba25)
+
+Stage Summary:
+- THE PRIMARY OUTPUT — visual "when/what/how much to order" interface
+- Executive summary with total orders, spend, CNY risk, urgency mix
+- CNY risk banner with auto-detection and countdown
+- Full recommended orders table with filtering and Convert to PO
+- Order timeline Gantt chart with Mfg/Ship/Customs segments
+- All data wired to v1 API endpoints
