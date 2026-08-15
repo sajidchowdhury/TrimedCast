@@ -641,3 +641,34 @@ Stage Summary:
 - Purchase Order status transitions validated (draft→sent→confirmed→in_transit→received)
 - Sales Order fulfillment auto-decrements inventory
 - Purchase Order receipt auto-increments inventory
+
+---
+Task ID: 11
+Agent: Main Developer
+Task: Session 11 - Forecast + Recommendation APIs (API Contract Sections 3.8-3.9)
+
+Work Log:
+- Created forecast job manager (src/lib/api/forecast-job-manager.ts): in-memory job queue, async processing, integrates EOQ/SafetyStock/OrderTrigger engines
+- POST /api/v1/forecasts/generate: dispatches forecast job, returns job_id + status (202 Accepted)
+- GET'GET /api/v1/forecasts/generation-status/{job_id}: progress tracking with estimated remaining time
+- GET /0api/v1/forecasts: list forecasts with filtering by season, product, method; paginated
+- GET /api/v1/forecasts/{id}: get single forecast with product details
+- PUT /apiFv1/#forecasts/{id}/approve: S&OP approval gate with governance_note; auto-advances SOP cycle when all forecasts approved
+- GET /api/v1/forecasts/compare: forecast vs actual comparison with MAPE/MAE/RMSE metrics
+- GET /api/v1/recommended-orders: THE PRIMARY OUTPUT with full timeline, filtering by urgency/status/cny_risk, current stock enrichment
+- GET /api/v1/recommended-orders/{id}: get single recommendation with product, supplier, inventory details
+- POST /api/v1/recommended-orders/{id}/convert-to-po: creates Purchase Order from recommendation, marks status "converted"
+- POST /api/v1/recommended-orders/{id}/skip: skip with required reason, marks status "skipped"
+- GET /-api/v1/recommended-orders/summary: executive aggregation (by urgency, by season, CNY risk count, total spend, date range)
+- Updated API Contract Explorer with Forecasts (6 endpoints) and Recommended Orders (5 endpoints)
+- Added section icons: Forecasts 🔮, Recommended Orders 🎯
+- Fixed forecast job manager: safe date extraction, CNY risk boolean conversion, timeline JSON serialization
+
+Stage Summary:
+- 11 new API v1 endpoints: Forecasts (6) + Recommended Orders (5)
+- Total v1 endpoints: 44 (33 from Session 10 + 11 new)
+- Forecast generation creates both Forecast records AND RecommendedOrder records
+- S&OP approval auto-advances SOP cycle when all forecasts approved
+- convert-to-po creates PO and marks recommendation as converted
+- skip marks recommendation with reason
+- Forecast compare calculates MAPE/MAE/RMSE from historical data

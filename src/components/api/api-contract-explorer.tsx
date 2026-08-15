@@ -78,6 +78,21 @@ const API_ENDPOINTS: ApiEndpoint[] = [
   { method: 'GET', path: '/api/v1/purchase-orders/{id}', description: 'Get purchase order', section: 'Purchase Orders', rbac: 'WM: all, SM: read' },
   { method: 'PUT', path: '/api/v1/purchase-orders/{id}', description: 'Update purchase order', section: 'Purchase Orders', rbac: 'warehouse_manager' },
   { method: 'PUT', path: '/api/v1/purchase-orders/{id}/status', description: 'Transition PO status with validation', section: 'Purchase Orders', rbac: 'warehouse_manager', requestBody: '{ "status": "confirmed" }' },
+
+  // Forecasts
+  { method: 'POST', path: '/api/v1/forecasts/generate', description: 'Dispatch forecast generation job', section: 'Forecasts', rbac: 'warehouse_manager, marketing_manager', requestBody: '{\n  "season": "winter",\n  "product_ids": ["uuid1"],\n  "method_override": "prophet"\n}' },
+  { method: 'GET', path: '/api/v1/forecasts/generation-status/{job_id}', description: 'Track forecast generation progress', section: 'Forecasts', rbac: 'Authenticated' },
+  { method: 'GET', path: '/api/v1/forecasts', description: 'List forecasts with filtering', section: 'Forecasts', queryParams: ['season', 'product_id', 'method', 'page'], rbac: 'All (read)' },
+  { method: 'GET', path: '/api/v1/forecasts/{id}', description: 'Get single forecast', section: 'Forecasts', rbac: 'All (read)' },
+  { method: 'PUT', path: '/api/v1/forecasts/{id}/approve', description: 'Approve forecast (S&OP gate)', section: 'Forecasts', rbac: 'warehouse_manager, executive', requestBody: '{ "governance_note": "Approved for Winter 2026" }' },
+  { method: 'GET', path: '/api/v1/forecasts/compare', description: 'Forecast vs Actual comparison', section: 'Forecasts', queryParams: ['product_id', 'months'], rbac: 'All (read)' },
+
+  // Recommended Orders
+  { method: 'GET', path: '/api/v1/recommended-orders', description: 'THE PRIMARY OUTPUT — recommended orders with timeline', section: 'Recommended Orders', queryParams: ['urgency', 'status', 'shipment_mode', 'cny_risk', 'page'], rbac: 'All (read)' },
+  { method: 'GET', path: '/api/v1/recommended-orders/{id}', description: 'Get single recommended order', section: 'Recommended Orders', rbac: 'All (read)' },
+  { method: 'POST', path: '/api/v1/recommended-orders/{id}/convert-to-po', description: 'Convert recommendation to Purchase Order', section: 'Recommended Orders', rbac: 'warehouse_manager' },
+  { method: 'POST', path: '/api/v1/recommended-orders/{id}/skip', description: 'Skip recommendation with reason', section: 'Recommended Orders', rbac: 'warehouse_manager', requestBody: '{ "reason": "Stock on order from alternate supplier" }' },
+  { method: 'GET', path: '/api/v1/recommended-orders/summary', description: 'Executive aggregation for dashboard', section: 'Recommended Orders', rbac: 'All (read)' },
 ];
 
 // --- Method Color Map ---
@@ -98,6 +113,8 @@ const SECTION_ICONS: Record<string, string> = {
   'Motorcycle Models': '🏍️',
   'Sales Orders': '🧾',
   'Purchase Orders': '📋',
+  Forecasts: '🔮',
+  'Recommended Orders': '🎯',
 };
 
 interface ApiResponse {
