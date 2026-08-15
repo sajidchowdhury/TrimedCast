@@ -37,6 +37,7 @@ import { OrderTimelineGantt } from '@/components/forecast/order-timeline-gantt';
 import { CNYRiskDashboard } from '@/components/forecast/cny-risk-dashboard';
 import { ApiContractExplorer } from '@/components/api/api-contract-explorer';
 import { SecurityPanel } from '@/components/api/security-panel';
+import { BillingPortal } from '@/components/billing/billing-portal';
 import {
   Loader2,
   AlertCircle,
@@ -66,6 +67,7 @@ import {
   GitBranch,
   AlertOctagon,
   Code2,
+  CreditCard,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -1155,6 +1157,11 @@ export default function Home() {
               <span className="hidden sm:inline">Security</span>
               <span className="sm:hidden">Sec.</span>
             </TabsTrigger>
+            <TabsTrigger value="billing" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              <span className="hidden sm:inline">Billing</span>
+              <span className="sm:hidden">Bill</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="import">
@@ -1268,6 +1275,20 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
               >
                 <SecurityPanel />
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="billing">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="billing-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <BillingPortal />
               </motion.div>
             </AnimatePresence>
           </TabsContent>

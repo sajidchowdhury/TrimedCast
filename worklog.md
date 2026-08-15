@@ -957,3 +957,193 @@ Stage Summary:
 - Total API route files: 65 (was 49 before Session 14)
 - Total Prisma models: 20 (was 17 before Session 14)
 - Key features: 3-tier subscription model, 14-day trial auto-provisioning, feature gating per tier, usage metering with limits, tenant lifecycle management (trial→active→past_due→suspended→cancelled), SaaS admin dashboard with MRR/ARR/churn metrics
+
+---
+Task ID: 3
+Agent: Session 15 - Enhanced Billing Library
+Task: Enhance billing.ts with subscription lifecycle, tier guard, usage alerts, payment methods, webhook verification, billing portal config, detailed revenue metrics, and invoice detail retrieval
+
+Work Log:
+- Enhanced /src/lib/api/billing.ts (689 → 1623 lines) with 8 new feature sections while preserving all existing Session 14 code
+- **1. Subscription Lifecycle Transitions**:
+  - `SubscriptionLifecycleStatus` type and `SubscriptionTransitionAction` interface
+  - `SUBSCRIPTION_TRANSITIONS` constant: 8 valid transitions (trial→active, trial→suspended, active→past_due, active→cancelled, past_due→active, past_due→suspended, cancelled→active, suspended→active)
+  - `subscriptionTransition()`: validates and executes lifecycle transitions with special validation for cancelled→active (only before period end); updates both subscription and tenant records
+  - `getValidTransitions()`: returns valid next states and trigger actions for a given current status
+  - `evaluateAndTransitionSubscription()`: auto-evaluates tenant subscription and transitions if needed (trial expired→suspended, past_due grace period expired→suspended)
+- **2. CheckSubscriptionTier Guard**:
+  - `TierGuardParams` and `TierGuardResult` interfaces
+  - `checkSubscriptionTierGuard()`: API route guard checking tenant status (blocks suspended/deleting/cancelled/expired-trial), feature availability, and usage limits; returns detailed result with reason, upgradeTo, usageExceeded; includes audit logging
+- **3. Usage Alerts**:
+  - `UsageAlert` interface with type, severity (warning/critical/exceeded), current, limit, percentUsed, message
+  - `getUsageAlerts()`: checks ai_queries, forecast_runs, sku_count, import_runs against limits; warning at 80%, critical at 95%, exceeded at ≥100%
+- **4. Payment Method Management**:
+  - `PaymentMethodInfo` interface
+  - `updatePaymentMethod()`: updates tenant payment method with expiry validation
+  - `getPaymentMethod()`: retrieves current payment method info
+- **5. Webhook Signature Verification**:
+  - `verifyWebhookSignature()`: simulated Stripe webhook verification; returns true if payload, signature, and secret are all non-empty
+- **6. Billing Portal Configuration**:
+  - `BillingPortalConfig` interface with subscription, tier, usage, alerts, invoices, paymentMethod, validTransitions, features
+  - `getBillingPortalConfig()`: returns full billing portal UI configuration
+- **7. Enhanced Revenue Metrics**:
+  - `DetailedRevenueMetrics` interface with MRR, ARR, MRR by tier, trial conversion rate, avg revenue, churn rate, LTV estimate, tenant count by status, usage aggregation
+  - `getDetailedRevenueMetrics()`: comprehensive SaaS admin metrics with usage breakdown by tier
+- **8. Invoice Detail Retrieval**:
+  - `InvoiceDetail`, `InvoiceLineItem`, `InvoiceUsageSummary` interfaces
+  - `getInvoiceDetail()`: returns full invoice with parsed line items and usage summary; includes tenant ownership security check
+- Lint: passes with zero errors
+
+---
+Task ID: 4-a
+Agent: Billing API Developer
+Task: Session 15 - Enhanced Billing API Endpoints (Lifecycle + Payment + Portal)
+
+Work Log:
+- Created 10 API route files under /src/app/api/v1/billing/ following existing patterns
+- All routes use getAuthContext() for authentication, standard response helpers from @/lib/api/response, createAuditLog for audit logging
+- All routes follow the common response format: { success: true, data: {...} }
+
+Files Created:
+1. /src/app/api/v1/billing/subscription/activate/route.ts
+   - POST: Activate trial subscription (trial → active)
+   - Validates subscription is in 'trial' status, calls subscriptionTransition(id, 'activate'), audit logs the transition
+
+2. /src/app/api/v1/billing/subscription/resume/route.ts
+   - POST: Resume cancelled subscription (cancelled → active)
+   - Validates subscription is in 'cancelled' status and endsAt is still in the future, calls subscriptionTransition(id, 'resume'), audit logs
+
+3. /src/app/api/v1/billing/subscription/lifecycle/route.ts
+   - GET: Get subscription lifecycle state and valid transitions
+   - Returns current status, valid transitions (from getValidTransitions()), timeline info, and tier definition
+
+4. /src/app/api/v1/billing/subscription/evaluate/route.ts
+   - POST: Evaluate and auto-transition subscription status
+   - Calls evaluateAndTransitionSubscription(tenantId), audit logs if transition occurred
+   - Returns whether a transition occurred and the new status
+
+5. /src/app/api/v1/billing/payment-method/route.ts
+   - GET: Returns payment method info from getPaymentMethod(tenantId)
+   - POST: Accepts { type, last_four, expiry_month, expiry_year }, calls updatePaymentMethod(), audit logs
+
+6. /src/app/api/v1/billing/portal/route.ts
+   - GET: Returns full billing portal configuration from getBillingPortalConfig(tenantId)
+   - Includes subscription, tier, usage, alerts, invoices, payment method, valid transitions, features
+
+7. /src/app/api/v1/billing/usage/alerts/route.ts
+   - GET: Returns usage alerts from getUsageAlerts(tenantId, plan)
+   - Includes summary flags: has_warnings, has_critical, has_exceeded
+
+8. /src/app/api/v1/billing/admin/revenue/route.ts
+   - GET: Returns detailed revenue metrics from getDetailedRevenueMetrics()
+   - Requires executive role (canDo(context, 'audit_log.read') permission check)
+
+9. /src/app/api/v1/billing/invoices/[id]/route.ts
+   - GET: Returns individual invoice details from getInvoiceDetail(invoiceId, tenantId)
+   - Tenant isolation is enforced within getInvoiceDetail; errors mapped to notFoundError
+
+10. /src/app/api/v1/billing/guard/route.ts
+    - POST: Checks subscription tier guard for any feature
+    - Accepts { feature, action? }, calls checkSubscriptionTierGuard({ tenantId, feature, action })
+    - Returns allowed, reason, upgradeTo, usageExceeded
+
+Lint: All files pass ESLint with no errors.
+
+---
+Task ID: 5
+Agent: Billing Portal UI Developer
+Task: Session 15 - Build Billing Portal UI Component
+
+Work Log:
+- Created /src/components/billing/billing-portal.tsx (~750 lines): Complete SaaS Billing Portal component
+  - Exported as `BillingPortal` with 'use client' directive
+  - 6 tabs: Overview, Plans & Pricing, Usage, Invoices, Payment, Admin
+  - **Overview Tab**: Subscription status card (color-coded badges: trial=amber, active=emerald, past_due=orange, suspended=red, cancelled=gray), current tier card with price/limits, quick actions (Activate/Cancel/Resume/Upgrade/Downgrade), usage mini progress bars
+  - **Plans & Pricing Tab**: 3 tier cards (Starter $29, Professional $79, Enterprise $249) with icons, limits, feature lists, current plan highlight with border glow, upgrade/downgrade buttons, full feature comparison matrix table with check/X icons
+  - **Usage Tab**: Detailed usage meters for all 5 types (forecast_runs, ai_queries, sku_count, import_runs, report_generated) with progress bars (green <80%, amber 80-95%, red >95%), remaining counts, unlimited indicator, usage alerts section with severity-coded Alert components
+  - **Invoices Tab**: Invoice table (number, status badge, amount, due date, period, paid date, actions), Generate Invoice button, invoice detail Dialog with loading skeleton
+  - **Payment Tab**: Current payment method display (type, last4, expiry, expired badge), update form with type selector, last4 input, month/year selectors, billing address placeholder
+  - **Admin Tab** (role-gated): 7 revenue metric cards (MRR, ARR, Active/Trial Tenants, Churn Rate, ARPU, LTV), tier distribution progress bars, revenue by tier table with per-tier ARPU
+  - Full demo data fallback when no auth (DEMO_SUBSCRIPTION, DEMO_USAGE, DEMO_INVOICES, etc.)
+  - All API calls use relative paths with fetch(), proper error handling
+  - Action handler: activate, cancel, resume, subscribe, upgrade, downgrade, generateInvoice, updatePayment — all with loading states and toast notifications
+  - Loading skeleton state, refresh button, demo mode badge
+  - Color scheme: emerald for positive/success, amber for warning, red for critical (no indigo/blue)
+  - Responsive: mobile-first with sm/md/lg breakpoints, stacked cards on mobile, grid on desktop
+- Integrated BillingPortal into /src/app/page.tsx:
+  - Added import for BillingPortal and CreditCard icon
+  - Added "Billing" tab trigger and content with AnimatePresence
+  - Tab shows between Security and end of TabsList
+- Lint: clean (no errors)
+- All existing type errors are from prior code (examples/skills/routes), not from this component
+---
+Task ID: 3
+Agent: Main Agent (via full-stack-developer subagent)
+Task: Enhance billing.ts with lifecycle transitions, tier guard, usage alerts, payment methods
+
+Work Log:
+- Read existing billing.ts (689 lines from Session 14)
+- Added 8 new feature sections (expanded to 1623 lines):
+  1. Subscription Lifecycle Transitions (subscriptionTransition, getValidTransitions, evaluateAndTransitionSubscription)
+ , 2. CheckSubscriptionTier Guard (checkSubscriptionTierGuard with tenant status, feature, and usage checks)
+  3. Usage Alerts (getUsageAlerts with warning/critical/exceeded severity levels at 80/95/100%)
+  4. Payment Method Management (updatePaymentMethod, getPaymentMethod with expiry validation)
+  5. Webhook Signature Verification (verifyWebhookSignature - simulated)
+  6. Billing Portal Configuration (getBillingPortalConfig - full UI config)
+  7. Enhanced Revenue Metrics (getDetailedRevenueMetrics with MRR, ARR, LTV, trial conversion, tier distribution)
+  8. Invoice Detail Retrieval (getInvoiceDetail with parsed line items)
+- Lint: zero errors
+
+Stage Summary:
+- billing.ts expanded from 689 to 1623 lines
+- All Session 14 code preserved
+- 8 new feature sections added for Session 15
+
+---
+Task ID: 4-a
+Agent: Main Agent (via full-stack-developer subagent)
+Task: Build enhanced billing API endpoints
+
+Work Log:
+- Created 10 new API route files:
+  1. POST /api/v1/billing/subscription/activate - Activate trial subscription
+  2. POST /api/v1/billing/subscription/resume - Resume cancelled subscription
+  3. GET /api/v1/billing/subscription/lifecycle - Get lifecycle state & valid transitions
+  4. POST /api/v1/billing/subscription/evaluate - Auto-evaluate & transition subscription
+  5. GET/POST /api/v1/billing/payment-method - Get/update payment method
+  6. GET /api/v1/billing/portal - Full billing portal configuration
+  7. GET /api/v1/billing/usage/alerts - Usage limit alerts
+  8. GET /api/v1/billing/admin/revenue - Detailed revenue metrics (executive-only)
+  9. GET /api/v1/billing/invoices/[id] - Individual invoice detail
+  10. POST /api/v1/billing/guard - Tier guard check for any feature
+- All routes follow established patterns (auth, response helpers, audit logging)
+- Lint: zero errors
+
+Stage Summary:
+- 10 new billing API routes created
+- Total billing routes: 19 (from Session 14's 9 + Session 15's 10)
+- All routes follow common response format
+
+---
+Task ID: 5
+Agent: Main Agent (via full-stack-developer subagent)
+Task: Build Billing Portal UI component
+
+Work Log:
+- Created /src/components/billing/billing-portal.tsx (1548 lines)
+- 6 tabs: Overview, Plans & Pricing, Usage, Invoices, Payment, Admin
+- Overview: Subscription status, tier info, quick actions, usage mini-bars
+- Plans & Pricing: 3 tier cards with feature comparison matrix
+- Usage: Color-coded progress bars with alerts section
+- Invoices: Table with generate button and detail dialog
+- Payment: Payment method display and update form
+- Admin: Revenue metrics, tier distribution, revenue-by-tier table (role-gated)
+- Demo fallback mode works without auth
+- Color scheme: Emerald (positive), Amber (warning), Red (critical)
+- Responsive: Mobile-first with breakpoints
+- Lint: zero errors
+
+Stage Summary:
+- Comprehensive billing portal UI component created
+- 1548 lines, 6 tabs, 18 API endpoint integrations
+- Integrated into main page as "Billing" tab
