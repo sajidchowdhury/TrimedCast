@@ -1147,3 +1147,29 @@ Stage Summary:
 - Comprehensive billing portal UI component created
 - 1548 lines, 6 tabs, 18 API endpoint integrations
 - Integrated into main page as "Billing" tab
+---
+Task ID: 16
+Agent: Main
+Task: Session 16: Scaling + Production Hardening (Multi-Tenancy & SaaS Architecture.md Sections 8-10)
+
+Work Log:
+- Added SecurityEvent, TenantBackup, ScheduledJob models to Prisma schema
+- Built Job Queue system (src/lib/api/job-queue.ts) — priority queues, retry with exponential backoff, monitoring, handler registry, processor
+- Built Job Scheduler system (src/lib/api/scheduler.ts) — cron-like intervals, 5 default scheduled jobs, on-demand start via API
+- Built Security Audit service (src/lib/api/security-audit.ts) — 8 event types, cross-tenant tracking, suspicious activity detection, shorthand helpers
+- Built Health Check system (src/lib/api/health-check.ts) — 6 component checks (DB, cache, queue, memory, disk, API), production config validation
+- Built Tenant Data Export service (src/lib/api/data-export.ts) — GDPR data portability, 17 exportable tables, rate limiting, CSV support for enterprise
+- Built Tier-based Rate Limiting (src/lib/api/tenant-rate-limit.ts) — per-tenant per-tier limits (api/forecast/ai/import), security event logging on violation
+- Created 14 new API routes for admin system health, queue monitoring, security events, impersonation, tier override, revenue, subscriptions, job queue, scheduler, rate limits, data export, backups
+- Total v1 API routes: 92 (up from 78)
+- Lint passes clean with 0 errors
+
+Stage Summary:
+- 5 new Prisma models: SecurityEvent, TenantBackup, ScheduledJob (+ Tenant relation updates)
+- 5 new lib modules: job-queue.ts, scheduler.ts, security-audit.ts, health-check.ts, data-export.ts, tenant-rate-limit.ts
+- 14 new API route files covering admin dashboard, job monitoring, scheduler control, security, data export
+- Public health endpoint: GET /api/v1/health (no auth required)
+- Tier-based rate limits: Starter (60/10/0/5), Pro (120/30/10/10), Enterprise (300/60/30/20) per minute
+- Job Queue: 6 queues (forecasts, imports, backups, exports, notifications, default) with priority support
+- Scheduler: 5 default jobs (auto_recalibration, subscription_eval, usage_alert, cleanup_expired, weekly_backup)
+- Security: 8 event types, cross-tenant tracking, suspicious activity detection, impersonation with audit trail

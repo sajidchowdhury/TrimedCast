@@ -65,6 +65,8 @@ model Tenant {
   subscription     Subscription?
   usageEvents      UsageEvent[]
   invoices         Invoice[]
+  securityEvents   SecurityEvent[]
+  backups          TenantBackup[]
 }
 
 model User {
@@ -560,4 +562,82 @@ model Invoice {
   @@index([status])
   @@index([dueDate])
   @@index([createdAt])
+}
+
+// ============================================
+// Session 16: Scaling + Production Hardening
+// Security Events, Job Queue, Tenant Backups
+// ============================================
+
+// --- Security Events ---
+
+model SecurityEvent {
+  id              String   @id @default(cuid())
+  type            String   // cross_tenant_access_attempt, admin_impersonation, rate_limit_exceeded, suspicious_query_pattern, permission_escalation_attempt, data_export, login_failure, token_expired
+  userId          String?
+  tenantId        String?
+  tokenTenantId   String?  // The tenant_id in the JWT
+  targetTenantId  String?  // The tenant_id they tried to access
+  ipAddress       String?
+  userAgent       String?
+  url             String?
+  requestMethod   String?
+  details         String?  // JSON: additional context
+  severity        String   @default("medium") // low, medium, high, critical
+  resolved        Boolean  @default(false)
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  occurredAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([type, occurredAt])
+  @@index([severity, resolved])
+  @@index([occurredAt])
+}
+
+// --- Tenant Backup ---
+
+model TenantBackup {
+  id          String   @id @default(cuid())
+  tenantId    String
+  path        String   // Storage path: backups/tenant-{id}/{timestamp}
+  sizeBytes   Int      @default(0)
+  tables      String?  // JSON: list of backed-up table names
+  status      String   @default("pending") // pending, in_progress, completed, failed
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// --- Scheduled Job ---
+
+model ScheduledJob {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  name        String   // auto_recalibration, weekly_backup, subscription_eval, usage_alert
+  type        String   // cron, one_time, recurring
+  schedule    String?  // Cron expression or interval description
+  status      String   @default("scheduled") // scheduled, running, completed, failed, cancelled
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  failCount   Int      @default(0)
+  lastError   String?
+  metadata    String?  // JSON: job-specific config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([nextRunAt])
+  @@index([name])
 }
