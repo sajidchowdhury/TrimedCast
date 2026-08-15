@@ -911,3 +911,49 @@ Files Modified:
 - /src/app/page.tsx (modified - added security tab + SecurityPanel import)
 
 Status: Complete. Lint passed. Dev server running without errors.
+---
+Task ID: 14
+Agent: Main Developer
+Task: Session 14 - Multi-Tenancy & SaaS Architecture (SaaS Billing)
+
+Work Log:
+- Extended Prisma schema with 3 new models: Subscription, UsageEvent, Invoice
+- Extended Tenant model with 13 new billing/lifecycle fields (status, trialEndsAt, suspendedAt, stripeCustomerId, etc.)
+- Created src/lib/api/billing.ts (350+ lines): Complete SaaS billing utility library
+  - TIERS constant: 3 tier definitions (Starter $29, Professional $79, Enterprise $199) with pricing, features, limits
+  - Feature gating: checkFeatureAccess(), hasFeature(), FEATURE_TIER_MAP (19 features across tiers)
+  - Usage metering: recordUsageEvent(), getCurrentPeriodUsage(), checkUsageLimit()
+  - Tenant lifecycle: evaluateTenantStatus() with 6 states (trial/active/past_due/suspended/cancelled/deleting)
+  - Subscription lifecycle: createSubscription(), activateSubscription(), cancelSubscription(), suspendTenant(), reactivateTenant()
+  - Revenue metrics: calculateRevenueMetrics() (MRR, ARR, churn rate, ARPT, tier distribution)
+  - Invoice generation: generateInvoice() with AI query overage billing
+- Created 16 new API route files:
+  - POST /api/v1/tenants/register — Tenant registration with auto-provisioning
+  - GET /api/v1/tenants/me — Current tenant with subscription, usage, status evaluation
+  - PUT /api/v1/tenants/{id}/suspend — Suspend tenant (executive only)
+  - PUT /api/v1/tenants/{id}/reactivate — Reactivate tenant (executive only)
+  - PUT /api/v1/tenants/{id}/extend-trial — Extend trial (executive only)
+  - GET /api/v1/billing/tiers — List all subscription tiers with feature matrix
+  - POST /api/v1/billing/subscribe — Subscribe to tier (create/upgrade/downgrade)
+  - GET /api/v1/billing/subscription — Get subscription details
+  - PUT /api/v1/billing/subscription — Update subscription tier
+  - POST /api/v1/billing/cancel — Cancel subscription
+  - GET/POST /api/v1/billing/invoice — List/generate invoices
+  - GET /api/v1/billing/usage — Current period usage with limits
+  - POST /api/v1/billing/usage/track — Record billable event (with limit check)
+  - GET /api/v1/billing/feature-check — Check feature availability
+  - POST /api/v1/billing/webhook — Handle Stripe webhook events
+  - GET /api/v1/admin/tenants — Admin: list all tenants with filters
+  - GET /api/v1/admin/metrics — Admin: platform revenue/usage metrics
+- Updated API Contract Explorer with 6 new sections (Tenant Management 🏢, Billing & Subscription 💳, Usage Metering 📏, Billing Webhooks 🔗, SaaS Admin 👑) and 16 new endpoint entries
+- Ran db:push to sync schema changes
+- Lint passes clean (0 errors, 0 warnings)
+
+Stage Summary:
+- 16 new API endpoints across 6 sections for Session 14
+- 3 new Prisma models: Subscription, UsageEvent, Invoice
+- Tenant model extended with 13 billing/lifecycle fields
+- Complete billing utility library with tier definitions, feature gating, usage metering, lifecycle management, revenue metrics, invoice generation
+- Total API route files: 65 (was 49 before Session 14)
+- Total Prisma models: 20 (was 17 before Session 14)
+- Key features: 3-tier subscription model, 14-day trial auto-provisioning, feature gating per tier, usage metering with limits, tenant lifecycle management (trial→active→past_due→suspended→cancelled), SaaS admin dashboard with MRR/ARR/churn metrics

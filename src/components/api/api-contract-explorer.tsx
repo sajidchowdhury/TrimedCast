@@ -129,6 +129,34 @@ const API_ENDPOINTS: ApiEndpoint[] = [
   { method: 'GET', path: '/api/v1/security/roles', description: 'All 5 roles with hierarchy + permissions + restrictions', section: 'Security', rbac: 'warehouse_manager, executive' },
   { method: 'GET', path: '/api/v1/security/audit-summary', description: 'Audit activity summary for tenant', section: 'Security', queryParams: ['days'], rbac: 'WM, executive, finance' },
   { method: 'GET', path: '/api/v1/security/rate-limit-status', description: 'Current rate limit usage per category', section: 'Security', rbac: 'Authenticated' },
+
+  // Tenant Management (Session 14)
+  { method: 'POST', path: '/api/v1/tenants/register', description: 'Register new tenant with auto-provisioning (tenant + admin + forecast_settings + subscription)', section: 'Tenant Management', requestBody: '{\n  "company_name": "BD Moto Parts",\n  "slug": "bd-moto-parts",\n  "admin_name": "Rahim",\n  "admin_email": "rahim@bdmoto.com",\n  "admin_password": "SecurePass123!",\n  "tier": "professional"\n}' },
+  { method: 'GET', path: '/api/v1/tenants/me', description: 'Get current tenant with subscription, usage, and status evaluation', section: 'Tenant Management', rbac: 'Authenticated' },
+  { method: 'PUT', path: '/api/v1/tenants/{id}/suspend', description: 'Suspend tenant (read-only access)', section: 'Tenant Management', rbac: 'executive', requestBody: '{ "reason": "Payment past due" }' },
+  { method: 'PUT', path: '/api/v1/tenants/{id}/reactivate', description: 'Reactivate suspended tenant', section: 'Tenant Management', rbac: 'executive' },
+  { method: 'PUT', path: '/api/v1/tenants/{id}/extend-trial', description: 'Extend tenant trial period (1-30 days)', section: 'Tenant Management', rbac: 'executive', requestBody: '{\n  "days": 7,\n  "reason": "Customer needs more evaluation time"\n}' },
+
+  // Billing & Subscription (Session 14)
+  { method: 'GET', path: '/api/v1/billing/tiers', description: 'List all subscription tiers with pricing, features, and limits', section: 'Billing & Subscription' },
+  { method: 'POST', path: '/api/v1/billing/subscribe', description: 'Subscribe to a tier (create or upgrade/downgrade)', section: 'Billing & Subscription', rbac: 'Authenticated', requestBody: '{\n  "tier": "professional",\n  "payment_method_id": "pm_xxx"\n}' },
+  { method: 'GET', path: '/api/v1/billing/subscription', description: 'Get current subscription details + tier definition', section: 'Billing & Subscription', rbac: 'Authenticated' },
+  { method: 'PUT', path: '/api/v1/billing/subscription', description: 'Update subscription tier (upgrade/downgrade)', section: 'Billing & Subscription', rbac: 'Authenticated', requestBody: '{ "tier": "enterprise" }' },
+  { method: 'POST', path: '/api/v1/billing/cancel', description: 'Cancel subscription (access until period end)', section: 'Billing & Subscription', rbac: 'Authenticated' },
+  { method: 'GET', path: '/api/v1/billing/invoice', description: 'List invoices (paginated)', section: 'Billing & Subscription', queryParams: ['page', 'per_page', 'status'], rbac: 'Authenticated' },
+  { method: 'POST', path: '/api/v1/billing/invoice', description: 'Generate invoice for current billing period', section: 'Billing & Subscription', rbac: 'Authenticated' },
+
+  // Usage Metering (Session 14)
+  { method: 'GET', path: '/api/v1/billing/usage', description: 'Current billing period usage with limits and remaining', section: 'Usage Metering', rbac: 'Authenticated' },
+  { method: 'POST', path: '/api/v1/billing/usage/track', description: 'Record a billable usage event (with limit check)', section: 'Usage Metering', rbac: 'Authenticated', requestBody: '{\n  "event_type": "forecast_run",\n  "metadata": { "product_id": "uuid" }\n}' },
+  { method: 'GET', path: '/api/v1/billing/feature-check', description: 'Check feature availability for current plan (or all features)', section: 'Usage Metering', queryParams: ['feature'], rbac: 'Authenticated' },
+
+  // Billing Webhooks (Session 14)
+  { method: 'POST', path: '/api/v1/billing/webhook', description: 'Handle Stripe/billing webhook events (payment, subscription, invoice)', section: 'Billing Webhooks', requestBody: '{\n  "type": "invoice.payment_succeeded",\n  "data": { "object": { "customer": "cus_xxx" } }\n}' },
+
+  // SaaS Admin (Session 14)
+  { method: 'GET', path: '/api/v1/admin/tenants', description: 'List all tenants with subscription + counts (admin dashboard)', section: 'SaaS Admin', queryParams: ['page', 'per_page', 'status', 'plan', 'search'], rbac: 'executive' },
+  { method: 'GET', path: '/api/v1/admin/metrics', description: 'Platform-wide revenue, tenant, usage, and forecast quality metrics', section: 'SaaS Admin', rbac: 'executive' },
 ];
 
 // --- Method Color Map ---
@@ -158,6 +186,11 @@ const SECTION_ICONS: Record<string, string> = {
   'Forecast Settings': '⚙️',
   Users: '👥',
   Security: '🛡️',
+  'Tenant Management': '🏢',
+  'Billing & Subscription': '💳',
+  'Usage Metering': '📏',
+  'Billing Webhooks': '🔗',
+  'SaaS Admin': '👑',
 };
 
 interface ApiResponse {

@@ -15,31 +15,56 @@ datasource db {
 // --- Tenant & Users ---
 
 model Tenant {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  domain      String?
-  plan        String   @default("starter") // starter, professional, enterprise
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  domain            String?
+  plan              String   @default("starter") // starter, professional, enterprise
+  status            String   @default("trial") // trial, active, past_due, suspended, cancelled, deleting
+  isActive          Boolean  @default(true)
+  
+  // Subscription & Billing Fields
+  trialStartsAt     DateTime @default(now())
+  trialEndsAt       DateTime?
+  suspendedAt       DateTime?
+  suspensionReason  String?  // subscription_past_due, admin_action, terms_violation
+  cancelledAt       DateTime?
+  deletionRequestedAt DateTime?
+  deletionScheduledAt DateTime?
+  
+  // Stripe / Payment Integration
+  stripeCustomerId  String?  @unique
+  stripePriceId    String?
+  pmType           String?  // card, bank_transfer, etc.
+  pmLastFour       String?  // last 4 digits of payment method
+  
+  // Billing Address
+  billingEmail     String?
+  billingName      String?
+  billingAddress   String?  // JSON: {line1, line2, city, state, postal_code, country}
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  users       User[]
-  products    Product[]
-  suppliers   Supplier[]
+  users            User[]
+  products         Product[]
+  suppliers        Supplier[]
   motorcycleModels MotorcycleModel[]
-  inventory   Inventory[]
-  salesHistory SalesHistory[]
-  purchaseHistory PurchaseHistory[]
-  promoEvents PromoEvent[]
+  inventory        Inventory[]
+  salesHistory     SalesHistory[]
+  purchaseHistory  PurchaseHistory[]
+  promoEvents      PromoEvent[]
   forecastSettings ForecastSetting[]
-  sopCycles  SopCycle[]
-  forecasts   Forecast[]
-  salesOrders SalesOrder[]
-  purchaseOrders PurchaseOrder[]
+  sopCycles        SopCycle[]
+  forecasts        Forecast[]
+  salesOrders      SalesOrder[]
+  purchaseOrders   PurchaseOrder[]
   recommendedOrders RecommendedOrder[]
-  dataImports DataImport[]
-  auditLogs   AuditLog[]
+  dataImports      DataImport[]
+  auditLogs        AuditLog[]
+  subscription     Subscription?
+  usageEvents      UsageEvent[]
+  invoices         Invoice[]
 }
 
 model User {
@@ -429,5 +454,110 @@ model AuditLog {
 
   @@index([tenantId])
   @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// ============================================
+// SaaS Billing & Subscription Models
+// Session 14: Multi-Tenancy & SaaS Architecture
+// ============================================
+
+// --- Subscription ---
+
+model Subscription {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  tier            String   @default("starter") // starter, professional, enterprise
+  status          String   @default("trial") // trial, active, past_due, cancelled, expired
+  stripeSubscriptionId String? @unique
+  stripePriceId   String?
+  
+  // Billing Cycle
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialEndsAt        DateTime?
+  cancelledAt        DateTime?
+  endsAt             DateTime?  // When subscription actually ends (end of billing period)
+  
+  // Pricing
+  unitAmountCents Int?     // Price in cents (2900, 7900, 19900)
+  currency        String   @default("usd")
+  
+  // Payment
+  lastPaymentAt  DateTime?
+  nextPaymentAt  DateTime?
+  paymentFailCount Int    @default(0)
+  gracePeriodEnd  DateTime?  // 7 days after payment failure
+  
+  // Metadata
+  metadata       String?  // JSON: additional info (e.g., upgrade reason, promo code)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([tier])
+}
+
+// --- Usage Events (Metering) ---
+
+model UsageEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  eventType   String   // forecast_run, ai_query, sku_created, import_run, report_generated
+  metadata    String?  // JSON: context info (productId, modelType, etc.)
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([tenantId, eventType, createdAt])
+}
+
+// --- Invoice ---
+
+model Invoice {
+  id              String   @id @default(cuid())
+  tenantId        String
+  subscriptionId  String?
+  stripeInvoiceId String? @unique
+  
+  // Invoice Details
+  number          String?  // INV-2025-001
+  status          String   @default("draft") // draft, open, paid, void, uncollectible
+  dueDate         DateTime?
+  paidAt          DateTime?
+  
+  // Amounts (in cents)
+  subtotalCents   Int      @default(0)
+  discountCents   Int      @default(0)
+  taxCents        Int      @default(0)
+  totalCents      Int      @default(0)
+  currency        String   @default("usd")
+  
+  // Line Items & Usage Summary
+  lineItems       String?  // JSON: [{description, amount_cents, quantity, unit_amount_cents}]
+  usageSummary    String?  // JSON: {forecast_runs, ai_queries, sku_count, period_start, period_end}
+  
+  // Billing Period
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  
+  // Payment
+  paymentMethod   String?  // card, bank_transfer
+  paymentRef      String?  // External payment reference
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueDate])
   @@index([createdAt])
 }
