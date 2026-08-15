@@ -93,6 +93,36 @@ const API_ENDPOINTS: ApiEndpoint[] = [
   { method: 'POST', path: '/api/v1/recommended-orders/{id}/convert-to-po', description: 'Convert recommendation to Purchase Order', section: 'Recommended Orders', rbac: 'warehouse_manager' },
   { method: 'POST', path: '/api/v1/recommended-orders/{id}/skip', description: 'Skip recommendation with reason', section: 'Recommended Orders', rbac: 'warehouse_manager', requestBody: '{ "reason": "Stock on order from alternate supplier" }' },
   { method: 'GET', path: '/api/v1/recommended-orders/summary', description: 'Executive aggregation for dashboard', section: 'Recommended Orders', rbac: 'All (read)' },
+
+  // S&OP Lifecycle
+  { method: 'GET', path: '/api/v1/sop-cycles/current', description: 'Get current active S&OP cycle with stage progress', section: 'S&OP Lifecycle', rbac: 'Authenticated' },
+  { method: 'POST', path: '/api/v1/sop-cycles', description: 'Create new S&OP cycle', section: 'S&OP Lifecycle', rbac: 'warehouse_manager, executive', requestBody: '{\n  "cycle_name": "Winter 2026 S&OP",\n  "rhythm": "monthly",\n  "period_start": "2025-11-01",\n  "period_end": "2026-02-28"\n}' },
+  { method: 'PUT', path: '/api/v1/sop-cycles/{id}/advance-stage', description: 'Advance S&OP stage (sequential)', section: 'S&OP Lifecycle', rbac: 'warehouse_manager, executive', requestBody: '{\n  "stage": "approval",\n  "governance_note": "All forecasts validated, MAPE within threshold"\n}' },
+  { method: 'GET', path: '/api/v1/sop-cycles/{id}/pva', description: 'Plan-vs-Actual analysis for governance', section: 'S&OP Lifecycle', queryParams: ['threshold_pct'], rbac: 'Authenticated' },
+
+  // Data Import
+  { method: 'POST', path: '/api/v1/imports/upload', description: 'Upload file for import (Excel/CSV)', section: 'Data Import', rbac: 'warehouse_manager', requestBody: 'multipart/form-data: file + import_type (sales_history|purchase_history|product_catalog|stock_levels|suppliers|motorcycle_models)' },
+  { method: 'POST', path: '/api/v1/imports/{id}/map-columns', description: 'Map source columns to target fields', section: 'Data Import', rbac: 'warehouse_manager', requestBody: '{\n  "column_mapping": {\n    "Date": "sale_date",\n    "SKU": "sku_code",\n    "Qty": "qty_sold"\n  }\n}' },
+  { method: 'POST', path: '/api/v1/imports/{id}/execute', description: 'Execute ETL pipeline (validate → harmonize → insert)', section: 'Data Import', rbac: 'warehouse_manager' },
+  { method: 'GET', path: '/api/v1/imports/{id}/status', description: 'Get import status and progress', section: 'Data Import', rbac: 'warehouse_manager' },
+
+  // Promo Events
+  { method: 'GET', path: '/api/v1/promo-events', description: 'List promo events (paginated)', section: 'Promo Events', queryParams: ['page', 'per_page', 'is_active', 'type'], rbac: 'All (read)' },
+  { method: 'POST', path: '/api/v1/promo-events', description: 'Create promo event', section: 'Promo Events', rbac: 'warehouse_manager, marketing_manager', requestBody: '{\n  "name": "Eid Special 2025",\n  "type": "eid_discount",\n  "start_date": "2025-04-01",\n  "end_date": "2025-04-15",\n  "discount_pct": 15,\n  "expected_uplift": 0.70\n}' },
+  { method: 'PUT', path: '/api/v1/promo-events/{id}', description: 'Update promo event', section: 'Promo Events', rbac: 'warehouse_manager, marketing_manager' },
+  { method: 'DELETE', path: '/api/v1/promo-events/{id}', description: 'Deactivate promo event', section: 'Promo Events', rbac: 'warehouse_manager' },
+
+  // Audit Log
+  { method: 'GET', path: '/api/v1/audit-log', description: 'List audit entries (paginated, filtered)', section: 'Audit Log', queryParams: ['entity_type', 'entity_id', 'user_id', 'date_from', 'date_to', 'action', 'page'], rbac: 'WM, executive, finance' },
+
+  // Forecast Settings
+  { method: 'GET', path: '/api/v1/forecast-settings', description: 'Get forecast settings for tenant', section: 'Forecast Settings', rbac: 'All (read)' },
+  { method: 'PUT', path: '/api/v1/forecast-settings', description: 'Update forecast settings', section: 'Forecast Settings', rbac: 'warehouse_manager', requestBody: '{\n  "model": "prophet",\n  "horizon_days": 90,\n  "confidence_level": 0.95,\n  "recalibration_threshold": 0.15\n}' },
+
+  // Users
+  { method: 'GET', path: '/api/v1/users', description: 'List tenant users', section: 'Users', queryParams: ['page', 'per_page'], rbac: 'warehouse_manager' },
+  { method: 'POST', path: '/api/v1/users', description: 'Create new user', section: 'Users', rbac: 'warehouse_manager', requestBody: '{\n  "name": "John",\n  "email": "john@shop.com",\n  "password": "SecurePass123!",\n  "role": "marketing_manager"\n}' },
+  { method: 'PUT', path: '/api/v1/users/{id}/role', description: 'Update user role', section: 'Users', rbac: 'warehouse_manager', requestBody: '{ "role": "marketing_manager" }' },
 ];
 
 // --- Method Color Map ---
@@ -115,6 +145,12 @@ const SECTION_ICONS: Record<string, string> = {
   'Purchase Orders': '📋',
   Forecasts: '🔮',
   'Recommended Orders': '🎯',
+  'S&OP Lifecycle': '🔄',
+  'Data Import': '📥',
+  'Promo Events': '🎉',
+  'Audit Log': '📝',
+  'Forecast Settings': '⚙️',
+  Users: '👥',
 };
 
 interface ApiResponse {

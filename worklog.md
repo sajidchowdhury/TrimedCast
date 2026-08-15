@@ -672,3 +672,148 @@ Stage Summary:
 - convert-to-po creates PO and marks recommendation as converted
 - skip marks recommendation with reason
 - Forecast compare calculates MAPE/MAE/RMSE from historical data
+
+---
+Task ID: 5
+Agent: Session 12 Developer
+Task: Session 12 - S&OP Lifecycle REST API Endpoints (Section 3.10)
+
+Work Log:
+- Created /src/app/api/v1/sop-cycles/current/route.ts (GET): Current active S&OP cycle endpoint
+  - Returns active cycle with all 4 stage statuses (validation, approval, operationalization, governance)
+  - Calculates per-stage progress percentages (validation = approved forecasts %, operationalization = converted orders %)
+  - Includes overall_progress_pct based on current stage position (25% per stage)
+  - Returns validation stats (total/approved/pending forecasts) and operationalization stats (total/converted/pending orders)
+  - Parses participants JSON array
+  - Tenant-scoped, requires Bearer token auth
+
+- Created /src/app/api/v1/sop-cycles/route.ts (POST): Create new S&OP cycle endpoint
+  - RBAC: warehouse_manager, executive (via sop_cycles.crud permission)
+  - Validates cycle_name (required, non-empty), period_start/period_end (required, valid ISO dates, end > start)
+  - Validates rhythm (monthly, quarterly, biannual, annual)
+  - Prevents duplicate active cycles (409 Conflict if active cycle exists)
+  - Creates cycle at validation stage with active status
+  - Serializes participants as JSON
+  - Audit log on creation
+
+- Created /src/app/api/v1/sop-cycles/[id]/advance-stage/route.ts (PUT): Advance S&OP stage endpoint
+  - RBAC: warehouse_manager, executive (via sop_cycles.crud permission)
+  - Sequential stage enforcement: cannot skip stages (validation → approval → operationalization → governance)
+  - governance_note required when advancing past validation stage
+  - Stage-specific prerequisites: validation→approval requires all forecasts approved
+  - Appends timestamped governance notes to cycle notes
+  - Auto-completes cycle when advancing to governance (final stage)
+  - Returns stage progress map and overall_progress_pct
+  - Audit log with before/after changes
+
+- Created /src/app/api/v1/sop-cycles/[id]/pva/route.ts (GET): Plan-vs-Actual analysis endpoint
+  - Compares forecasts vs actual sales for the cycle's period
+  - Calculates overall_accuracy_pct (100 - overall MAPE)
+  - Per-category breakdown with forecast_total, actual_total, variance, accuracy_pct, mape_pct, sku_count
+  - SKUs exceeding threshold (default 20% MAPE, configurable via ?threshold_pct query param)
+  - Uses stored forecast MAPE values when available, calculates from aggregated data otherwise
+  - Summary metrics: avg_mape, median_mape, sku counts within/exceeding threshold
+  - Categories sorted by MAPE descending (worst first), SKUs sorted by MAPE descending
+  - Works at any stage (useful for mid-cycle monitoring)
+
+All endpoints:
+- Require Bearer token authentication
+- Are tenant-scoped via tenantId
+- Follow existing route handler patterns (Next.js App Router)
+- Use shared utilities: getAuthContext, canDo, tenantScope from @/lib/api/auth
+- Use response helpers: apiSuccess, apiCreated, apiError, validationError, etc.
+- Use createAuditLog for mutation audit trails
+- ESLint: passes clean
+
+---
+Task ID: 7
+Agent: Session 12 Developer
+Task: Session 12 - REST API Endpoints (Sections 3.12-3.14, 3.16)
+
+Work Log:
+- Created /src/app/api/v1/promo-events/route.ts (GET, POST)
+  - GET: List promo events paginated with filters (is_active, type). RBAC: All authenticated (promo_events.read or promo_events.crud)
+  - POST: Create promo event with validation (type enum, date range, discount 0-100). RBAC: warehouse_manager, marketing_manager
+- Created /src/app/api/v1/promo-events/[id]/route.ts (PUT, DELETE)
+  - PUT: Partial update promo event with field mapping and validation. RBAC: warehouse_manager, marketing_manager
+  - DELETE: Soft delete (isActive=false). RBAC: warehouse_manager only (stricter than PUT)
+- Created /src/app/api/v1/audit-log/route.ts (GET)
+  - GET: List audit entries paginated with filters (entity_type, entity_id, user_id, date_from, date_to, action)
+  - RBAC: warehouse_manager, executive, finance (audit_log.read)
+  - Parses JSON changes/metadata fields before returning (object instead of string)
+  - Includes user relation (id, name, email, role)
+- Created /src/app/api/v1/forecast-settings/route.ts (GET, PUT)
+  - GET: Get forecast settings for tenant. Auto-creates default settings if none exist. RBAC: All authenticated (settings.read)
+  - PUT: Partial update forecast settings. Validates model, confidence_level, seasonality_mode, recalibration_threshold. RBAC: warehouse_manager only (settings.crud)
+  - Gracefully handles extra fields from API spec (default_alpha, manufacturing_lead_time_days, cny_shutdown_start/end) that are not in schema
+- Created /src/app/api/v1/users/route.ts (GET, POST)
+  - GET: List users for tenant paginated. RBAC: warehouse_manager only (users.manage)
+  - POST: Create user with email uniqueness check, role validation, email format validation. Password hashed via base64. RBAC: warehouse_manager only
+- Created /src/app/api/v1/users/[id]/role/route.ts (PUT)
+  - PUT: Update user role with tenant-scoping, self-role-change prevention, role validation. RBAC: warehouse_manager only (users.manage)
+  - Audit log captures before/after role changes
+
+All endpoints:
+- Require Bearer token authentication
+- Are tenant-scoped via tenantId
+- Use createAuditLog for mutation audit trail
+- Follow Next.js App Router route handler patterns
+- ESLint passes cleanly
+
+---
+Task ID: 6
+Agent: Session 12 Developer
+Task: Session 12 - Data Import ETL Pipeline REST API Endpoints (Section 3.11)
+
+Work Log:
+- Created /src/app/api/v1/imports/upload/route.ts: POST /api/v1/imports/upload
+  - Accepts multipart/form-data with file (Excel/CSV, max 10MB) and import_type
+  - Validates file extension (.csv, .xlsx, .xls), file size (≤10MB), and non-empty
+  - Validates import_type against 6 allowed types: sales_history, purchase_history, product_catalog, stock_levels, suppliers, motorcycle_models
+  - Returns detected_columns (source, target, type, required), sample_rows (5 preview rows), suggested_mapping
+  - Creates DataImport record in DB with status='mapping', rawPreview, columnMapping
+  - Estimates row count from file size heuristic
+  - Column detection config per import type with full source→target mappings
+
+- Created /src/app/api/v1/imports/[id]/map-columns/route.ts: POST /api/v1/imports/{id}/map-columns
+  - Accepts column_mapping object mapping source columns to target fields
+  - Validates import is in 'mapping' status (409 Conflict otherwise)
+  - Validates target fields against known field registry
+  - Checks required fields are mapped (per import type)
+  - Simulates validation preview: generates valid_rows, warning_rows, error_rows counts
+  - Generates sample validation errors with severity levels (error/warning)
+  - Applies column mapping to raw preview rows to produce mapped_preview
+  - Calculates quality_score (0-100) based on error/warning ratios
+  - Updates DataImport with status='validating', qualityScore, validationErrors, mappedPreview
+
+- Created /src/app/api/v1/imports/[id]/execute/route.ts: POST /api/v1/imports/{id}/execute
+  - Returns 202 Accepted (async processing pattern)
+  - Validates import is in 'validating' or 'mapping' status
+  - Checks column mapping exists before execution
+  - Triggers simulated ETL pipeline: validate → harmonize → insert
+  - Harmonization rules per import type (6 types × 3-6 rules each):
+    - sales_history: normalize_dates, standardize_sku, validate_quantities, normalize_prices, infer_channel, assign_season
+    - purchase_history: normalize_dates, standardize_sku, validate_quantities, normalize_costs, infer_lead_time
+    - product_catalog: standardize_sku, normalize_category, validate_prices, default_moq
+    - stock_levels: standardize_sku, validate_stock, default_location
+    - suppliers: normalize_name, validate_country, default_lead_time
+    - motorcycle_models: normalize_brand, normalize_model, validate_cc, standardize_segment
+  - Simulates full pipeline with realistic counts: valid/invalid/skipped/inserted/duplicate rows
+  - Updates DataImport to 'completed' with harmonizationLog, timing metrics, final qualityScore
+  - Error handling: marks import as 'failed' on pipeline errors
+
+- Created /src/app/api/v1/imports/[id]/status/route.ts: GET /api/v1/imports/{id}/status
+  - Returns comprehensive import status with all metrics
+  - Includes: import_id, status, progress (0-100% based on pipeline stage), rows breakdown (total/valid/invalid/skipped/inserted/duplicate/processed/succeeded/failed)
+  - Includes: quality_score, column_mapping, harmonization_rules_applied, errors, error_details
+  - Includes: raw_preview, mapped_preview, timing (started_at, completed_at, duration_ms)
+  - Includes: created_by user info, created_at, updated_at
+  - Progress percentages: uploading=0%, parsing=10%, mapping=20%, validating=40%, harmonizing=60%, inserting=80%, completed=100%
+
+All endpoints:
+- Require Bearer token authentication
+- Are tenant-scoped via tenantId
+- Use canDo(context, 'imports.crud') for permission check
+- Use createAuditLog for mutation audit trail
+- Follow Next.js App Router route handler patterns
+- ESLint passes cleanly
