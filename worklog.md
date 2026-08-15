@@ -1395,3 +1395,30 @@ Work Log:
   - All existing ETL components reused: ColumnMapper, ValidationResults, HarmonizationLog, QualityBadge, ImportHistory
 - Lint: PASSED (0 errors)
 - Dev server: Running, no compilation errors
+
+---
+Task ID: 20
+Agent: Main Developer
+Task: Session 20: Inventory + Import + Promo UI
+
+Work Log:
+- Created /src/components/dashboard/inventory-grid.tsx (~900 lines): Full 11-column data grid with stock status indicators (green/yellow/red/dark-red), inline editing for safety stock & reorder point, manual override toggle with amber background, column sorting (click headers for asc/desc), filtering (category multi-select, status dropdown, SKU/name search), pagination (15/page), BDT lakh formatting, 28 sample BD motorcycle parts, summary stats row (total SKUs, healthy, low, critical, stockout, stock value), skeleton loading states, framer-motion row animations
+- Created /src/components/dashboard/lead-time-simulator.tsx (~580 lines): Segmented Sea vs Air toggle with animated sliding indicator (Framer Motion spring physics), instant SS recalculation using SS = k*sqrt(mu_t*sigma_d^2 + mu_d^2*sigma_t^2) with k=1.65, before/after impact panel with % change badges, per-product simulation (8 BD motorcycle parts), recharts grouped BarChart for cost comparison, visual buffer inventory indicator with red/yellow/green zones, lead time breakdown stacked bar (Mfg+Ship+Customs)
+- Created /src/components/dashboard/promo-index-module.tsx (~750 lines): Promo Index slider (0-1, step 0.05) with gradient intensity bar (green/amber/red zones), campaign event date picker with BD season auto-detection (Winter/Pre-Winter/Monsoon/Summer with Bengali labels), beta coefficient display (D(F) = b0 + b1*Price + b2*Promo, b2 = sliderValue * 0.45), real-time forecast adjustment preview chart (6-month view, baseline vs adjusted lines), active promo events table with status/toggle/delete, add promo event dialog with full form
+- Created /src/components/dashboard/import-wizard.tsx (~650 lines): 7-step wizard (Select Type -> Upload -> Map -> Validate -> Harmonize -> Insert -> Complete) with animated step progress bar (green checks, pulsing active, grey future), directional slide transitions (Framer Motion AnimatePresence), step navigation (Back/Next/Cancel), cancel confirmation dialog, import type card grid with icons, auto-advance on step completion, import history section
+- Created /src/components/dashboard/audit-log-panel.tsx (~600 lines): Sheet-based right slide-out panel (~400px), filter controls (entity type, action, date range, search), audit entry cards with user avatar/name/role badge, relative timestamps, color-coded action badges, before->after change diff display (red strikethrough old, green new), infinite scroll pagination, 30s polling for new entries with animated badge, 10 sample entries, loading skeletons
+- Updated /src/components/dashboard/pages/inventory-page.tsx: 5 tabs (Inventory Grid, Sea vs Air, EOQ & Safety Stock, Service Levels, Stock Projection)
+- Updated /src/components/dashboard/pages/import-page.tsx: Replaced old sequential layout with ImportWizard
+- Updated /src/components/dashboard/pages/forecast-page.tsx: Added Promo tab (Megaphone icon) for PromoIndexModule
+- Updated /src/components/dashboard/header.tsx: Already has AuditLogTriggerButton (from prior session)
+- Updated /src/components/dashboard/dashboard-layout.tsx: Already has AuditLogPanel (from prior session)
+- Lint passes clean (0 errors)
+- Dev server compiles successfully (200 response on /)
+- Committed as 391f723 and pushed to GitHub
+
+Stage Summary:
+- 5 new components: inventory-grid, lead-time-simulator, promo-index-module, import-wizard, audit-log-panel
+- 3 updated pages: inventory-page, import-page, forecast-page
+- 6,474 lines added, 137 lines removed across 11 files
+- All UI/UX Specification Sections 4-7 implemented: Marketing Input (Promo Index), Operations Input (Safety Stock Controls), Sea vs Air Lead Time Toggle, Audit Log
+- Complete operational UI for all non-forecast modules
