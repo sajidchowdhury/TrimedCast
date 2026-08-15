@@ -1,20 +1,26 @@
 'use client';
 
 // ============================================
-// Inventory Page — EOQ, Safety Stock, Stock Status
+// Inventory Page — Session 20 enhanced
+// Full Inventory Grid + Lead Time Simulator
+// + EOQ/Safety Stock + Service Levels + Stock Projection
 // ============================================
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Package, Ship, Calculator, Shield, TrendingDown } from 'lucide-react';
+
+// Session 20 components
+import { InventoryGrid } from '../inventory-grid';
+import { LeadTimeSimulator } from '../lead-time-simulator';
+
+// Existing forecast components
 import { EOQSafetyStockPanel } from '@/components/forecast/eoq-safety-stock-panel';
 import { ServiceLevelTable } from '@/components/forecast/service-level-table';
 import { StockProjection } from '@/components/forecast/stock-projection';
-import { Package, Shield, Calculator, TrendingDown } from 'lucide-react';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 
 export function InventoryPage() {
-  const [tab, setTab] = useState<'eoq' | 'service' | 'projection'>('eoq');
+  const [tab, setTab] = useState<'grid' | 'simulator' | 'eoq' | 'service' | 'projection'>('grid');
 
   return (
     <div className="space-y-5">
@@ -29,34 +35,11 @@ export function InventoryPage() {
         </div>
       </div>
 
-      {/* Stock status summary */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="border-emerald-200 dark:border-emerald-900/50">
-          <CardContent className="p-3 flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-xs text-muted-foreground">Healthy Stock</span>
-            <Badge variant="secondary" className="ml-auto text-[10px]">—</Badge>
-          </CardContent>
-        </Card>
-        <Card className="border-amber-200 dark:border-amber-900/50">
-          <CardContent className="p-3 flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-amber-500" />
-            <span className="text-xs text-muted-foreground">Low Stock</span>
-            <Badge variant="secondary" className="ml-auto text-[10px]">—</Badge>
-          </CardContent>
-        </Card>
-        <Card className="border-red-200 dark:border-red-900/50">
-          <CardContent className="p-3 flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-red-500" />
-            <span className="text-xs text-muted-foreground">Stockout Risk</span>
-            <Badge variant="destructive" className="ml-auto text-[10px]">—</Badge>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Tab navigation */}
-      <div className="flex items-center gap-2 border-b border-border pb-2">
+      <div className="flex items-center gap-2 border-b border-border pb-2 overflow-x-auto">
         {[
+          { key: 'grid' as const, label: 'Inventory Grid', icon: Package },
+          { key: 'simulator' as const, label: 'Sea vs Air', icon: Ship },
           { key: 'eoq' as const, label: 'EOQ & Safety Stock', icon: Calculator },
           { key: 'service' as const, label: 'Service Levels', icon: Shield },
           { key: 'projection' as const, label: 'Stock Projection', icon: TrendingDown },
@@ -65,7 +48,7 @@ export function InventoryPage() {
             key={t.key}
             variant={tab === t.key ? 'default' : 'ghost'}
             size="sm"
-            className="text-xs"
+            className="text-xs shrink-0"
             onClick={() => setTab(t.key)}
           >
             <t.icon className="h-3.5 w-3.5 mr-1" />
@@ -75,6 +58,8 @@ export function InventoryPage() {
       </div>
 
       {/* Content */}
+      {tab === 'grid' && <InventoryGrid />}
+      {tab === 'simulator' && <LeadTimeSimulator />}
       {tab === 'eoq' && <EOQSafetyStockPanel />}
       {tab === 'service' && <ServiceLevelTable />}
       {tab === 'projection' && <StockProjection />}

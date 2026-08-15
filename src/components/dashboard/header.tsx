@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useDashboardStore, type DashboardPage } from '@/lib/dashboard/store';
 import { useTheme } from 'next-themes';
+import { AuditLogTriggerButton } from './audit-log-panel';
 
 const PAGE_LABELS: Record<DashboardPage, string> = {
   overview: 'Dashboard',
@@ -97,6 +98,9 @@ export function DashboardHeader() {
           <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
+
+        {/* Audit Log */}
+        <AuditLogTriggerButton />
 
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="h-8 w-8 relative">

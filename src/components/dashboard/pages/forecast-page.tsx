@@ -1,9 +1,10 @@
 'use client';
 
 // ============================================
-// Forecast Page — Session 18 enhanced
+// Forecast Page — Session 18 + Session 20 enhanced
 // Consensus Forecast Chart + Metrics Table + Season Toggle
 // + Forecast vs Actual + Product Selector
+// + Promo Index Module (Session 20)
 // ============================================
 
 import { useState, useEffect } from 'react';
@@ -15,12 +16,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import type { BDSeason } from '@/lib/forecasting/models';
 
-// New Session 18 components
+// Session 18 components
 import { ConsensusForecastChart } from '../consensus-forecast-chart';
 import { ForecastMetricsTable } from '../forecast-metrics-table';
 import { SeasonToggle, getCurrentBDSeason } from '../season-toggle';
 import { ForecastVsActualChart } from '../forecast-vs-actual-chart';
 import { ProductSelector } from '../product-selector';
+
+// Session 20 component
+import { PromoIndexModule } from '../promo-index-module';
 
 // Existing forecast components
 import { SeasonalPattern } from '@/components/forecast/seasonal-pattern';
@@ -32,7 +36,7 @@ import { StockProjection } from '@/components/forecast/stock-projection';
 
 import {
   TrendingUp, RefreshCw, Brain, BarChart3, Target,
-  LineChart, Layers, Settings2,
+  LineChart, Layers, Settings2, Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +52,7 @@ export function ForecastPage() {
   } = useForecastStore();
 
   const [activeSeason, setActiveSeason] = useState<BDSeason | null>(null);
-  const [view, setView] = useState<'consensus' | 'comparison' | 'advanced'>('consensus');
+  const [view, setView] = useState<'consensus' | 'comparison' | 'advanced' | 'promo'>('consensus');
   const currentSeason = getCurrentBDSeason();
 
   // Load products on mount
@@ -62,9 +66,6 @@ export function ForecastPage() {
   const individualResults = forecastResult?.forecast?.individualResults;
   const selectedProduct = forecastResult?.product;
   const dataPoints = forecastResult?.dataPoints;
-
-  // Build historical data from the store (we'll use sample data if no forecast)
-  const historicalData = forecastResult ? undefined : undefined; // Will be populated from API
 
   return (
     <div className="space-y-5">
@@ -83,6 +84,7 @@ export function ForecastPage() {
             {[
               { key: 'consensus' as const, label: 'Consensus', icon: Layers },
               { key: 'comparison' as const, label: 'Compare', icon: BarChart3 },
+              { key: 'promo' as const, label: 'Promo', icon: Megaphone },
               { key: 'advanced' as const, label: 'Advanced', icon: Settings2 },
             ].map((v) => (
               <button
@@ -139,7 +141,7 @@ export function ForecastPage() {
       {/* CONSENSUS VIEW */}
       {!forecastLoading && view === 'consensus' && (
         <div className="space-y-4">
-          {/* Consensus Forecast Chart — Orange bars + Blue line + Dotted blue + Blue shaded CI */}
+          {/* Consensus Forecast Chart */}
           <ConsensusForecastChart
             points={forecastPoints}
             activeSeason={activeSeason}
@@ -213,6 +215,11 @@ export function ForecastPage() {
           {/* Seasonal pattern alongside */}
           <SeasonalPattern currentSeason={currentSeason} />
         </div>
+      )}
+
+      {/* PROMO INDEX VIEW — Session 20 */}
+      {!forecastLoading && view === 'promo' && (
+        <PromoIndexModule />
       )}
 
       {/* ADVANCED VIEW */}

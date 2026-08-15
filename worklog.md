@@ -1276,3 +1276,122 @@ Stage Summary:
 - Full recommended orders table with filtering and Convert to PO
 - Order timeline Gantt chart with Mfg/Ship/Customs segments
 - All data wired to v1 API endpoints
+
+---
+
+Task ID: 1
+Agent: Inventory Grid Developer
+Task: Build Inventory Data Grid Component
+
+Work Log:
+- Created /src/components/dashboard/inventory-grid.tsx (~900 lines): Complete interactive inventory data grid
+  - **Full Data Grid** with 11 columns: SKU, Product Name, Category, Motorcycle Model, Current Stock, Available Stock, Reserved Stock, Safety Stock (editable), Reorder Point (editable), Max Stock Level, Stock Status
+  - **Stock Status Indicators**: 4-tier status system (Healthy/Low Stock/Critical/Stockout) with colored dot + text badges and proper boundary logic (availableStock vs reorderPoint/safetyStock)
+  - **Column Sorting**: Click-to-sort on all columns with visual asc/desc indicators using ArrowUp/ArrowDown/ArrowUpDown icons
+  - **Column Filtering**: Category multi-select dropdown (using DropdownMenuCheckboxItem), Stock status Select filter, Search by SKU or product name
+  - **Inline Editing**: Double-click on Safety Stock / Reorder Point cells to edit; input field with Save/Cancel buttons; Enter/Escape keyboard support; auto-focus on edit; PUT /api/v1/inventory/[id] API integration with optimistic updates
+  - **Manual Override Toggle**: Switch next to Safety Stock column; when ON, cell background changes to bg-amber-50 (light yellow); "(manual)" badge shown next to overridden values
+  - **Pagination**: 15 items per page with first/prev/next/last page controls, page indicator
+  - **Data Source**: Fetches from /api/v1/inventory with page/per_page params; falls back to SAMPLE_INVENTORY on API error/empty response
+  - **Summary Stats Row**: Total SKUs, Healthy count, Low Stock count, Critical count, Stockout count, Total Stock Value (BDT lakh formatting with formatBDT helper)
+  - **Sample Data**: 28 realistic BD motorcycle parts (pistons, gaskets, chains, filters, brake pads, carburetors, clutch plates, spark plugs, bearings, tyre/tubes, CDI units, fuel pumps, sprocket sets, etc.) with varying stock levels across Bajaj/Honda/TVS models
+  - **Responsive Design**: Mobile shows 4 essential columns (SKU, Name, Stock, Status); desktop shows all 11 columns; dynamic resize detection
+  - **Dark Mode**: All status colors, borders, and backgrounds have dark mode variants
+  - **Animations**: Framer Motion AnimatePresence for row enter/exit with staggered delay
+  - **Loading States**: Skeleton placeholders during data fetch; saving indicator overlay
+  - **Error Handling**: Error banner display; graceful fallback to sample data on API failure; Reset filters button
+  - **formatBDT() helper**: Bangladeshi lakh currency formatting (e.g., ৳1,50,000)
+- Lint: 0 errors, 0 warnings
+
+---
+Task ID: 2
+Agent: Lead Time Simulator Developer
+Task: Build Lead Time Simulator Component (Sea vs Air Toggle)
+
+Work Log:
+- Created /src/components/dashboard/lead-time-simulator.tsx (~580 lines): Complete Sea vs Air Lead Time Simulator
+  - **Segmented Control Toggle**: Custom ShippingModeToggle with animated sliding indicator using Framer Motion layout animation, Ship/Plane icons, mode-specific day badges (90d/35d)
+  - **Instant Safety Stock Recalculation**: Full formula implementation SS = k * sqrt(mu_t * sigma_d^2 + mu_d^2 * sigma_t^2) with k=1.65 (95% SL), sigma_T_sea=15d, sigma_T_air=5d, sigma_D=25% of mean demand. Brief "Recalculating..." animation on toggle
+  - **Impact Summary Panel**: Before/after comparison for Lead Time, Safety Stock, Buffer Inventory, Holding Cost (BDT/month with h=25% annual), and EOQ. Each row shows percentage change with color-coded improvement badge (green=improved, red=worsened)
+  - **Per-Product Simulation**: 8 realistic BD motorcycle parts in dropdown selector (Bajaj Pulsar Piston Kit, Honda CG Chain Set, Yamaha Brake Pad Set, etc.). Shows current stock, daily demand, unit cost, supplier, reliability badge. Framer Motion AnimatePresence for smooth product transitions
+  - **Cost Comparison Chart**: Recharts BarChart with grouped Sea/Air bars for Holding Cost, Order Cost, Total Cost. CSS variable chart colors (chart-1/chart-2) for dark mode compatibility. BDT formatting on tooltip and Y-axis
+  - **Visual Buffer Inventory Indicator**: Horizontal bar with three color zones (red=below safety stock, yellow=near ROP, green=healthy). Markers for SS and ROP. Animated bar width transitions. Zone legend
+  - **Lead Time Breakdown**: Stacked horizontal bar showing Manufacturing + Shipment + Customs segments with animated widths. Sea: 45+35+10=90d, Air: 45+5+5=35d
+  - **Comparison Bars**: Side-by-side Sea vs Air visual bars for Lead Time, Safety Stock, Holding Cost, Reorder Point, EOQ with animated transitions
+  - **Savings Callout**: When in Air mode, shows monthly BDT savings and percentage reduction in holding cost with emerald green styling
+  - **Formula Reference Footer**: Displays SS, EOQ formulas and parameters (k=1.65, h=25%, sigma_T values)
+  - **BDT Formatting**: formatBDT() and formatBDTShort() with Bangladeshi lakh convention
+  - **8 Sample Products**: BJP-110, HCG-125, YBR-125, DISC-150, FILT-100, CLCH-135, BEAR-200, SPRK-110 with realistic costs (BDT 180-2200), demand (3-18/day), lead times, suppliers, and reliability scores
+  - **Dark Mode**: All colors use CSS variables, chart-1/chart-2 for recharts, muted/border/foreground tokens throughout
+  - **Responsive**: Single column on mobile, 2-column grid for charts on lg+, flex-wrap for product info
+  - **Animations**: Framer Motion for toggle slider (spring physics), AnimatePresence for product/mode transitions, animated bar widths, savings callout height animation
+- Lint: 0 errors, 0 warnings
+
+---
+Task ID: 3
+Agent: Promo Index Module Developer
+Task: Build Promo Index Module Component
+
+Work Log:
+- Created /src/components/dashboard/promo-index-module.tsx (~600 lines): Complete Marketing Input Module
+  - PromoIndexModule: Main exported component with responsive 2-column grid layout
+  - Promo Index Slider (0.0-1.0, step 0.05): Radix slider + numerical input, gradient bar (green/amber/red), intensity label + risk badge
+  - Campaign Event Date Picker: shadcn Calendar + Popover for start/end date, auto BD season detection, duration display
+  - Beta Coefficient Display: Multi-linear regression formula D(F) = β₀ + β₁(Price) + β₂(Promo), β₂ = sliderValue * 0.45, animated value transitions, adjusted demand calculation, risk level indicator
+  - Real-Time Forecast Adjustment Preview: recharts LineChart with 6-month forward view, baseline (solid) + adjusted (dotted), live uplift % display, BD seasonal demand multipliers
+  - Active Promo Events Table: List with Status/Name/Type/Dates/Discount/Uplift/Active toggle/Delete, status auto-detection (Active/Upcoming/Expired/Inactive), color-coded promo type badges
+  - Add Promo Event Dialog: Full form (Name, Type select, Date pickers, Discount%, Expected Uplift, Category multi-select), POST to /api/v1/promo-events, season auto-detection on date range
+  - detectBDSeason(): BD season detection (Winter Oct-Jan, Pre-Winter Aug-Sep, Monsoon Jun-Jul, Summer Feb-May) with Bengali names and colors
+  - Framer Motion animations: slider value transitions, formula coefficient updates, uplift percentage, card entrance
+  - Dark mode compatible, responsive layout, Lucide icons, shadcn/ui components throughout
+  - API integration: GET /api/v1/promo-events on mount, POST /api/v1/promo-events on add, sample data fallback
+  - Lint: PASSED (0 errors)
+
+---
+Task ID: 5
+Agent: Audit Log Panel Developer
+Task: Build Audit Log Slide-Out Panel Component
+
+Work Log:
+- Created /src/components/dashboard/audit-log-panel.tsx (500+ lines): Complete audit log slide-out panel
+  - AuditLogPanel: Sheet-based slide-out panel (~400px wide, right side), governed by useDashboardStore rightPanelOpen/rightPanelContent
+  - AuditLogTriggerButton: Header button that toggles the panel via dashboard store
+  - Filter Controls: Entity Type dropdown (7 types), Action dropdown (7 actions), From/To date pickers (Calendar+Popover), search input (entity_id/user name), Clear Filters button
+  - Audit Entry Cards: User avatar (initials) + name + role badge, relative timestamp with absolute tooltip, action badge (color-coded: create=green, update=amber, delete=red, approve=emerald, reject=red, import=violet, export=sky), entity type + truncated ID, IP address
+  - ChangeDiffDisplay: Field-by-field before/after comparison, red strikethrough for old value, green for new value, arrow between, Collapsible for multi-field changes, amber border highlighting changed fields, smart display for create/delete actions
+  - Pagination: Intersection Observer infinite scroll sentinel + manual "Load More" button, "Showing X of Y entries" footer
+  - Empty States: No data (no filters vs. filtered), loading skeletons (4 fake cards), error state with retry
+  - Real-time Update Indicator: Polls every 30s for new entries, animated "X new entries" badge, click to reload
+  - Sample Data: 10 diverse entries (update inventory, update forecast, create forecast, approve order, delete product, import data, update stock, create promo, reject forecast, export data) as fallback when API unavailable
+  - Framer Motion: Staggered card entry animations, animate new-entries indicator
+  - Dark mode compatible, responsive, Lucide icons, shadcn/ui throughout
+- Integrated AuditLogPanel into /src/components/dashboard/dashboard-layout.tsx (renders alongside sidebar)
+- Added AuditLogTriggerButton to /src/components/dashboard/header.tsx (between theme toggle and notifications)
+- Lint: PASSED (0 errors)
+- Dev server: Running, no errors
+
+---
+Task ID: 4
+Agent: Import Wizard Developer
+Task: Build Data Import Wizard Component (7-Step)
+
+Work Log:
+- Created /src/components/dashboard/import-wizard.tsx (~700 lines): Complete 7-step data import wizard
+  - StepProgressBar: Horizontal stepper with 7 steps, connecting lines, completed/active/future states, pulsing animation on current step, responsive (labels hidden on mobile)
+  - Step 0 (Select Import Type): Card grid (3 columns), each card shows icon, type name, description, required/optional field counts, click-to-select with highlighted border, check mark on selected
+  - Step 1 (Upload File): Drag-and-drop zone for Excel/CSV, file validation (.xlsx/.xls/.csv, max 10MB), upload progress bar, import type badge, auto-advance on upload success
+  - Step 2 (Map Columns): Uses existing ColumnMapper component from @/components/etl/column-mapper, onProceed callback advances wizard to step 3
+  - Step 3 (Validate Data): Auto-triggers POST /api/imports/[id]/validate on step entry, uses existing ValidationResults component, critical errors block advancement (destructive alert), warnings require checkbox acknowledgement before proceeding
+  - Step 4 (Harmonize): Auto-triggers POST /api/imports/[id]/harmonize on step entry, uses existing HarmonizationLog component, quality score preview via QualityBadge, summary of changes (duplicates removed, fields normalized, categories mapped)
+  - Step 5 (Insert to Database): Auto-triggers POST /api/imports/[id]/insert, real-time progress bar with percentage, live stats (inserted/skipped/errors), auto-advance on completion
+  - Step 6 (Complete): Success animation (spring scale), summary card with QualityBadge (with breakdown), 5-column stats (Total Rows, Inserted, Skipped, Errors, Duration), "Import Another" and "View History" buttons
+  - Navigation: Back button (except step 0/6), Cancel button with confirmation Dialog (except step 6), Next button for applicable steps (disabled until step complete), step counter "Step X of 7"
+  - Framer Motion: AnimatePresence with slide transitions (left for forward, right for backward), spring physics
+  - Cancel Confirmation: Dialog with destructive action, warns about discarding progress
+  - Import History: Existing ImportHistory component rendered below wizard with scroll-mt-4 anchor
+  - Dark mode compatible throughout
+  - Responsive: Step labels hide on mobile (hidden sm:block), grid adapts from 1-col to 3-col
+  - Self-contained: No dependency on old import-page.tsx layout
+  - All existing ETL components reused: ColumnMapper, ValidationResults, HarmonizationLog, QualityBadge, ImportHistory
+- Lint: PASSED (0 errors)
+- Dev server: Running, no compilation errors

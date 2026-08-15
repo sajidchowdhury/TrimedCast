@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
 import { DashboardHeader } from './header';
 import { ContentRouter } from './content-router';
+import { AuditLogPanel } from './audit-log-panel';
 
 export function DashboardLayout() {
   return (
@@ -25,6 +26,7 @@ export function DashboardLayout() {
           </p>
         </footer>
       </SidebarInset>
+      <AuditLogPanel />
     </SidebarProvider>
   );
 }
