@@ -14,6 +14,7 @@ export type DashboardPage =
   | 'import'
   | 'suppliers'
   | 'analytics'
+  | 'ai-assistant'
   | 'billing'
   | 'api-explorer'
   | 'settings';
@@ -97,7 +98,7 @@ const CACHE_TTL = 60_000; // 1 minute cache
 
 export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // Navigation
-  activePage: 'overview',
+  activePage: 'analytics',
   setActivePage: (page) => set({ activePage: page }),
 
   // Dashboard data

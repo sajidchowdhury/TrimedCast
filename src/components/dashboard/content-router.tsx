@@ -37,6 +37,8 @@ export function ContentRouter() {
         return <SuppliersPage />;
       case 'analytics':
         return <AnalyticsPage />;
+      case 'ai-assistant':
+        return <ForecastPage />;
       case 'billing':
         return <BillingPage />;
       case 'api-explorer':

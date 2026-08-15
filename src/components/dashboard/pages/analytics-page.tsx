@@ -1,18 +1,22 @@
 'use client';
 
 // ============================================
-// Analytics Page — Category analysis, seasonal grid
+// Analytics Page — Category analysis, seasonal grid, What-If
+// + Sea vs Air Comparison + Promo What-If Slider
 // ============================================
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CategorySeasonalGrid } from '@/components/forecast/category-seasonal-grid';
 import { CNYCalendar } from '@/components/forecast/cny-calendar';
-import { BarChart3, Calendar, TrendingUp, PieChart } from 'lucide-react';
+import { WhatIfScenarioPanel } from '@/components/forecast/what-if-scenario-panel';
+import { SeaVsAirComparison } from '@/components/forecast/sea-vs-air-comparison';
+import { PromoWhatIfSlider } from '@/components/forecast/promo-whatif-slider';
+import { BarChart3, Calendar, GitBranch, PieChart, Ship, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<'seasonal' | 'cny' | 'trends'>('seasonal');
+  const [tab, setTab] = useState<'whatif' | 'seavsair' | 'promo' | 'seasonal' | 'cny'>('seavsair');
 
   return (
     <div className="space-y-5">
@@ -22,15 +26,17 @@ export function AnalyticsPage() {
             <BarChart3 className="h-5 w-5 text-purple-500" />
             Analytics & Insights
           </h2>
-          <p className="text-sm text-muted-foreground">Category performance, seasonal patterns, and market trends</p>
+          <p className="text-sm text-muted-foreground">Category performance, seasonal patterns, and scenario simulation</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-border pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
         {[
+          { key: 'seavsair' as const, label: 'Sea vs Air', icon: Ship },
+          { key: 'promo' as const, label: 'Promo Slider', icon: Megaphone },
+          { key: 'whatif' as const, label: 'What-If Scenario', icon: GitBranch },
           { key: 'seasonal' as const, label: 'Seasonal Grid', icon: PieChart },
           { key: 'cny' as const, label: 'CNY Calendar', icon: Calendar },
-          { key: 'trends' as const, label: 'Trends', icon: TrendingUp },
         ].map((t) => (
           <Button
             key={t.key}
@@ -45,16 +51,11 @@ export function AnalyticsPage() {
         ))}
       </div>
 
+      {tab === 'seavsair' && <SeaVsAirComparison />}
+      {tab === 'promo' && <PromoWhatIfSlider />}
+      {tab === 'whatif' && <WhatIfScenarioPanel />}
       {tab === 'seasonal' && <CategorySeasonalGrid />}
       {tab === 'cny' && <CNYCalendar />}
-      {tab === 'trends' && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <TrendingUp className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">Trend analysis coming in Phase 6 (AI & Advanced Features)</p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

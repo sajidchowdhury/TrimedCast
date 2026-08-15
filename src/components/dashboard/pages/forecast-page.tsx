@@ -34,9 +34,15 @@ import { ModelComparison } from '@/components/forecast/model-comparison';
 import { AdvancedForecastPanel } from '@/components/forecast/advanced-forecast-panel';
 import { StockProjection } from '@/components/forecast/stock-projection';
 
+// What-If and AI components
+import { WhatIfScenarioPanel } from '@/components/forecast/what-if-scenario-panel';
+import { SeaVsAirComparison } from '@/components/forecast/sea-vs-air-comparison';
+import { PromoWhatIfSlider } from '@/components/forecast/promo-whatif-slider';
+import { AIQueryBar } from '@/components/forecast/ai-query-bar';
+
 import {
   TrendingUp, RefreshCw, Brain, BarChart3, Target,
-  LineChart, Layers, Settings2, Megaphone,
+  LineChart, Layers, Settings2, Megaphone, FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +58,7 @@ export function ForecastPage() {
   } = useForecastStore();
 
   const [activeSeason, setActiveSeason] = useState<BDSeason | null>(null);
-  const [view, setView] = useState<'consensus' | 'comparison' | 'advanced' | 'promo'>('consensus');
+  const [view, setView] = useState<'consensus' | 'comparison' | 'promo' | 'whatif' | 'advanced' | 'ai'>('consensus');
   const currentSeason = getCurrentBDSeason();
 
   // Load products on mount
@@ -85,7 +91,9 @@ export function ForecastPage() {
               { key: 'consensus' as const, label: 'Consensus', icon: Layers },
               { key: 'comparison' as const, label: 'Compare', icon: BarChart3 },
               { key: 'promo' as const, label: 'Promo', icon: Megaphone },
+              { key: 'whatif' as const, label: 'What-If', icon: FlaskConical },
               { key: 'advanced' as const, label: 'Advanced', icon: Settings2 },
+              { key: 'ai' as const, label: 'AI', icon: Brain },
             ].map((v) => (
               <button
                 key={v.key}
@@ -222,9 +230,25 @@ export function ForecastPage() {
         <PromoIndexModule />
       )}
 
+      {/* WHAT-IF VIEW */}
+      {!forecastLoading && view === 'whatif' && (
+        <div className="space-y-4">
+          <WhatIfScenarioPanel />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <SeaVsAirComparison />
+            <PromoWhatIfSlider />
+          </div>
+        </div>
+      )}
+
       {/* ADVANCED VIEW */}
       {!forecastLoading && view === 'advanced' && (
         <AdvancedForecastPanel />
+      )}
+
+      {/* AI QUERY VIEW */}
+      {!forecastLoading && view === 'ai' && (
+        <AIQueryBar />
       )}
     </div>
   );

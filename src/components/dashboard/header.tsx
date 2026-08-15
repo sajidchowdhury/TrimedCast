@@ -37,6 +37,7 @@ const PAGE_LABELS: Record<DashboardPage, string> = {
   import: 'Import Data',
   suppliers: 'Suppliers',
   analytics: 'Analytics',
+  'ai-assistant': 'AI Assistant',
   billing: 'Billing',
   'api-explorer': 'API Explorer',
   settings: 'Settings',
