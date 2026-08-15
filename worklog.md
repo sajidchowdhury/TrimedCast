@@ -1516,3 +1516,31 @@ Work Log:
   - Platform-aware keyboard shortcut display (Cmd vs Ctrl)
 
 All lint checks pass. Dev server compiles successfully.
+
+---
+Task ID: 21
+Agent: Main Developer
+Task: Session 21: AI + Prophet (Forecasting Engine)
+
+Work Log:
+- Created /src/app/api/v1/ai/query/route.ts: POST endpoint using z-ai-web-dev-sdk LLM with TrimedCast-specific system prompt covering BD market context, forecasting, inventory optimization, order triggers, S&OP, and CNY. Auto context detection (stockout_risk, forecast_accuracy, order_timing, seasonal, general) with data gathering from Prisma for each context type.
+- Created /src/app/api/v1/ai/conversation/route.ts: In-memory conversation history store with POST/GET/DELETE, 100-message limit per session with smart trimming
+- Created /src/app/api/v1/ai/recalibrate/route.ts: Auto-recalibration API with GET (status check) and POST (trigger recalibration), single product or batch mode
+- Created /src/lib/forecasting/prophet-engine.ts (~830 lines): Enhanced Prophet engine with BD custom seasonalities (bd_winter Nov-Feb Fourier 3 prior 15, bd_monsoon Jun-Sep Fourier 3 prior 12, bd_pre_winter Oct Fourier 2 prior 8), holiday effects (Eid ul-Fitr -30%, Eid ul-Adha -25%, Durga Puja +10%, Pohela Boishakh +8%, Independence Day -5%), CNY calendar (Jan 20-Feb 20 shutdown, 10-day buffer, before/after strategies), consensus forecast (60% quantitative + 40% qualitative with 60/40 marketing/sales split), auto-tune alpha cross-validation (0.1-0.9 sweep), enhanced ensemble (55% prophet_enhanced, 25% seasonal_decomp, 15% ETS_auto, 5% MA)
+- Created /src/lib/forecasting/auto-recalibration.ts (~400 lines): MAPE monitoring from DB (forecast vs actual sales), consecutive bad period detection (3+ periods triggers re-forecast), 5 urgency levels (none/low/medium/high/critical), batch check + execute with audit logging, smart recommendations based on MAPE ratio
+- Created /src/components/dashboard/ask-ai-panel.tsx: Sheet-based slide-out panel with search bar, 8 auto-suggest prompt templates (Stockout Risk, MAPE Accuracy, CNY Timing, Winter Forecast, Top Products, Order Urgency, Cash Flow Impact, Seasonal Patterns), chat-like query/results display with Markdown rendering, context type badges (color-coded), conversation history sidebar (last 10 queries), copy/follow-up actions, rate limiting (10 queries/min), Cmd+K/Ctrl+K keyboard shortcut, Framer Motion animations
+- Created /src/lib/dashboard/ai-store.ts: Zustand store for AI panel state, conversation management, query lifecycle, history sync, rate limiting, error handling
+- Updated /src/app/api/forecast/route.ts: Integrated enhanced prophet engine (prophetEnhanced) and auto-tuned exponential smoothing (exponentialSmoothingAutoTuned) as default models, with fallback to original models. Uses enhancedEnsembleForecast for ensemble mode.
+- Updated /src/components/dashboard/header.tsx: Ask AI search bar click handler, Brain icon trigger button, AskAIPanel Sheet rendered
+- Lint passes clean (0 errors)
+- Dev server compiles successfully (200 response)
+- Committed as 520d76a and pushed to GitHub
+
+Stage Summary:
+- 7 new files + 3 modified files = 10 files changed
+- 3,460 lines added, 14 lines removed
+- AI Query Backend: LLM-powered natural language queries with TrimedCast domain context
+- Ask AI UI: Full chat interface with auto-suggest, conversation history, Markdown rendering
+- Enhanced Prophet Engine: BD custom seasonalities, holiday effects, CNY calendar, consensus logic
+- Auto-Recalibration: MAPE monitoring, threshold breach detection, re-forecast triggers
+- Forecast API upgraded to use enhanced models by default
