@@ -1173,3 +1173,39 @@ Stage Summary:
 - Job Queue: 6 queues (forecasts, imports, backups, exports, notifications, default) with priority support
 - Scheduler: 5 default jobs (auto_recalibration, subscription_eval, usage_alert, cleanup_expired, weekly_backup)
 - Security: 8 event types, cross-tenant tracking, suspicious activity detection, impersonation with audit trail
+
+---
+Task ID: 17
+Agent: Main Developer
+Task: Session 17 — Dashboard Layout + S&OP Progress Bar (UI/UX Specification.md)
+
+Work Log:
+- Read UI/UX Specification.md Sections 2-3 for dashboard layout and S&OP progress bar specs
+- Read Session-wise Implementation Roadmap.md for Session 17 scope definition
+- Explored codebase: page.tsx (monolithic tabs), layout.tsx (basic), shadcn sidebar (installed but unused), dashboard API (already exists)
+- Created src/lib/dashboard/store.ts — Zustand store with navigation state, dashboard data fetching, right panel state, 1-minute cache TTL
+- Created src/components/dashboard/app-sidebar.tsx — Sidebar navigation with 3 groups (Core, Operations, System), 10 pages, TrimedCast branding, version indicator
+- Created src/components/dashboard/sop-progress-bar.tsx — S&OP Lifecycle Progress Bar with 4 stages (Validation → Approval → Operationalization → Governance), visual states (inactive/current/completed/overdue), Monthly/Bi-weekly rhythm toggle, pulsing animation for current stage, green check for completed
+- Created src/components/dashboard/kpi-cards.tsx — 8 KPI cards: Total SKUs, Stock Value (BDT with lakh formatting), Stockout Risk, Overstock, Pending POs, Pending SOs, Avg MAPE, Accuracy. Color-coded variants (success/warning/danger)
+- Created src/components/dashboard/season-indicator.tsx — BD 4-season display with Bengali labels (শীতকাল, গ্রীষ্মকাল, বর্ষাকাল, হেমন্তকাল), icons per season (Snowflake/Sun/CloudRain/CloudSun), days-to-next-season countdown with progress bar
+- Created src/components/dashboard/urgent-orders-panel.tsx — Top 5 critical/high urgency recommended orders with urgency badges, date formatting, View All button
+- Created src/components/dashboard/recent-forecasts-panel.tsx — Last 5 forecasts with product name, season badge, predicted qty, MAPE with color coding
+- Created src/components/dashboard/header.tsx — Dashboard header with breadcrumb, Ask AI search bar (⌘K shortcut), refresh button, theme toggle (next-themes), notification bell with badge
+- Created src/components/dashboard/overview.tsx — Main dashboard overview page with S&OP progress bar, KPI cards, season indicator, urgent orders, recent forecasts, quick actions (4 buttons), BD Market Intelligence summary
+- Created src/components/dashboard/content-router.tsx — Animated content router with framer-motion page transitions
+- Created src/components/dashboard/dashboard-layout.tsx — Main app shell with SidebarProvider + AppSidebar + SidebarInset + Header + Main + Footer
+- Created 9 page components: forecast-page, orders-page, inventory-page, import-page, suppliers-page, analytics-page, billing-page, api-explorer-page, settings-page
+- Updated src/app/layout.tsx — Added ThemeProvider (next-themes) with dark default, updated metadata for TrimedCast
+- Updated src/app/page.tsx — Replaced monolithic tab layout with DashboardLayout component
+- Verified: lint passes, GET / 200, GET /api/v1/dashboard 200, all Prisma queries execute correctly
+- Committed and pushed to GitHub
+
+Stage Summary:
+- Dashboard shell with sidebar navigation fully functional
+- S&OP Lifecycle Progress Bar with 4 visual states and rhythm toggle
+- 8 KPI cards with BD-specific formatting (BDT currency, lakh notation)
+- Season indicator with Bengali labels and countdown
+- Dark theme as default with toggle support
+- 10 navigable pages with animated transitions
+- Integrates existing forecast, ETL, billing, and API explorer components
+- All data from /api/v1/dashboard API
