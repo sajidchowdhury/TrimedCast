@@ -32,6 +32,9 @@ import { StockProjection } from '@/components/forecast/stock-projection';
 import { AdvancedForecastPanel } from '@/components/forecast/advanced-forecast-panel';
 import { EOQSafetyStockPanel } from '@/components/forecast/eoq-safety-stock-panel';
 import { ServiceLevelTable } from '@/components/forecast/service-level-table';
+import { SeasonalBestPanel } from '@/components/forecast/seasonal-best-panel';
+import { OrderTimelineGantt } from '@/components/forecast/order-timeline-gantt';
+import { CNYRiskDashboard } from '@/components/forecast/cny-risk-dashboard';
 import {
   Loader2,
   AlertCircle,
@@ -58,6 +61,8 @@ import {
   Sparkles,
   Brain,
   Gauge,
+  GitBranch,
+  AlertOctagon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -819,6 +824,170 @@ function OrderTriggersTab() {
 }
 
 // ============================================
+// Order Trigger Pipeline Tab (Session 9 - THE CORE IP)
+// ============================================
+
+function PipelineTab() {
+  const [cnyCalendar, setCnyCalendar] = useState<{ years: Array<{ year: number; lunarNewYear: string; shutdownStart: string; shutdownEnd: string; effectiveStart: string; effectiveEnd: string; shutdownDays: number; rushDeadline: string; isCurrentlyActive: boolean; isUpcoming: boolean; daysUntilShutdown: number }>; current: { year: number; shutdownStart: string; shutdownEnd: string; daysRemaining: number } | null; next: { year: number; shutdownStart: string; shutdownEnd: string; daysUntil: number } | null } | null>(null);
+  const [pipelineProducts, setPipelineProducts] = useState<Array<{
+    productSku: string; productName: string; category?: string; urgency: string;
+    orderTriggerDate: string; expectedAvailableDate: string; recommendedQty: number;
+    totalLeadTimeDays: number; cnyRisk: boolean; cnyStrategy: string;
+    shippingMethod?: string;
+    timeline?: { orderTriggerDate: string; mfgStartDate: string; mfgCompleteDate: string; shipDepartureDate: string; arrivalDate: string; customsClearanceDate: string; availableForSaleDate: string; totalLeadTimeDays: number; cnyDelayDays: number };
+  }>>([]);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [cnyAffected, setCnyAffected] = useState<Array<{
+    skuCode: string; productName: string; urgency: string; cnyStrategy: string;
+    overlapDays: number; additionalDelayDays: number; latestSafeOrderDate?: string; explanation: string;
+  }>>([]);
+
+  // Fetch CNY calendar on mount
+  useEffect(() => {
+    const fetchCNY = async () => {
+      try {
+        const res = await fetch('/api/cny-calendar');
+        if (res.ok) {
+          const json = await res.json();
+          setCnyCalendar(json);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchCNY();
+  }, []);
+
+  // Run pipeline analysis
+  const runPipeline = useCallback(async (season: string, year: number, shippingMethod: string) => {
+    setPipelineLoading(true);
+    try {
+      const res = await fetch('/api/orders/seasonal-pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: 'demo-bd-motors',
+          targetSeason: season,
+          targetYear: year,
+          topN: 50,
+          shippingMethod,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setPipelineProducts(json.data.products || []);
+          // Build CNY affected list from products with CNY risk
+          const affected = (json.data.products || [])
+            .filter((p: { cnyRisk: boolean }) => p.cnyRisk)
+            .map((p: { productSku: string; productName: string; urgency: string; cnyStrategy: string; totalLeadTimeDays: number }) => ({
+              skuCode: p.productSku,
+              productName: p.productName,
+              urgency: p.urgency,
+              cnyStrategy: p.cnyStrategy,
+              overlapDays: 0,
+              additionalDelayDays: 0,
+              explanation: `CNY strategy: ${p.cnyStrategy}. Lead time: ${p.totalLeadTimeDays} days.`,
+            }));
+          setCnyAffected(affected);
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setPipelineLoading(false); }
+  }, []);
+
+  // Auto-run on mount
+  useEffect(() => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    let defaultSeason = 'winter';
+    if (month >= 3 && month <= 5) defaultSeason = 'summer';
+    else if (month >= 6 && month <= 9) defaultSeason = 'monsoon';
+    else if (month === 10) defaultSeason = 'pre_winter';
+    runPipeline(defaultSeason, now.getFullYear() + 1, 'sea');
+  }, [runPipeline]);
+
+  // Build Gantt data from pipeline products
+  const ganttProducts = pipelineProducts
+    .filter(p => p.timeline)
+    .map(p => ({
+      skuCode: p.productSku,
+      productName: p.productName,
+      category: p.category,
+      urgency: p.urgency as 'critical' | 'high' | 'normal' | 'low',
+      orderTriggerDate: p.orderTriggerDate,
+      availableDate: p.expectedAvailableDate,
+      timeline: p.timeline!,
+      cnyRisk: p.cnyRisk,
+      cnyStrategy: p.cnyStrategy,
+      recommendedQty: p.recommendedQty,
+      shippingMethod: (p.shippingMethod || 'sea') as 'sea' | 'air',
+    }));
+
+  // Build CNY periods from calendar
+  const cnyPeriods = cnyCalendar?.years?.map(y => ({
+    start: y.effectiveStart,
+    end: y.effectiveEnd,
+    year: y.year,
+  })) || [];
+
+  return (
+    <div className="space-y-6">
+      {/* Hero Banner */}
+      <Card className="border-rose-200 bg-gradient-to-r from-rose-50 via-amber-50 to-emerald-50">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-rose-500 via-amber-500 to-emerald-600 flex items-center justify-center shadow-lg flex-shrink-0">
+              <GitBranch className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Order Trigger Pipeline — THE CORE IP</h2>
+              <p className="text-sm text-gray-700">
+                The <strong>killer feature</strong>: &ldquo;Order <strong className="text-rose-600">SKU-047</strong> on <strong className="text-amber-600">June 22</strong>, <strong className="text-emerald-600">300 units</strong>, arrives <strong className="text-blue-600">Nov 15</strong>, total cost <strong>BDT 135,000</strong>&rdquo;
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                7-Step Pipeline: Historical Data → Prophet Forecast → Seasonal Adjustment → Order Trigger → Qty Calculation → CNY Resolution → Dashboard Output
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Seasonal Best Products Panel - THE PRIMARY OUTPUT */}
+      <SeasonalBestPanel />
+
+      {/* Order Timeline Gantt Chart */}
+      {ganttProducts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-blue-500" />
+              <CardTitle className="text-base">Order Timeline — Gantt Chart</CardTitle>
+            </div>
+            <CardDescription>
+              Visual timeline from order placement to product availability. CNY shutdown zones shown in red.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OrderTimelineGantt
+              products={ganttProducts}
+              cnyPeriods={cnyPeriods}
+              showToday
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* CNY Risk Dashboard */}
+      {cnyCalendar && (
+        <CNYRiskDashboard
+          cnyCalendar={cnyCalendar}
+          affectedProducts={cnyAffected}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // Advanced Forecasting Tab (Session 7)
 // ============================================
 
@@ -941,8 +1110,8 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders')} className="w-full">
-          <TabsList className="grid w-full max-w-2xl mx-auto mb-6 grid-cols-5">
+        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'import' | 'forecast' | 'advanced' | 'eoq' | 'orders' | 'pipeline')} className="w-full">
+          <TabsList className="grid w-full max-w-3xl mx-auto mb-6 grid-cols-6">
             <TabsTrigger value="import" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import Data</span>
@@ -967,6 +1136,11 @@ export default function Home() {
               <ShoppingCart className="h-4 w-4" />
               <span className="hidden sm:inline">Order Triggers</span>
               <span className="sm:hidden">Orders</span>
+            </TabsTrigger>
+            <TabsTrigger value="pipeline" className="flex items-center gap-2">
+              <GitBranch className="h-4 w-4" />
+              <span className="hidden sm:inline">Pipeline</span>
+              <span className="sm:hidden">Pipeline</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1039,6 +1213,20 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
               >
                 <OrderTriggersTab />
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="pipeline">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="pipeline-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <PipelineTab />
               </motion.div>
             </AnimatePresence>
           </TabsContent>

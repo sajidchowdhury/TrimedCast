@@ -445,3 +445,141 @@ Stage Summary:
 - Responsive: desktop table + mobile cards
 - Framer-motion animations throughout
 - Zero lint errors, build succeeds
+
+---
+Task ID: 9-gantt-ui
+Agent: Frontend Styling Expert
+Task: Build Order Timeline Gantt Chart + CNY Risk Dashboard (Session 9)
+
+Work Log:
+- Created /src/components/forecast/order-timeline-gantt.tsx (~430 lines): Horizontal Gantt chart component
+  - Data interfaces: GanttProduct (with timeline phases, CNY risk, urgency, shipping method) + OrderTimelineGanttProps
+  - X-axis: auto-calculated date range spanning all products + 30-day padding, with month labels
+  - Y-axis: Product rows sorted by urgency (critical → high → normal → low)
+  - Phase bars: Manufacturing (blue #3B82F6), Shipping (green #10B981), Customs (orange #F59E0B) with CSS positioning
+  - Markers: Order trigger (red ▼ inverted triangle with date), Available date (green ✓ with date)
+  - CNY shutdown zones: Red vertical bands at 15% opacity spanning full chart height
+  - Today line: Dashed vertical gray line
+  - Left panel: SKU code, product name, urgency badge, CNY risk icon, air shipping icon
+  - Urgency filter dropdown using shadcn Select component
+  - Pagination: max 20 products per page with numbered page buttons
+  - Legend bar showing all visual elements
+  - Responsive: horizontal scroll on mobile, full width on desktop
+  - framer-motion: staggered row entry animation, phase bar scale-in animation
+  - Tooltips on all bars and markers showing date ranges and day counts
+- Created /src/components/forecast/cny-risk-dashboard.tsx (~260 lines): CNY Risk Dashboard component
+  - Current/Next CNY window cards with countdown timers
+  - Safe/Risky timeline bar visualizing CNY shutdown zone with rush deadline and "Now" markers
+  - Strategy breakdown: 4 stat cards (affected products, order before/after CNY counts, total delay impact)
+  - Safe order deadline callout with days-until calculation
+  - Affected products list: sorted by urgency, showing SKU, name, strategy badge, additional delay, overlap days
+  - Tooltips on delay values showing full explanation
+  - Status badge: ACTIVE / APPROACHING / MONITORING
+  - framer-motion: staggered entry animations, scale-in on cards
+  - Empty state with checkmark when no products affected
+- Lint: 0 errors, 0 warnings (clean)
+
+---
+Task ID: 9-backend
+Agent: Backend Developer
+Task: Session 9 - Order Trigger Calculator Enhanced API Routes
+
+Work Log:
+
+## 1. `/src/app/api/orders/quantity/route.ts` — NEW
+- POST endpoint: standalone quantity calculator
+- Accepts { forecastedDemand, safetyStock, currentStock, qtyOnOrder, eoq, moq, maxStock }
+- Returns full QuantityBreakdown from calculateRecommendedQty
+- Input validation for all numeric fields (non-negative requirements)
+- Returns meta with inputs for traceability
+
+## 2. `/src/app/api/orders/cny-strategy/route.ts` — NEW
+- POST endpoint: CNY strategy auto-selector
+- Accepts { daysUntilStockout, cnyDelayDays, itemMarginPct, itemUrgency, canAirShip, airCostMultiplier? }
+- Calls selectCNYStrategy from order-trigger.ts
+- Returns selected strategy + human-readable explanation
+- Risk level assessment (none/low/medium/high/critical)
+- Business impact: canSurviveCny, needsPreCnyAction, needsAirFreight, effectiveDelayDays, costImpact
+- Explanation builder per strategy (after_cny, before_cny, air_escape, partial_order, none)
+
+## 3. `/src/app/api/orders/seasonal-pipeline/route.ts` — NEW (THE MAIN ENDPOINT)
+- POST endpoint: Seasonal Best Products with Full Order Trigger Analysis
+- Accepts { tenantId?, targetSeason, targetYear, topN?, shippingMethod?, serviceLevel? }
+- Loads products from DB with inventory, suppliers, sales history
+- Loads pending POs to compute qtyOnOrder per product
+- For each product:
+  - Applies seasonal weight via applySeasonalWeight (category-specific)
+  - Calls safeCalculateOrderTrigger with full CNY analysis
+  - Filters to only products needing orders
+- Returns sorted by urgency priority → adjusted demand descending
+- Summary stats: totalProducts, totalRecommendedUnits, totalRecommendedSpendBdt
+  - urgencyBreakdown (critical/high/normal/low counts)
+  - cnyRiskCount, cnyStrategyBreakdown (before_cny/after_cny/partial_order/air_escape/none counts)
+  - earliestOrderDate, latestOrderDate
+- CNY window info from getCNYForDate
+- Season date range from getSeasonDateRange
+- TopN slicing for large catalogs
+
+## 4. `/src/app/api/orders/timeline/route.ts` — ENHANCED
+- Kept existing GET endpoint (backward compatible)
+- Added POST endpoint with enhanced parameters
+- Shared helper loadAndCalculate(): loads product from DB with inventory, supplier, sales
+  - Computes avgDailyDemand from 90-day sales history
+  - Gets qtyOnOrder from pending POs
+  - Calls safeCalculateOrderTrigger with full parameters
+  - Calculates 180-day stock projection via calculateStockProjection
+- Shared helper serializeResult(): formats full OrderTriggerResult including
+  - Complete timeline milestones (all 11 dates)
+  - Full CNY risk assessment (effectiveCnyStart, shutdownStart/End, strategy, latestSafeOrderDate, postCnyOrderDate)
+  - Lead time breakdown
+  - Stock projection (sampled every 3rd day)
+  - Season context
+  - Total cost calculation
+- POST validates shippingMethod, serviceLevel range
+
+## 5. `/src/app/api/orders/acknowledge/route.ts` — ENHANCED
+- Enhanced PATCH endpoint with full action support
+- Accepts { recommendationId, action, actualQty?, actualOrderDate?, shipmentMode?, notes? }
+- Actions: ordered → approved, skipped → rejected, deferred → deferred (30 days), modified → pending
+- For 'ordered': updates qty, shipmentMode, orderDate; tracks actuals
+- For 'skipped': marks rejected with justification
+- For 'deferred': pushes orderDate +30 days, lowers priority
+- For 'modified': allows qty/shipmentMode/date overrides, keeps pending for re-review
+- Comprehensive audit log: creates AuditLog entry with before/after diff
+  - action: RECOMMENDATION_ORDERED / SKIPPED / DEFERRED / MODIFIED
+  - entity: RecommendedOrder
+  - changes: JSON { before, after } with status, suggestedQty, quantity, shipmentMode, priority
+  - metadata: action context with notes, actualQty, shipmentMode, deferredTo, etc.
+- Input validation for all parameters
+- Action-specific response messages
+
+## Technical Details
+- All routes use Next.js 16 App Router (NextRequest, NextResponse)
+- All routes import from @/lib/db and @/lib/tenant-resolver
+- All routes import core functions from @/lib/forecasting/order-trigger
+- Error handling: try/catch with structured error responses
+- Lint: 0 errors, 0 warnings (clean)
+
+---
+Task ID: 9-seasonal-panel
+Agent: frontend-styling-expert
+Task: Build Seasonal Best Products Panel UI
+
+Work Log:
+- Created /src/components/forecast/seasonal-best-panel.tsx (~490 lines): Complete Seasonal Best Products Pipeline UI
+  - Configuration controls: Season selector (winter/summer/monsoon/pre_winter), Year selector (2026/2027), Shipping method toggle (Sea/Air), Run Analysis button
+  - API call: POST /api/orders/seasonal-pipeline with tenantId, targetSeason, targetYear, topN=50, shippingMethod
+  - Summary Stats Row (4 cards): Products Needing Order, Recommended Units, Total Spend (BDT), CNY Risk Products
+  - Urgency Breakdown (4 color-coded badges): Critical (red), High (orange), Normal (yellow), Low (green)
+  - Desktop Product Table: SKU, Product Name, Category, Urgency badge, Adjusted Demand, Recommended Qty, Order Trigger Date, Available Date, Lead Time (days), CNY Risk badge, Unit Cost, Total Cost
+  - Mobile Card View: Responsive alternative with key metrics per card
+  - Expanded Row: Full timeline (Order → Mfg Start → Mfg End → Ship → Customs → Available), Quantity Breakdown (gap, EOQ, MOQ, safety stock, constraint), CNY Risk explanation with strategy
+  - Pagination: 15 items per page with Previous/Next and page number buttons
+  - Loading skeleton: Animated pulse placeholders for summary cards and table rows
+  - Error state: Red card with retry button
+  - Empty/initial state: Prompt to run analysis
+  - Period & CNY info banner with shutdown window badge
+- Uses shadcn/ui: Card, Button, Badge, Select, Table, Skeleton, Separator
+- Uses lucide-react: ShoppingCart, TrendingUp, AlertTriangle, Calendar, Clock, Ship, Plane, Package, ChevronDown, ChevronRight, Loader2, Zap, Target, Shield, CircleDollarSign, RefreshCw
+- Uses framer-motion: Fade-in/slide-up for results, AnimatePresence for expanded rows and mobile cards
+- Lint: 0 errors, 0 warnings (clean)
