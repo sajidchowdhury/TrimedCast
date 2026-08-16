@@ -1,0 +1,25 @@
+name,code,country,lead_time_days,reliability,is_cny_affected,contact_email,contact_phone
+Qingdao Piston Manufacturing,QD-PIST-001,China,90,0.88,true,sales@qdpiston.cn,+86-532-8811-2233
+Guangzhou Gasket Factory,GZ-GASK-002,China,85,0.92,true,export@gzgasket.cn,+86-20-8765-4321
+Chongqing Chain Industry,CQ-CHAIN-003,China,95,0.85,true,info@cqchain.cn,+86-23-6789-0123
+Ningbo Filter Systems,NB-FILT-004,China,80,0.90,true,orders@nbfilter.cn,+86-574-5567-8899
+Shanghai Brake Components,SH-BRAK-005,China,88,0.87,true,sales@shbrake.cn,+86-21-6677-8899
+Tianjin Tire Trading,TJ-TIRE-006,China,100,0.82,true,export@tjtire.cn,+86-22-3344-5566
+Shenzhen Battery Tech,SZ-BATT-007,China,75,0.93,true,info@szbatt.cn,+86-755-2233-4455
+Wuxi Spark Plug Factory,WX-SPRK-008,China,70,0.91,true,sales@wxspark.cn,+86-510-7788-9900
+Hangzhou Cable Manufacturing,HZ-CABL-009,China,82,0.89,true,orders@hzcable.cn,+86-571-8899-0011
+Zhongshan Bearing Works,ZS-BEAR-010,China,78,0.86,true,export@zsbear.cn,+86-760-1122-3344
+Jinan Clutch Assembly,JN-CLUT-011,China,92,0.84,true,info@jnclutch.cn,+86-531-4455-6677
+Taizhou Engine Parts,TZ-ENGN-012,China,95,0.80,true,sales@tzengine.cn,+86-523-7788-9900
+Foshan Fork Components,FS-FORK-013,China,88,0.87,true,orders@fsfork.cn,+86-757-2233-4455
+Chengdu Shock Absorber,CD-SHCK-014,China,90,0.83,true,export@cdshock.cn,+86-28-5566-7788
+Wenzhou Headlight Co,WZ-HEAD-015,China,72,0.90,true,info@wzhlight.cn,+86-577-8899-0011
+Yuyao Taillight Factory,YY-TAIL-016,China,68,0.92,true,sales@yytlight.cn,+86-574-1122-3344
+Xiamen Mirror Industry,XM-MIRR-017,China,65,0.94,true,orders@xmmirror.cn,+86-592-4455-6677
+Kunshan Handlebar Tech,KS-HDLB-018,China,75,0.88,true,export@kshandle.cn,+86-512-7788-9900
+Changzhou Seat Factory,CZ-SEAT-019,China,80,0.86,true,info@czseat.cn,+86-519-2233-4455
+Luoyang Tank Manufacturing,LY-TANK-020,China,98,0.81,true,sales@lytank.cn,+86-379-5566-7788
+Zibo Exhaust Systems,ZB-EXHS-021,China,85,0.85,true,orders@zbexhaust.cn,+86-533-8899-0011
+Jiangmen Carburetor Works,JM-CARB-022,China,78,0.89,true,export@jmcarb.cn,+86-750-1122-3344
+BD Auto Parts Local,BD-LOCL-023,Bangladesh,15,0.95,false,info@bdautoparts.com,+880-2-8888-1111
+DHAKA Spares Hub,BD-DHKA-024,Bangladesh,10,0.97,false,sales@dhakaspares.com,+880-2-9999-2222

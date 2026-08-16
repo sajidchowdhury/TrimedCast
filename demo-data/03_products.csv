@@ -1,0 +1,43 @@
+sku,name,category,subcategory,unit_cost,selling_price,unit,min_order_qty,lead_time_days,is_seasonal,seasonality_type
+PIST-BAJ-100,Bajaj Discover 100cc Piston Kit,piston,piston_kit,320,580,piece,50,90,true,winter_peak
+PIST-BAJ-150,Bajaj Pulsar 150cc Piston Kit,piston,piston_kit,450,820,piece,40,90,true,winter_peak
+PIST-HERO-100,Hero Splendor 100cc Piston Kit,piston,piston_kit,280,510,piece,60,90,true,winter_peak
+PIST-HONDA-125,Honda CG 125 Piston Kit,piston,piston_kit,350,640,piece,50,90,true,winter_peak
+GASK-BAJ-100,Bajaj 100cc Gasket Set,gasket,head_gasket,120,240,set,80,85,true,winter_peak
+GASK-UNIV-125,Universal 125cc Gasket Set,gasket,head_gasket,150,290,set,70,85,true,winter_peak
+CHAIN-428H,428H Heavy Duty Chain,chain,drive_chain,180,350,piece,30,95,true,winter_peak
+CHAIN-420,420 Standard Chain,chain,drive_chain,120,230,piece,40,95,false,
+FILT-OIL-100,Oil Filter 100cc通用,filter,oil_filter,45,95,piece,100,80,false,
+FILT-OIL-125,Oil Filter 125cc通用,filter,oil_filter,52,110,piece,100,80,false,
+FILT-AIR-100,Air Filter 100cc,filter,air_filter,38,82,piece,120,80,false,
+FILT-AIR-125,Air Filter 125cc,filter,air_filter,42,90,piece,100,80,false,
+BRKE-PAD-DISC,Disc Brake Pad Set,brake_pad,disc_pad,85,175,pair,60,88,true,winter_peak
+BRKE-PAD-DRUM,Drum Brake Shoe Set,brake_pad,drum_shoe,65,135,pair,80,88,true,winter_peak
+TIRE-100-18,100/90-18 Rear Tire,tire,rear_tire,650,1100,piece,20,100,true,monsoon_dip
+TIRE-100-17,100/80-17 Front Tire,tire,front_tire,580,980,piece,20,100,true,monsoon_dip
+TIRE-125-18,125/80-18 Rear Tire,tire,rear_tire,780,1350,piece,15,100,true,monsoon_dip
+BATT-12V7A,12V 7Ah Battery,battery,mf_battery,850,1500,piece,25,75,true,winter_peak
+BATT-12V9A,12V 9Ah Battery,battery,mf_battery,980,1750,piece,20,75,true,winter_peak
+SPRK-NGK-C4HSA,NGK C4HSA Spark Plug,spark_plug,standard,65,130,piece,200,70,false,
+SPRK-NGK-BPR6ES,NGK BPR6ES Spark Plug,spark_plug,standard,72,145,piece,150,70,false,
+CABL-CLUTCH-100,Clutch Cable 100cc,cable,clutch_cable,55,125,piece,50,82,false,
+CABL-THROT-100,Throttle Cable 100cc,cable,throttle_cable,48,108,piece,60,82,false,
+CABL-SPED-100,Speedometer Cable 100cc,cable,speedo_cable,42,95,piece,50,82,false,
+BEAR-6201,6201 Deep Groove Bearing,bearing,ball_bearing,35,75,piece,200,78,false,
+BEAR-6202,6202 Deep Groove Bearing,bearing,ball_bearing,38,82,piece,200,78,false,
+BEAR-6301,6301 Deep Groove Bearing,bearing,ball_bearing,42,90,piece,150,78,false,
+CLUT-PLATE-100,Clutch Plate Set 100cc,clutch,friction_plate,120,250,set,40,92,true,winter_peak
+CLUT-PLATE-125,Clutch Plate Set 125cc,clutch,friction_plate,145,290,set,35,92,true,winter_peak
+ENGN-OIL-10W30,Engine Oil 10W30 1L,engine,motor_oil,180,320,piece,100,75,false,
+ENGN-OIL-20W40,Engine Oil 20W40 1L,engine,motor_oil,195,350,piece,80,75,false,
+FORK-SEAL-100,Fork Oil Seal 100cc,fork,oil_seal,55,120,piece,50,88,false,
+SHCK-REAR-100,Rear Shock Absorber 100cc,shock_absorber,rear_shock,420,780,piece,20,90,true,winter_peak
+HEAD-LED-H4,H4 LED Headlight,headlight,led_h4,280,520,piece,30,72,false,
+HEAD-HALO-H4,H4 Halogen Headlight,headlight,halo_h4,120,240,piece,40,72,false,
+TAIL-UNIV-A,Universal Tail Light Assembly,taillight,standard,95,195,piece,40,68,false,
+MIRR-ROUND-10,Round Mirror 10mm,mirror,round,35,78,pair,100,65,false,
+HDLB-RAISED-22,Raised Handlebar 22mm,handlebar,tubular,150,290,piece,30,75,false,
+SEAT-COMM-100,Commuter Seat 100cc,seat,standard,180,350,piece,25,80,false,
+TANK-FUEL-10L,10L Fuel Tank,tank,standard,850,1550,piece,10,98,false,
+EXHS-BAJ-100,Bajaj 100cc Exhaust Pipe,exhaust,standard,380,720,piece,15,85,true,monsoon_dip
+CARB-KEI-VM17,Keihin VM17 Carburetor,carburetor,vm_series,650,1200,piece,15,78,true,winter_peak

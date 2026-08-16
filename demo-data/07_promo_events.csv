@@ -1,0 +1,16 @@
+name,type,start_date,end_date,discount_pct,expected_uplift
+Eid ul-Fitr 2024,eid_discount,08/04/2024,22/04/2024,15,35
+Eid ul-Adha 2024,eid_discount,14/06/2024,28/06/2024,12,25
+Monsoon Clearance 2024,clearance,01/08/2024,31/08/2024,20,15
+Pre-Winter Stock Sale 2024,seasonal_sale,15/10/2024,30/10/2024,10,20
+Winter Festive 2024,seasonal_sale,15/12/2024,05/01/2025,12,30
+New Year Flash 2025,flash_sale,01/01/2025,07/01/2025,8,10
+Eid ul-Fitr 2025,eid_discount,28/03/2025,12/04/2025,15,40
+Eid ul-Adha 2025,eid_discount,05/06/2025,19/06/2025,12,25
+Monsoon Clearance 2025,clearance,01/08/2025,31/08/2025,20,15
+Pre-Winter Stock Sale 2025,seasonal_sale,15/10/2025,30/10/2025,10,20
+Winter Festive 2025,seasonal_sale,15/12/2025,05/01/2026,12,30
+Bike Parts Bundle Eid 2024,bundle_deal,10/04/2024,20/04/2024,18,45
+Loyalty Reward Summer 2024,loyalty_reward,01/05/2024,31/05/2024,5,8
+Bike Parts Bundle Eid 2025,bundle_deal,30/03/2025,10/04/2025,18,45
+Loyalty Reward Summer 2025,loyalty_reward,01/05/2025,31/05/2025,5,8

@@ -1,0 +1,26 @@
+brand,model,year_start,year_end,cc_rating,segment
+Bajaj,Discover 100,2014,2025,100,commuter
+Bajaj,Platina 100,2006,2025,100,commuter
+Bajaj,CT100,2005,2025,100,commuter
+Bajaj,Pulsar 150,2004,2025,150,premium
+Bajaj,Pulsar 125,2012,2025,125,commuter
+Bajaj,Discover 125,2013,2025,125,commuter
+TVS,Apache RTR 160,2009,2025,160,premium
+TVS,Star City Plus,2010,2025,110,commuter
+TVS,Radeon,2018,2025,110,commuter
+TVS,Apache RTR 180,2010,2025,180,premium
+Hero,Splendor Plus,2005,2025,100,commuter
+Hero,Glamour,2005,2025,125,commuter
+Hero,Passion Pro,2006,2025,100,commuter
+Hero,Super Splendor,2006,2025,125,commuter
+Honda,CD 80,2005,2025,80,commuter
+Honda,CG 125,2005,2025,125,commuter
+Honda,Shine 125,2006,2025,125,commuter
+Honda,Dream Neo,2014,2025,110,commuter
+Yamaha,Saluto 125,2015,2025,125,commuter
+Yamaha,FZ-S V3,2018,2025,150,premium
+Runner,RT 100,2010,2025,100,commuter
+Runner,Deluxe 125,2012,2025,125,commuter
+Walton,Xplore 125,2016,2025,125,commuter
+Walton,Tarzan 150,2016,2025,150,premium
+Bajaj,Avenger 220,2007,2025,220,cruiser
