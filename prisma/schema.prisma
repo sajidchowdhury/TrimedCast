@@ -5,6 +5,9 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+  // For PostgreSQL (production), change to:
+  // provider = "postgresql"
+  // url      = env("DATABASE_URL")
 }
 
 // ============================================
@@ -16,9 +19,11 @@ datasource db {
 
 model Tenant {
   id                String   @id @default(cuid())
+  acId              String   @unique  // Auto-generated: TC-2025-DHK-0001
   name              String
   slug              String   @unique
   domain            String?
+  division          String   @default("dhaka") // dhaka, chittagong, sylhet, rajshahi, khulna, barishal, rangpur, mymensingh
   plan              String   @default("starter") // starter, professional, enterprise
   status            String   @default("trial") // trial, active, past_due, suspended, cancelled, deleting
   isActive          Boolean  @default(true)
@@ -35,13 +40,17 @@ model Tenant {
   // Stripe / Payment Integration
   stripeCustomerId  String?  @unique
   stripePriceId    String?
-  pmType           String?  // card, bank_transfer, etc.
+  pmType           String?  // card, bank_transfer, bkash, nagad, etc.
   pmLastFour       String?  // last 4 digits of payment method
   
   // Billing Address
   billingEmail     String?
   billingName      String?
   billingAddress   String?  // JSON: {line1, line2, city, state, postal_code, country}
+  
+  // Shop Info (from signup)
+  shopName         String?  // Display name of the shop
+  phone            String?  // BD phone: +880 1XXX-XXXXXX
   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -67,21 +76,138 @@ model Tenant {
   invoices         Invoice[]
   securityEvents   SecurityEvent[]
   backups          TenantBackup[]
+  sessions         UserSession[]
+  otpVerifications OtpVerification[]
+  subscriptionPayments SubscriptionPayment[]
+  seasonalityTypes SeasonalityType[]
+
+  @@index([acId])
+  @@index([division])
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  role      String   @default("warehouse_manager") // warehouse_manager, sales_manager, marketing_manager, finance, executive
-  tenantId  String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String
+  passwordHash  String   // bcrypt hashed password
+  name          String
+  phone         String?  // BD phone: +880 1XXX-XXXXXX
+  role          String   @default("admin") // admin, warehouse_manager, sales_manager, marketing_manager, finance, executive, viewer
+  tenantId      String
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  inviteToken   String?  // For team member invitations
+  inviteExpiresAt DateTime?
+  invitedBy     String?  // User ID who sent the invite
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  dataImports DataImport[] @relation("ImportCreator")
-  auditLogs AuditLog[] @relation("AuditUser")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  dataImports   DataImport[] @relation("ImportCreator")
+  auditLogs     AuditLog[] @relation("AuditUser")
+  sessions      UserSession[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+}
+
+// ============================================
+// Session 1: Authentication & Security Models
+// ============================================
+
+// --- DB-Backed Sessions (replaces in-memory token store) ---
+
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  tenantId    String
+  token       String   @unique
+  expiresAt   DateTime
+  ipAddress   String?
+  userAgent   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// --- OTP Verification ---
+
+model OtpVerification {
+  id          String   @id @default(cuid())
+  email       String
+  code        String          // 6-digit OTP
+  purpose     String          // "signup" | "login" | "reset_password" | "invite"
+  tenantId    String?
+  phone       String?         // Optional phone for SMS OTP
+  expiresAt   DateTime        // 5 minutes from creation
+  isVerified  Boolean  @default(false)
+  attempts    Int      @default(0)  // max 3 attempts
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose])
+  @@index([code, email])
+  @@index([expiresAt])
+}
+
+// --- BD Payment Records ---
+
+model SubscriptionPayment {
+  id              String   @id @default(cuid())
+  tenantId        String
+  amount          Float    // Amount in BDT
+  currency        String   @default("BDT")
+  method          String   // "bkash" | "nagad" | "card" | "bank_transfer" | "sslcommerz"
+  transactionId   String?  // bKash/Nagad/SSLCommerz transaction ID
+  status          String   @default("pending") // pending | submitted | verified | completed | failed | refunded
+  periodStart     DateTime // Subscription period start
+  periodEnd       DateTime // Subscription period end (1 year from start)
+  verifiedBy      String?  // Admin user ID who verified
+  verifiedAt      DateTime?
+  receiptUrl      String?  // Uploaded payment receipt (bank transfer)
+  notes           String?  // Admin notes
+  metadata        String?  // JSON: additional info (bKash number, etc.)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([method])
+  @@index([createdAt])
+}
+
+// --- Configurable Seasonality Types ---
+
+model SeasonalityType {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String   // "eid_peak", "cny_preparation", etc.
+  label       String   // "Eid Peak Demand" (English)
+  labelBn     String?  // "ঈদের চাহিদা বৃদ্ধি" (Bangla)
+  description String?
+  multiplier  Float    @default(1.0)  // Demand multiplier: 1.5 = 50% more demand
+  months      String   // JSON array of months: "[3,4]" or "[11,12,1,2]"
+  color       String?  // UI color: "#ef4444" for winter, etc.
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)  // System default (can't delete)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([isActive])
 }
 
 // --- Master Data ---
@@ -147,7 +273,7 @@ model Product {
   maxStock          Int      @default(500) // Maximum warehouse capacity for this SKU
   leadTimeDays      Int?     // override supplier lead time
   isSeasonal        Boolean  @default(false)
-  seasonalityType   String?  // winter_peak, monsoon_dip, etc.
+  seasonalityType   String?  // winter_peak, monsoon_dip, eid_peak, etc. (references SeasonalityType.name)
   seasonWeight      Float?   // Custom seasonal weight override
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
@@ -461,7 +587,6 @@ model AuditLog {
 
 // ============================================
 // SaaS Billing & Subscription Models
-// Session 14: Multi-Tenancy & SaaS Architecture
 // ============================================
 
 // --- Subscription ---
@@ -481,9 +606,9 @@ model Subscription {
   cancelledAt        DateTime?
   endsAt             DateTime?  // When subscription actually ends (end of billing period)
   
-  // Pricing
-  unitAmountCents Int?     // Price in cents (2900, 7900, 19900)
-  currency        String   @default("usd")
+  // Pricing (BDT for BD market)
+  unitAmount       Int?     // Price in BDT (12000 for pro)
+  currency        String   @default("BDT")
   
   // Payment
   lastPaymentAt  DateTime?
@@ -534,15 +659,15 @@ model Invoice {
   dueDate         DateTime?
   paidAt          DateTime?
   
-  // Amounts (in cents)
-  subtotalCents   Int      @default(0)
-  discountCents   Int      @default(0)
-  taxCents        Int      @default(0)
-  totalCents      Int      @default(0)
-  currency        String   @default("usd")
+  // Amounts (BDT)
+  subtotal        Int      @default(0) // in BDT
+  discount        Int      @default(0) // in BDT
+  tax             Int      @default(0) // in BDT
+  total           Int      @default(0) // in BDT
+  currency        String   @default("BDT")
   
   // Line Items & Usage Summary
-  lineItems       String?  // JSON: [{description, amount_cents, quantity, unit_amount_cents}]
+  lineItems       String?  // JSON: [{description, amount, quantity, unit_amount}]
   usageSummary    String?  // JSON: {forecast_runs, ai_queries, sku_count, period_start, period_end}
   
   // Billing Period
@@ -550,8 +675,8 @@ model Invoice {
   periodEnd       DateTime?
   
   // Payment
-  paymentMethod   String?  // card, bank_transfer
-  paymentRef      String?  // External payment reference
+  paymentMethod   String?  // bkash, nagad, card, bank_transfer
+  paymentRef      String?  // External payment reference (bKash TrxID, etc.)
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -565,8 +690,7 @@ model Invoice {
 }
 
 // ============================================
-// Session 16: Scaling + Production Hardening
-// Security Events, Job Queue, Tenant Backups
+// Security & Operations Models
 // ============================================
 
 // --- Security Events ---

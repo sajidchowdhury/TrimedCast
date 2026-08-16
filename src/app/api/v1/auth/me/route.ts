@@ -1,18 +1,11 @@
 // ============================================
 // GET /api/v1/auth/me
+// Get current authenticated user info
 // ============================================
 
 import { db } from '@/lib/db';
 import { apiSuccess, unauthorizedError } from '@/lib/api/response';
-import { getAuthContext } from '@/lib/api/auth';
-
-const ROLE_PERMISSIONS: Record<string, string[]> = {
-  warehouse_manager: ['products.crud', 'inventory.crud', 'forecasts.approve', 'settings.crud'],
-  sales_manager: ['products.read', 'inventory.read', 'sales_orders.crud'],
-  marketing_manager: ['products.read', 'forecasts.generate', 'promo_events.crud'],
-  finance: ['products.read', 'purchase_orders.read', 'audit_log.read'],
-  executive: ['products.read', 'forecasts.approve', 'sop_cycles.crud', 'audit_log.read'],
-};
+import { getAuthContext, hasPermission } from '@/lib/api/auth';
 
 export async function GET() {
   try {
@@ -30,7 +23,20 @@ export async function GET() {
       return unauthorizedError();
     }
 
-    const permissions = ROLE_PERMISSIONS[user.role] || [];
+    // Get all permissions for this role
+    const allPermissions: string[] = [];
+    const permissionChecks = [
+      'products.crud', 'products.read', 'inventory.crud', 'inventory.read',
+      'suppliers.crud', 'suppliers.read', 'forecasts.crud', 'forecasts.read',
+      'forecasts.approve', 'forecasts.generate', 'settings.crud', 'settings.read',
+      'imports.crud', 'users.manage', 'billing.manage', 'team.manage',
+      'audit_log.read', 'sop_cycles.crud', 'promo_events.crud',
+    ];
+    for (const perm of permissionChecks) {
+      if (hasPermission(user.role, perm)) {
+        allPermissions.push(perm);
+      }
+    }
 
     return apiSuccess({
       user: {
@@ -38,16 +44,23 @@ export async function GET() {
         name: user.name,
         email: user.email,
         role: user.role,
+        phone: user.phone,
         is_active: user.isActive,
+        last_login_at: user.lastLoginAt,
       },
       tenant: {
         id: user.tenant.id,
+        ac_id: user.tenant.acId,
         name: user.tenant.name,
+        shop_name: user.tenant.shopName,
         slug: user.tenant.slug,
         plan: user.tenant.plan,
-        isActive: user.tenant.isActive,
+        division: user.tenant.division,
+        status: user.tenant.status,
+        is_active: user.tenant.isActive,
+        trial_ends_at: user.tenant.trialEndsAt,
       },
-      permissions,
+      permissions: allPermissions,
     });
   } catch (error) {
     console.error('[Auth/Me]', error);

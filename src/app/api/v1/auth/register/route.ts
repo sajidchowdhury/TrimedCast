@@ -1,110 +1,72 @@
 // ============================================
 // POST /api/v1/auth/register
-// Register new tenant + admin user (SaaS onboarding)
+// Step 1: Register new tenant (sends OTP to email)
 // ============================================
 
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
-import { apiSuccess, apiError, validationError } from '@/lib/api/response';
-import { generateToken } from '@/lib/api/auth';
-import { createAuditLog } from '@/lib/api/audit';
+import { apiSuccess, apiError } from '@/lib/api/response';
+import { createOtp } from '@/lib/auth/otp';
+import { validateEmail, validatePhone, validatePasswordStrength } from '@/lib/auth/password';
+import { isValidDivision, VALID_DIVISIONS } from '@/lib/auth/ac-id';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { company_name, subdomain, admin_name, admin_email, password, subscription_tier } = body;
+    const { shop_name, email, phone, division, password } = body;
 
     // Validate required fields
-    if (!company_name || !subdomain || !admin_name || !admin_email || !password) {
-      return apiError([
-        ...(!company_name ? [{ code: 'VALIDATION_ERROR' as const, message: 'company_name is required', field: 'company_name' }] : []),
-        ...(!subdomain ? [{ code: 'VALIDATION_ERROR' as const, message: 'subdomain is required', field: 'subdomain' }] : []),
-        ...(!admin_name ? [{ code: 'VALIDATION_ERROR' as const, message: 'admin_name is required', field: 'admin_name' }] : []),
-        ...(!admin_email ? [{ code: 'VALIDATION_ERROR' as const, message: 'admin_email is required', field: 'admin_email' }] : []),
-        ...(!password ? [{ code: 'VALIDATION_ERROR' as const, message: 'password is required', field: 'password' }] : []),
-      ], 400);
+    const errors: { code: string; message: string; field: string }[] = [];
+
+    if (!shop_name || shop_name.trim().length < 2) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'Shop name is required (min 2 characters)', field: 'shop_name' });
     }
 
-    if (password.length < 8) {
-      return validationError('password', 'Password must be at least 8 characters');
+    if (!email || !validateEmail(email)) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'Valid email address is required', field: 'email' });
     }
 
-    // Check if email already exists
-    const existingUser = await db.user.findUnique({ where: { email: admin_email } });
-    if (existingUser) {
-      return apiError({ code: 'CONFLICT', message: 'Email already registered', field: 'admin_email' }, 409);
+    if (phone && !validatePhone(phone)) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'Invalid BD phone number format', field: 'phone' });
     }
 
-    // Check if subdomain/slug already exists
-    const existingTenant = await db.tenant.findUnique({ where: { slug: subdomain } });
-    if (existingTenant) {
-      return apiError({ code: 'CONFLICT', message: 'Subdomain already taken', field: 'subdomain' }, 409);
+    if (!division || !isValidDivision(division)) {
+      errors.push({ code: 'VALIDATION_ERROR', message: `Division must be one of: ${VALID_DIVISIONS.join(', ')}`, field: 'division' });
     }
 
-    // Create tenant + admin user in transaction
-    const result = await db.$transaction(async (tx) => {
-      const tenant = await tx.tenant.create({
-        data: {
-          name: company_name,
-          slug: subdomain,
-          plan: subscription_tier || 'starter',
-          isActive: true,
-        },
-      });
+    if (!password) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'Password is required', field: 'password' });
+    } else {
+      const passwordErrors = validatePasswordStrength(password);
+      for (const err of passwordErrors) {
+        errors.push({ code: 'VALIDATION_ERROR', message: err, field: 'password' });
+      }
+    }
 
-      const user = await tx.user.create({
-        data: {
-          email: admin_email,
-          name: admin_name,
-          role: 'warehouse_manager',
-          tenantId: tenant.id,
-          isActive: true,
-        },
-      });
+    if (errors.length > 0) {
+      return apiError(errors, 400);
+    }
 
-      // Create default forecast settings
-      await tx.forecastSetting.create({
-        data: {
-          tenantId: tenant.id,
-          model: 'prophet',
-          horizonDays: 90,
-          confidenceLevel: 0.95,
-          seasonalityMode: 'multiplicative',
-          includeHolidays: true,
-          includePromos: true,
-          cnyAdjustment: true,
-          autoRecalibration: true,
-          recalibrationThreshold: 0.15,
-        },
-      });
+    // Create OTP (this also rate-limits)
+    try {
+      const otpCode = await createOtp(email, 'signup', undefined, phone);
 
-      return { tenant, user };
-    });
+      // TODO: Send OTP via email (Session 3: Email Service Integration)
+      // For now, return the OTP in development mode
+      const isDev = process.env.NODE_ENV === 'development';
 
-    // Generate token
-    const token = generateToken({
-      userId: result.user.id,
-      tenantId: result.tenant.id,
-      role: result.user.role,
-    });
-
-    // Audit
-    await createAuditLog({
-      tenantId: result.tenant.id,
-      userId: result.user.id,
-      action: 'create',
-      entity: 'tenant',
-      entityId: result.tenant.id,
-      metadata: { company_name, subdomain, subscription_tier },
-    });
-
-    return apiSuccess({
-      tenant_id: result.tenant.id,
-      user_id: result.user.id,
-      token,
-      user: { id: result.user.id, name: result.user.name, role: result.user.role, email: result.user.email },
-      tenant: { id: result.tenant.id, name: result.tenant.name, slug: result.tenant.slug, plan: result.tenant.plan },
-    }, undefined, 201);
+      return apiSuccess({
+        message: 'OTP sent to your email address',
+        email,
+        expires_in_minutes: 5,
+        // In development, include OTP for testing
+        ...(isDev ? { _dev_otp: otpCode } : {}),
+      }, undefined, 201);
+    } catch (otpError) {
+      if (otpError instanceof Error && otpError.message.includes('Too many')) {
+        return apiError({ code: 'RATE_LIMITED', message: otpError.message }, 429);
+      }
+      throw otpError;
+    }
   } catch (error) {
     console.error('[Auth/Register]', error);
     return apiError({ code: 'INTERNAL_ERROR', message: 'Registration failed' }, 500);

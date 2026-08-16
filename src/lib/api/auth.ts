@@ -1,53 +1,26 @@
 // ============================================
 // TrimedCast API - Authentication Utilities
-// JWT-based auth for API v1 endpoints
+// DB-backed sessions with RBAC
 // ============================================
 
 import { db } from '@/lib/db';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
+import {
+  createSession,
+  verifySession,
+  revokeSession,
+} from '@/lib/auth/session-store';
 
-// Simple JWT-like token encoding (for demo; production would use proper JWT library)
-// Token format: base64({userId}:{tenantId}:{role}:{expiresAt})
+// --- Token Payload ---
 
-interface TokenPayload {
+export interface TokenPayload {
   userId: string;
   tenantId: string;
   role: string;
   expiresAt: number;
 }
 
-// In-memory token store for session management
-const tokenStore = new Map<string, TokenPayload>();
-
-export function generateToken(payload: Omit<TokenPayload, 'expiresAt'>): string {
-  const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24h expiry
-  const fullPayload: TokenPayload = { ...payload, expiresAt };
-  
-  // Create a simple token
-  const tokenStr = `${payload.userId}:${payload.tenantId}:${payload.role}:${expiresAt}`;
-  const token = Buffer.from(tokenStr).toString('base64url');
-  
-  // Store in memory
-  tokenStore.set(token, fullPayload);
-  
-  return token;
-}
-
-export function verifyToken(token: string): TokenPayload | null {
-  const payload = tokenStore.get(token);
-  if (!payload) return null;
-  if (payload.expiresAt < Date.now()) {
-    tokenStore.delete(token);
-    return null;
-  }
-  return payload;
-}
-
-export function revokeToken(token: string): void {
-  tokenStore.delete(token);
-}
-
-// --- Request Context ---
+// --- Auth Context ---
 
 export interface AuthContext {
   userId: string;
@@ -56,7 +29,22 @@ export interface AuthContext {
   isAuthenticated: boolean;
 }
 
-// Get auth context from request headers
+/**
+ * Create a new authenticated session
+ * Returns the session token
+ */
+export async function createAuthSession(
+  userId: string,
+  tenantId: string,
+  ipAddress?: string,
+  userAgent?: string
+): Promise<string> {
+  return createSession(userId, tenantId, ipAddress, userAgent);
+}
+
+/**
+ * Get auth context from request headers (Bearer token)
+ */
 export async function getAuthContext(): Promise<AuthContext> {
   try {
     const hdrs = await headers();
@@ -67,33 +55,84 @@ export async function getAuthContext(): Promise<AuthContext> {
     }
     
     const token = authHeader.substring(7);
-    const payload = verifyToken(token);
-    
-    if (!payload) {
-      return { userId: '', tenantId: '', role: '', isAuthenticated: false };
-    }
-    
-    return {
-      userId: payload.userId,
-      tenantId: payload.tenantId,
-      role: payload.role,
-      isAuthenticated: true,
-    };
+    return getAuthContextFromToken(token);
   } catch {
     return { userId: '', tenantId: '', role: '', isAuthenticated: false };
   }
 }
 
+/**
+ * Get auth context from a token string
+ */
+export async function getAuthContextFromToken(token: string): Promise<AuthContext> {
+  const session = await verifySession(token);
+  if (!session) {
+    return { userId: '', tenantId: '', role: '', isAuthenticated: false };
+  }
+
+  // Get user with role
+  const user = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, isActive: true },
+  });
+
+  if (!user || !user.isActive) {
+    return { userId: '', tenantId: '', role: '', isAuthenticated: false };
+  }
+
+  return {
+    userId: session.userId,
+    tenantId: session.tenantId,
+    role: user.role,
+    isAuthenticated: true,
+  };
+}
+
+/**
+ * Get auth context from cookies (for server-side page protection)
+ */
+export async function getAuthContextFromCookies(): Promise<AuthContext> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('trimedcast-session')?.value;
+
+    if (!token) {
+      return { userId: '', tenantId: '', role: '', isAuthenticated: false };
+    }
+
+    return getAuthContextFromToken(token);
+  } catch {
+    return { userId: '', tenantId: '', role: '', isAuthenticated: false };
+  }
+}
+
+/**
+ * Invalidate a session (logout)
+ */
+export async function logout(token: string): Promise<boolean> {
+  return revokeSession(token);
+}
+
 // --- Role-Based Access Control ---
 
-export type Role = 
-  | 'warehouse_manager' 
-  | 'sales_manager' 
-  | 'marketing_manager' 
-  | 'finance' 
-  | 'executive';
+export type Role =
+  | 'admin'
+  | 'warehouse_manager'
+  | 'sales_manager'
+  | 'marketing_manager'
+  | 'finance'
+  | 'executive'
+  | 'viewer';
 
 const ROLE_PERMISSIONS: Record<Role, string[]> = {
+  admin: [
+    // Admin has ALL permissions
+    'products.crud', 'inventory.crud', 'suppliers.crud', 'motorcycle_models.crud',
+    'sales_orders.crud', 'purchase_orders.crud', 'forecasts.crud', 'forecasts.approve',
+    'recommended_orders.crud', 'settings.crud', 'imports.crud', 'users.manage',
+    'sop_cycles.crud', 'promo_events.crud', 'audit_log.read',
+    'billing.manage', 'subscription.manage', 'team.manage', 'api_explorer.access',
+  ],
   warehouse_manager: [
     'products.crud', 'inventory.crud', 'suppliers.crud', 'motorcycle_models.crud',
     'sales_orders.crud', 'purchase_orders.crud', 'forecasts.crud', 'forecasts.approve',
@@ -120,6 +159,11 @@ const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'sales_orders.read', 'purchase_orders.read', 'forecasts.read', 'forecasts.approve',
     'recommended_orders.read', 'settings.read', 'sop_cycles.crud', 'audit_log.read',
   ],
+  viewer: [
+    'products.read', 'inventory.read', 'suppliers.read', 'motorcycle_models.read',
+    'sales_orders.read', 'purchase_orders.read', 'forecasts.read',
+    'recommended_orders.read', 'settings.read',
+  ],
 };
 
 export function hasPermission(role: string, permission: string): boolean {
@@ -138,16 +182,27 @@ export function tenantScope(tenantId: string) {
   return { tenantId };
 }
 
-// Resolve tenant - if no auth, fallback to first active tenant for demo
+/**
+ * Resolve tenant - if authenticated, use their tenantId
+ * Fallback to first active tenant for demo/dev mode
+ */
 export async function resolveTenant(tenantId?: string): Promise<string> {
   if (tenantId) {
     const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
     if (tenant) return tenant.id;
   }
   
-  // Fallback: first active tenant
+  // Fallback: first active tenant (dev/demo mode)
   const first = await db.tenant.findFirst({ where: { isActive: true } });
   if (first) return first.id;
   
   throw new Error('No active tenant found');
+}
+
+/**
+ * Resolve tenant by AC-ID
+ */
+export async function resolveTenantByAcId(acId: string): Promise<string | null> {
+  const tenant = await db.tenant.findUnique({ where: { acId } });
+  return tenant?.id ?? null;
 }
