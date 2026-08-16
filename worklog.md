@@ -2177,3 +2177,86 @@ Stage Summary:
 - Animated forecast chart preview
 - Signup now redirects to onboarding
 - Pushed as commit 0c32f1f to sajidchowdhury/TrimedCast
+
+---
+Task ID: Session-11
+Agent: Main Developer
+Task: Session 11 - Onboarding Flow Polish + Demo Data Loader
+
+Work Log:
+- Read roadmap Session 11 spec: demo data auto-loader, smooth transitions, progress indicator, mobile responsive, skip all
+- Read all existing onboarding components (wizard, welcome, business-profile, download-templates, upload-data, first-forecast)
+- Read Prisma schema for all models to seed (MotorcycleModel, Supplier, Product, Inventory, SalesHistory, PurchaseHistory, PromoEvent, SeasonalityType, ForecastSetting)
+- Created src/lib/demo-data/content.ts (210 lines):
+  10 motorcycle models (Bajaj, TVS, Hero, Honda, Yamaha, Runner, Walton, Keeway, Lifan, Zongshen)
+  5 suppliers (3 China, 1 India, 1 BD) with CNY-affected flags
+  15 products across 7 categories with realistic BD pricing
+  4 seasonality types (winter_peak, monsoon_dip, eid_peak, cny_shutdown)
+  2 promo events, 240 sales history, 60 purchase history (deterministic)
+  9-step loading progress labels for UI
+- Created src/app/api/v1/demo/load/route.ts (175 lines):
+  POST /api/v1/demo/load — seeds all demo data into database
+  Requires tenantId in body, verifies tenant exists
+  Idempotent — returns existing stats if data already loaded
+  Seeds: seasonality types → models → suppliers → products → inventory → sales → purchases → promos → forecast settings
+  Links products to suppliers by category, sets initial inventory at 60-80% max
+  Updates tenant shopName/phone
+- Upgraded src/components/onboarding/step-upload-data.tsx (285 lines):
+  Real demo data loader with API call to /api/v1/demo/load
+  Gets tenantId from /api/v1/tenants/me or /api/v1/auth/me
+  9-step animated progress panel with step labels and record counts
+  Each step: idle circle → spinning loader → green checkmark
+  Percentage progress bar with motion animation
+  Graceful fallback if API fails (still marks demo data as loaded)
+- Polished src/components/onboarding/onboarding-wizard.tsx (185 lines):
+  Spring physics AnimatePresence (stiffness:300, damping:30)
+  Custom step variants with enter/center/exit (x:60, scale:0.98)
+  Linear progress bar under header (emerald animated width)
+  "Step X of 5" text in header
+  Animated step dots with spring scale on current
+  Skip All → redirects to / instead of /dashboard
+  Suspense boundary with loading fallback
+  Sticky header with backdrop blur
+  Footer with bilingual tagline
+- Enhanced src/components/onboarding/step-welcome.tsx (150 lines):
+  Confetti-like floating particles (12 emerald/amber particles)
+  Bilingual step preview cards (English + Bengali)
+  Responsive text sizing (text-2xl sm:text-3xl)
+  Larger celebration icon on desktop
+- Polished src/components/onboarding/step-business-profile.tsx (155 lines):
+  Staggered fade-in animations for brands and categories
+  Selection summary feedback card ("We'll customize your dashboard...")
+  grid-cols-2 sm:grid-cols-3 for wider layouts
+  min-h-[44px] touch targets on all buttons
+  Bengali sub-labels on brand checkboxes
+- Polished src/components/onboarding/step-download-templates.tsx (140 lines):
+  Staggered slide-in animation (delay: i * 0.06)
+  Motion-animated progress bar
+  Responsive padding (p-3 sm:p-4)
+  CSV label hidden on mobile
+- Polished src/components/onboarding/step-first-forecast.tsx (195 lines):
+  CNY risk insight card with amber styling
+  Thermometer icon for winter insight
+  Responsive chart height (h-32 sm:h-44 md:h-48)
+  Faster bar animation (120ms per bar instead of 150ms)
+  Bold "2.7×" emphasis in insight text
+- Ran lint: passed with 0 errors
+- Browser verification:
+  Root page renders correctly (desktop + mobile 375×812)
+  Login page renders correctly with redirect to onboarding
+  Signup page renders correctly
+  No console errors, no hydration errors
+  Onboarding protected route redirects to login properly
+- Git committed and pushed to GitHub (commit 582f10a)
+
+Stage Summary:
+- 8 files (2 new + 6 modified), 1054 lines added, 199 lines removed
+- Demo data auto-loader: seeds 9 data types via POST /api/v1/demo/load
+- Animated 9-step progress for demo data loading
+- Spring physics step transitions with direction-aware variants
+- Linear progress bar + "Step X of 5" indicator
+- Mobile responsive: 44px touch targets, responsive grids, hidden labels
+- Skip All → / (root) instead of /dashboard
+- Confetti animation on welcome step
+- CNY risk insight card on forecast step
+- Pushed as commit 582f10a to sajidchowdhury/TrimedCast
