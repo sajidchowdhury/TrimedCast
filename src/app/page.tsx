@@ -10,6 +10,9 @@ import { Navbar } from '@/components/landing/navbar';
 import { Hero } from '@/components/landing/hero';
 import { Problem } from '@/components/landing/problem';
 import { Solution } from '@/components/landing/solution';
+import { Features } from '@/components/landing/features';
+import { HowItWorks } from '@/components/landing/how-it-works';
+import { Statistics } from '@/components/landing/statistics';
 import { Bike } from 'lucide-react';
 
 export default function LandingPage() {
@@ -29,11 +32,18 @@ export default function LandingPage() {
         {/* Solution Section */}
         <Solution />
 
+        {/* Features Section */}
+        <Features />
+
+        {/* How It Works Section */}
+        <HowItWorks />
+
+        {/* Statistics / Proof Section */}
+        <Statistics />
+
         {/* Anchor targets for smooth scrolling (future sections) */}
-        <div id="features" className="scroll-mt-20" />
         <div id="pricing" className="scroll-mt-20" />
         <div id="faq" className="scroll-mt-20" />
-        <div id="how-it-works" className="scroll-mt-20" />
       </main>
 
       {/* Footer */}
