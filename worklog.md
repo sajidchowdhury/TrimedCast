@@ -2123,3 +2123,57 @@ Stage Summary:
 - Both login and forgot-password use same auth layout
 - Emerald accent, bilingual Bengali+English
 - Pushed as commit 1dfcb55 to sajidchowdhury/TrimedCast
+
+---
+Task ID: Session-10
+Agent: Main Developer
+Task: Session 10 - Onboarding Flow Steps 1-4
+
+Work Log:
+- Read roadmap Session 10 spec: onboarding wizard with 5 steps (welcome + 4 steps)
+- Verified push status, pushed any pending commits first
+- Created src/lib/onboarding/store.ts — Zustand store with persist middleware (200 lines)
+  ONBOARDING_STEPS, STEP_LABELS (bilingual), MOTORCYCLE_BRANDS (10 BD brands),
+  PARTS_CATEGORIES (8 with emoji icons), CSV_TEMPLATES (7 import types)
+  State: currentStep, completedSteps, selectedBrands, selectedCategories,
+  businessType, downloadedTemplates, hasUploadedData, usedDemoData, acId
+  Actions: nextStep, prevStep, skipStep, completeStep, goToDashboard,
+  toggleBrand, toggleCategory, markTemplateDownloaded, setUploadedData,
+  setUsedDemoData, setHasSeenForecast
+- Created src/app/onboarding/page.tsx — Route at /onboarding
+- Created src/components/onboarding/onboarding-wizard.tsx — Wizard orchestrator (150 lines)
+  Header with logo + Skip All button
+  Progress bar with step dots, labels, connector lines
+  AnimatePresence transitions between steps
+  AC-ID from URL search params
+  Redirects to dashboard when all steps complete
+- Created src/components/onboarding/step-welcome.tsx — Welcome screen (100 lines)
+  Celebration animation, AC-ID card with copy, 4-step preview grid
+- Created src/components/onboarding/step-business-profile.tsx — Step 1 (100 lines)
+  10 brand checkboxes with Bengali labels, 8 category checkboxes with emoji
+  Emerald selection styling, count indicators
+- Created src/components/onboarding/step-download-templates.tsx — Step 2 (120 lines)
+  7 CSV template download cards with real CSV content
+  Progress indicator, download tracking with green checkmarks
+- Created src/components/onboarding/step-upload-data.tsx — Step 3 (170 lines)
+  Drag & drop with validation (CSV/XLSX/XLS, 10MB max)
+  Demo Data button with loading animation
+  Upload success display with remove option
+- Created src/components/onboarding/step-first-forecast.tsx — Step 4 (190 lines)
+  Animated bar chart: 12-month seasonal demand with sequential animation
+  Color coding: emerald (high), amber (moderate), rose (low/monsoon)
+  Legend, insight card: "Winter demand peaks in November!"
+- Modified src/components/auth/signup-form.tsx — Changed redirect from /dashboard
+  to /onboarding?ac_id=... for guided setup after signup
+- Verified /onboarding is protected (307 → /login?redirect=/onboarding)
+- Ran lint: passed with 0 errors
+- Git committed and pushed to GitHub
+
+Stage Summary:
+- 9 files (8 new + 1 modified), 1337 lines added
+- Full 5-step onboarding wizard with skip functionality
+- Zustand persist for resume support
+- CSV template downloads with real content
+- Animated forecast chart preview
+- Signup now redirects to onboarding
+- Pushed as commit 0c32f1f to sajidchowdhury/TrimedCast
