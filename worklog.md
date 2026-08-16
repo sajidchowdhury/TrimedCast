@@ -2033,3 +2033,47 @@ Stage Summary:
 - BD payment methods shown in both Pricing and Footer
 - Full navigation with smooth scroll anchors
 - Pushed to sajidchowdhury/TrimedCast on main branch
+
+---
+Task ID: Session-8
+Agent: Main Developer
+Task: Session 8 - Signup Page with OTP Verification Flow
+
+Work Log:
+- Read roadmap Session 8 spec: signup page with OTP, AC-ID display, form validation
+- Read existing auth API routes: /register, /verify-otp, /resend-otp
+- Read existing shadcn/ui components: InputOTP, Select, Input, Button, Card, Label
+- Created src/app/(auth)/layout.tsx — Auth pages layout with 2-panel design
+  Left: emerald branding panel (Bengali headline, trust indicators, footer)
+  Right: form panel with mobile logo
+  Responsive: left panel hidden on mobile (lg:flex)
+- Created src/app/(auth)/signup/page.tsx — Signup route at /signup
+- Created src/components/auth/signup-form.tsx — Multi-step signup form (570 lines)
+  Step 1: Form with 5 fields (shop name, email, phone, division, password)
+  Step 2: OTP verification with 6-digit input and countdown timer
+  Step 3: AC-ID success display with copy-to-clipboard
+  Features: framer-motion AnimatePresence transitions, form validation,
+  password strength indicator (4-bar), show/hide password, BD division
+  dropdown with Bengali labels, API integration, session cookie on success
+- Created src/components/auth/otp-input.tsx — OTP component (120 lines)
+  Uses shadcn InputOTP with emerald focus styling
+  Auto-verify when all 6 digits entered
+  60-second resend cooldown timer
+  Email masking for privacy
+- Created src/components/auth/ac-id-display.tsx — Success state (140 lines)
+  Animated checkmark, AC-ID with copy button
+  Shop/division/trial details
+  Amber warning to save Account ID
+- Ran lint: passed with 0 errors
+- Dev server: both / and /signup return 200
+- Browser verification: form renders correctly on desktop and mobile
+  All fields visible, division dropdown shows 8 BD divisions with Bengali labels
+- Git committed and pushed to GitHub
+
+Stage Summary:
+- 5 new files, 1026 lines of code
+- Multi-step signup flow: Form → OTP → AC-ID Success
+- Full API integration with existing auth routes
+- Responsive 2-panel auth layout
+- Emerald accent, bilingual Bengali+English throughout
+- Pushed as commit ab0b9c3 to sajidchowdhury/TrimedCast
