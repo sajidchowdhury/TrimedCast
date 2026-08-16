@@ -1939,3 +1939,29 @@ Stage Summary:
 - Help sidebar menu with 3-tab guide (Step-by-Step, Import Guide, Page Guide)
 - All 7 Excel import types have detailed column specifications with Bangla descriptions
 - All 12 pages have Bangla help content
+---
+Task ID: 4
+Agent: main
+Task: Session 4: Auth Middleware + Route Protection
+
+Work Log:
+- Read existing middleware.ts (basic cookie/session check), auth context (Bearer token only), and dashboard components
+- Created src/lib/auth/middleware.ts with extracted auth check logic: route classification (public/auth/protected/API), role-based route restrictions (admin, settings, billing, team, audit-log), tenant suspension blocking, session validation against DB
+- Created src/lib/auth/context.tsx with React AuthProvider + useAuth/usePermission/usePermissionGuard/useRoleGuard hooks for client-side auth state
+- Created src/stores/auth-store.ts with Zustand auth store for client-side state management (setAuthData, clearAuth, hasPermission, hasRole, isAdmin, isTenantActive, isTrialExpired)
+- Updated src/middleware.ts with 6-step middleware flow: (1) public routes allow, (2) auth pages redirect if logged in, (3) no token → /login with redirect param, (4) validate session against DB, (5) role-based route protection, (6) tenant suspension check → redirect to billing
+- Updated src/lib/api/auth.ts with requireAuth(), requirePermission(), requireRole() helpers; middleware header fallback (x-user-id/x-tenant-id/x-user-role); AuthError class
+- Updated src/components/dashboard/dashboard-layout.tsx: Wrapped with AuthProvider
+- Updated src/components/dashboard/header.tsx: User dropdown menu with role badge, tenant AC-ID badge, logout, auth loading state
+- Updated src/components/dashboard/app-sidebar.tsx: Permission-filtered nav items, user info in footer, quick logout
+- Updated src/lib/auth/index.ts: Barrel exports for all new utilities
+- Lint passed clean
+- Committed and pushed to GitHub
+
+Stage Summary:
+- Middleware now provides 6-step auth flow with role-based + tenant status protection
+- AuthProvider provides React context for client-side auth state (user, tenant, permissions)
+- Dashboard UI fully integrated with auth context (user dropdown, permission-filtered nav, logout)
+- API auth utilities enhanced with requireAuth/requirePermission/requireRole + middleware header fallback
+- Zustand auth store available for components that prefer store pattern over context
+- All changes pushed to sajidchowdhury/TrimedCast on main branch
