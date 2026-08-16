@@ -16,6 +16,7 @@ import { AnalyticsPage } from './pages/analytics-page';
 import { BillingPage } from './pages/billing-page';
 import { ApiExplorerPage } from './pages/api-explorer-page';
 import { SettingsPage } from './pages/settings-page';
+import { HelpPage } from './pages/help-page';
 import { SOEControlTower } from './soe-control-tower';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -48,6 +49,8 @@ export function ContentRouter() {
         return <ApiExplorerPage />;
       case 'settings':
         return <SettingsPage />;
+      case 'help':
+        return <HelpPage />;
       default:
         return <DashboardOverview />;
     }

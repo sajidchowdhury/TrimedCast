@@ -12,6 +12,7 @@ import { DashboardHeader } from './header';
 import { ContentRouter } from './content-router';
 import { AuditLogPanel } from './audit-log-panel';
 import { ErrorBoundary } from './error-boundary';
+import { FloatingHelpButton } from './floating-help-button';
 
 export function DashboardLayout() {
   return (
@@ -31,6 +32,7 @@ export function DashboardLayout() {
         </footer>
       </SidebarInset>
       <AuditLogPanel />
+      <FloatingHelpButton />
     </SidebarProvider>
   );
 }

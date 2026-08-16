@@ -18,7 +18,8 @@ export type DashboardPage =
   | 'ai-assistant'
   | 'billing'
   | 'api-explorer'
-  | 'settings';
+  | 'settings'
+  | 'help';
 
 export interface SopCycleData {
   id: string;

@@ -19,6 +19,7 @@ import {
   Bike,
   Brain,
   Zap,
+  CircleHelp,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -62,6 +63,7 @@ const systemNav: NavItem[] = [
   { page: 'billing', label: 'Billing', icon: CreditCard },
   { page: 'api-explorer', label: 'API Explorer', icon: Code2 },
   { page: 'settings', label: 'Settings', icon: Settings },
+  { page: 'help', label: 'Help', icon: CircleHelp },
 ];
 
 export function AppSidebar() {

@@ -1900,3 +1900,42 @@ Stage Summary:
 - Dashboard layout has sticky footer and proper flex column structure
 - Tables and tab navigations scroll horizontally on mobile
 - All changes are minimal and non-breaking
+---
+Task ID: 1
+Agent: main
+Task: Create TrimedCast-Guide.md, floating help button, Help page with Bangla content, and import column specifications
+
+Work Log:
+- Explored full project structure: 12 pages, 3 sidebar groups, 7 import types, content-router
+- Created /home/z/my-project/TrimedCast-Guide.md - comprehensive 500+ line guide with:
+  - Platform overview, getting started, step-by-step guide
+  - Page-by-page descriptions in Bangla for all 12 pages
+  - Excel import column specifications for all 7 import types
+  - Phase-by-phase implementation process (6 phases, 23 sessions)
+  - Keyboard shortcuts, glossary
+- Created /home/z/my-project/src/lib/help/page-help-content.ts - data file with:
+  - PAGE_HELP: Record<DashboardPage, PageHelpContent> - Bangla help for every page
+  - IMPORT_HELP: 7 import types with full column specs in Bangla
+  - PLATFORM_GUIDE: 5 phases with step-by-step actions in Bangla
+- Created /home/z/my-project/src/components/dashboard/floating-help-button.tsx:
+  - Fixed bottom-right "?" button with pulse animation
+  - Opens Sheet off-canvas from right with page-specific Bangla help
+  - Shows summaryBn, sections (titleBn + contentBn), tipsBn
+- Created /home/z/my-project/src/components/dashboard/pages/help-page.tsx:
+  - Three tabs: Step-by-Step, Import Guide, Page Guide
+  - Step-by-Step: 5 phases with accordion, numbered steps in Bangla
+  - Import Guide: 7 import types with column tables, required/optional badges, Bangla descriptions
+  - Page Guide: All pages with Bangla summaries, sections, tips
+- Updated store.ts: Added 'help' to DashboardPage type
+- Updated app-sidebar.tsx: Added Help (CircleHelp) to systemNav
+- Updated content-router.tsx: Added HelpPage case
+- Updated dashboard-layout.tsx: Added FloatingHelpButton
+- Lint passes (no new errors)
+- Browser verification: Help page loads, Import Guide tab shows column specs, floating "?" works on all pages
+
+Stage Summary:
+- TrimedCast-Guide.md created with comprehensive documentation
+- Floating "?" help button with off-canvas Bangla help on every page
+- Help sidebar menu with 3-tab guide (Step-by-Step, Import Guide, Page Guide)
+- All 7 Excel import types have detailed column specifications with Bangla descriptions
+- All 12 pages have Bangla help content
