@@ -1965,3 +1965,29 @@ Stage Summary:
 - API auth utilities enhanced with requireAuth/requirePermission/requireRole + middleware header fallback
 - Zustand auth store available for components that prefer store pattern over context
 - All changes pushed to sajidchowdhury/TrimedCast on main branch
+---
+Task ID: 5
+Agent: main
+Task: Session 5: Landing Page — Hero + Problem + Solution
+
+Work Log:
+- Read Session 5 roadmap: Move dashboard to /dashboard, create landing page at / with Hero + Problem + Solution sections
+- Created src/app/dashboard/page.tsx — Dashboard now at /dashboard route
+- Replaced src/app/page.tsx with landing page assembling Navbar + Hero + Problem + Solution + Footer
+- Created src/components/landing/navbar.tsx — Sticky nav with scroll transparency→solid transition, TrimedCast logo (Bike icon + emerald "Cast"), Features/Pricing/FAQ smooth scroll anchors, Start Free Trial CTA, mobile Sheet hamburger menu, framer-motion entrance
+- Created src/components/landing/hero.tsx — Bengali headline with emerald highlight, English subheadline "Stop guessing. Start forecasting.", description with bold WHEN/HOW MUCH/৳12K, dual CTAs (Get Started Free → /signup + See How It Works scroll), 3 trust badges with custom SVG checkmarks, gradient background with radial glow effects, staggered container/item animation variants
+- Created src/components/landing/problem.tsx — "3 Killers" section with 3 cards: Winter Overstock (rose), Monsoon Dead Stock (amber), CNY Delays (red), each with colored left border, icon in tinted bg, quote + Bengali translation, whileInView scroll animations
+- Created src/components/landing/solution.tsx — "TrimedCast Solves All Three" with 3 emerald-accent cards: Seasonal Forecasting (TrendingUp), Smart Order Triggers (ShoppingCart), CNY Risk Engine (Shield), hover "Problem solved →" indicator, Problem→TrimedCast→Solution visual flow pill, emerald gradient background
+- Landing page footer with TrimedCast branding, copyright, Privacy/Terms/Contact links
+- All sections responsive (mobile-first), framer-motion scroll animations, emerald/green primary (no indigo/blue)
+- Lint clean, dev server running, landing page renders correctly at /
+- Browser verified: navbar, hero, problem, solution, footer all rendering
+- Committed and pushed to GitHub
+
+Stage Summary:
+- Dashboard moved from / to /dashboard
+- Premium landing page at / with 4 sections (Navbar, Hero, Problem, Solution)
+- Bengali + English bilingual content for BD market connection
+- Emerald/green primary color system throughout (no indigo/blue)
+- All animations working (framer-motion scroll + entrance)
+- Pushed to sajidchowdhury/TrimedCast on main branch
