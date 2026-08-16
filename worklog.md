@@ -2077,3 +2077,49 @@ Stage Summary:
 - Responsive 2-panel auth layout
 - Emerald accent, bilingual Bengali+English throughout
 - Pushed as commit ab0b9c3 to sajidchowdhury/TrimedCast
+
+---
+Task ID: Session-9
+Agent: Main Developer
+Task: Session 9 - Login Page with Forgot Password Flow
+
+Work Log:
+- Read roadmap Session 9 spec: login page with AC-ID + email + password, forgot password, remember me
+- Read existing login API route: POST /api/v1/auth/login (AC-ID + email + password)
+- Read forgot-password API: POST /api/v1/auth/forgot-password (sends OTP, prevents enumeration)
+- Read reset-password API: POST /api/v1/auth/reset-password (verify OTP + set new password)
+- Created src/app/(auth)/login/page.tsx — Login route at /login
+  View switching between login and forgot-password forms
+  Wrapped in Suspense for useSearchParams() compatibility (redirect param)
+- Created src/components/auth/login-form.tsx — Login form (210 lines)
+  AC-ID input: monospace, auto-uppercase, TC-XXXX-XXX-XXXX format validation
+  Email input, Password with show/hide toggle
+  Remember me checkbox: 30-day vs 1-day session cookie
+  Forgot password button → switches to forgot-password view
+  Create account link to /signup
+  Error handling: invalid AC-ID, wrong credentials, account suspended
+  Session cookie on success, localStorage for last AC-ID
+  Redirect to ?redirect param or /dashboard
+- Created src/components/auth/forgot-password-form.tsx — Password reset (290 lines)
+  3-step animated flow: Email → OTP + New Password → Success
+  Step 1: Enter email, sends OTP via /forgot-password API
+  Step 2: 6-digit OTP input + new password with validation
+  Step 3: Success confirmation with back-to-login button
+  Resend OTP with 60-second cooldown timer
+  Email masking for privacy, back navigation
+- Ran lint: passed with 0 errors
+- Browser verification:
+  Login page renders all elements correctly (desktop + mobile)
+  Form filling works: AC-ID, email, password
+  Forgot password view switches correctly
+  Back to login navigation works
+  Mobile viewport responsive
+- Git committed and pushed to GitHub
+
+Stage Summary:
+- 3 new files, 806 lines of code
+- Login with AC-ID + email + password, remember me
+- Forgot password with OTP-based reset (3 steps)
+- Both login and forgot-password use same auth layout
+- Emerald accent, bilingual Bengali+English
+- Pushed as commit 1dfcb55 to sajidchowdhury/TrimedCast
