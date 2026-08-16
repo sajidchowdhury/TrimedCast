@@ -18,6 +18,7 @@ import {
   Settings,
   Bike,
   Brain,
+  Zap,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -53,6 +54,7 @@ const secondaryNav: NavItem[] = [
   { page: 'import', label: 'Import Data', icon: Upload },
   { page: 'suppliers', label: 'Suppliers', icon: Truck },
   { page: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { page: 'soe', label: 'S&OE Tower', icon: Zap },
   { page: 'ai-assistant', label: 'AI Assistant', icon: Brain },
 ];
 

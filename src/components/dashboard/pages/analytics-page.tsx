@@ -11,12 +11,17 @@ import { CNYCalendar } from '@/components/forecast/cny-calendar';
 import { WhatIfScenarioPanel } from '@/components/forecast/what-if-scenario-panel';
 import { SeaVsAirComparison } from '@/components/forecast/sea-vs-air-comparison';
 import { PromoWhatIfSlider } from '@/components/forecast/promo-whatif-slider';
-import { BarChart3, Calendar, GitBranch, PieChart, Ship, Megaphone } from 'lucide-react';
+import { BarChart3, Calendar, GitBranch, PieChart, Ship, Megaphone, GitMerge, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
+// Decomposition, Consensus Pipeline, and Recalibration components
+import { ProphetDecompositionChart } from '@/components/forecast/prophet-decomposition-chart';
+import { ConsensusPipelinePanel } from '@/components/forecast/consensus-pipeline-panel';
+import { RecalibrationDashboard } from '@/components/forecast/recalibration-dashboard';
+
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<'whatif' | 'seavsair' | 'promo' | 'seasonal' | 'cny'>('seavsair');
+  const [tab, setTab] = useState<'whatif' | 'seavsair' | 'promo' | 'seasonal' | 'cny' | 'decomp' | 'pipeline' | 'recal'>('seavsair');
 
   return (
     <div className="space-y-5">
@@ -35,6 +40,9 @@ export function AnalyticsPage() {
           { key: 'seavsair' as const, label: 'Sea vs Air', icon: Ship },
           { key: 'promo' as const, label: 'Promo Slider', icon: Megaphone },
           { key: 'whatif' as const, label: 'What-If Scenario', icon: GitBranch },
+          { key: 'decomp' as const, label: 'Decomposition', icon: BarChart3 },
+          { key: 'pipeline' as const, label: 'Consensus Pipeline', icon: GitMerge },
+          { key: 'recal' as const, label: 'Recalibration', icon: Activity },
           { key: 'seasonal' as const, label: 'Seasonal Grid', icon: PieChart },
           { key: 'cny' as const, label: 'CNY Calendar', icon: Calendar },
         ].map((t) => (
@@ -54,6 +62,9 @@ export function AnalyticsPage() {
       {tab === 'seavsair' && <SeaVsAirComparison />}
       {tab === 'promo' && <PromoWhatIfSlider />}
       {tab === 'whatif' && <WhatIfScenarioPanel />}
+      {tab === 'decomp' && <ProphetDecompositionChart />}
+      {tab === 'pipeline' && <ConsensusPipelinePanel />}
+      {tab === 'recal' && <RecalibrationDashboard />}
       {tab === 'seasonal' && <CategorySeasonalGrid />}
       {tab === 'cny' && <CNYCalendar />}
     </div>

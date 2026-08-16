@@ -1754,3 +1754,149 @@ Stage Summary:
 - Sidebar includes AI Assistant navigation item
 - All existing functionality preserved - only additions made
 - Lint passes clean, app responds HTTP 200
+
+---
+Task ID: 4-5
+Agent: full-stack-developer
+Task: Build Consensus Forecast + Auto-Recalibration Engines
+
+Work Log:
+- Read existing forecasting code: models.ts, prophet-engine.ts, eoq-safety-stock.ts, auto-recalibration.ts
+- Analyzed existing types (ForecastMetrics, ConsensusInput/ConsensusResult in prophet-engine.ts) and helper functions (calculateMetrics, inverseNormalCDF)
+- Created /src/lib/forecasting/consensus-engine.ts (630+ lines): Full 5-step consensus forecast pipeline
+  - Step 1: step1ProphetBaseline() - Pass-through with non-negative enforcement
+  - Step 2: step2ApplySeasonalWeights() - Per-SKU BD seasonal weight multipliers by month (4 categories: general, cold_weather, off_road, street)
+  - Step 3: step3ApplyMarketingAdjustment() - promo_adjustment = beta_2 * (planned_promo_index - baseline_promo_index)
+  - Step 4: step4ApplyOverrides() - Confidence-based blending (low: 0.2, medium: 0.4, high: 0.7 override weight)
+  - Step 5: step5FinalConsensus() - Round to whole units ("Single Set of Numbers")
+  - Main pipeline: calculateConsensusForecast() with full per-step breakdown
+  - Batch: batchConsensusForecast() for multi-SKU processing
+  - Utilities: getSeasonalWeight(), parseMonthNumber(), getSeasonalWeightProfile()
+  - Analysis: analyzeConsensusVariance() - per-step variance contribution analysis
+  - Validation: validateConsensusQuality() - zero demand, large adjustments, negative values, override coverage
+  - Sensitivity: consensusSensitivityAnalysis() - beta_2 and promo index sweep
+  - Comparison: compareConsensusForecasts() - before/after analysis
+  - Simulation: simulateOverrideEffect() - what-if override analysis
+  - Override summaries: summarizeOverridesByReason(), summarizeOverridesByConfidence()
+  - Exported BD_SEASONAL_WEIGHTS table, OVERRIDE_BLEND_WEIGHTS mapping, all types
+- Created /src/lib/forecasting/auto-recalibration-engine.ts (580+ lines): Full auto-recalibration engine
+  - calculateAllMetrics() - MAPE, MAE, MSE, RMSE, Bias, Historical std dev with MAPE rating and alerts
+  - classifyMAPE() - excellent(0-5%), good(5-10%), fair(10-20%), poor(20-50%), unusable(>50%)
+  - runRecalibration() - 4-trigger auto-recalibration engine:
+    - Trigger 1: HIGH_MAPE -> auto-tune alpha, adjust changepoint_prior_scale
+    - Trigger 2: OUTLIER_DOMINANCE (RMSE > 1.15*MAE) -> increase sigma threshold
+    - Trigger 3: WORSE_THAN_AVERAGE (MAE > historical sigma) -> flag for audit
+    - Trigger 4: SYSTEMATIC_BIAS (|Bias| > 0.1*MAE) -> apply bias correction
+  - runBacktest() - Rolling origin backtest with 4 built-in models (moving_average, exp_smoothing, naive, seasonal_naive)
+  - runAlphaSweepBacktest() - Alpha parameter sweep for exponential smoothing
+  - checkRecalibrationStatus() - Product-level recalibration checking with urgency grouping
+  - analyzeAccuracyTrend() - Linear regression on MAPE over time (improving/stable/degrading)
+  - runFullRecalibrationReport() - Combined recalibration + backtest + trend analysis
+  - Utilities: applyBiasCorrection(), applyRecalibrationConfig(), pctWithinTolerance(), calculateTheilsU(), calculateFVA(), summarizeMetrics()
+  - All types exported: MetricsResult, MetricAlert, RecalibrationAction, RecalibrationResult, BacktestResult, etc.
+- Verified lint passes clean
+- Both files are pure TypeScript with no React/API/DB dependencies
+
+Stage Summary:
+- consensus-engine.ts: 630+ lines, 13 sections, full 5-step pipeline with breakdown, batch, variance analysis, validation, sensitivity, comparison, simulation
+- auto-recalibration-engine.ts: 580+ lines, 11 sections, full metrics with 4-trigger recalibration, rolling backtest, alpha sweep, accuracy trend, FVA/Theil's U
+- All functions and types exported for UI consumption
+- Edge cases handled: zero demand, empty arrays, negative values, missing overrides
+- BD seasonal weights table from spec fully implemented (12 months x 4 categories)
+- Override blend weights by confidence level (low/medium/high) per spec
+- Lint passes clean, dev server running HTTP 200
+
+---
+Task ID: 3
+Agent: full-stack-developer
+Task: Build S&OE Control Tower + APIs
+
+Work Log:
+- Created /src/app/api/soe/control-tower/route.ts (GET): Full 0-3 month S&OE aggregation
+  - Queries inventory for stockout alerts (availableStock <= safetyStock)
+  - Calculates daysUntilStockout from daily consumption rate (30-day rolling sales)
+  - Identifies MAPE breaches from Forecast table where mape > 10
+  - Gets upcoming deliveries from PurchaseOrder (in_transit/shipped/customs/confirmed)
+  - Builds monthly demand forecast rows for 3-month horizon
+  - Generates critical actions: stockout_order, recalibrate, cny_reroute, overstock_reduction, sop_stage_advance
+  - Falls back to demo data when no real data exists
+  - Uses parallel Promise.all for all DB queries
+- Created /src/app/api/soe/confirm-order/route.ts (POST): One-click order confirmation
+  - Validates productId, quantity, shipmentMode (sea/air)
+  - Creates PurchaseOrder with auto-generated PO number
+  - Calculates lead time based on shipment mode (air = 30% of sea)
+  - Checks CNY risk from supplier flags
+  - Builds full timeline with milestones (ack, production, shipment, customs, arrival)
+  - Updates matching RecommendedOrder status from 'pending' to 'converted'
+  - Creates AuditLog entry with full context
+  - Returns PO with timeline and confirmation message
+- Created /src/app/api/soe/notifications/route.ts (GET + POST): S&OE notifications
+  - GET: Returns 5 notification types - stockout_risk, mape_breach, cny_risk, overstock, delivery_delay
+  - Calculates severity (critical/high/normal) based on business rules
+  - Returns summary with counts by type and severity
+  - POST: Marks notifications as read (in-memory store for demo)
+- Created /src/components/dashboard/soe-control-tower.tsx: Full frontend component
+  - 7 KPI summary cards (SKUs, stockout risk, overstock, pending orders, MAPE breaches, rec spend, critical actions)
+  - 6-tab interface: Stockout Alerts, MAPE Breaches, Deliveries, Demand Forecast, Critical Actions, Notifications
+  - Stockout alerts with one-click order confirmation (air for critical, sea for high)
+  - MAPE breach cards with suggested actions
+  - Delivery tracking with days-until-arrival
+  - Monthly demand forecast table with accuracy and gap
+  - Critical actions with priority sorting, type icons, impact BDT
+  - Notifications with mark-all-read, severity badges, unread indicators
+  - Framer Motion animations, responsive grid, scroll areas
+- Updated /src/lib/dashboard/store.ts: Added 'soe' to DashboardPage type, set default to 'soe'
+- Updated /src/components/dashboard/content-router.tsx: Added S&OE route case
+- Updated /src/components/dashboard/app-sidebar.tsx: Added S&OE Tower nav item with Zap icon
+
+Stage Summary:
+- 3 API routes created: control-tower (GET), confirm-order (POST), notifications (GET+POST)
+- 1 major frontend component: soe-control-tower.tsx (~500 lines)
+- Full integration with sidebar, content router, and store
+- All APIs tested and returning 200 with real DB data
+- Lint passes clean, dev server running without errors
+- Control tower correctly identifies 15 MAPE breaches and 15 critical actions from seed data
+
+---
+Task ID: 6-7
+Agent: full-stack-developer
+Task: Build Prophet Decomp + Consensus + Recalibration UI + Integration
+
+Work Log:
+- Read existing project files: worklog.md, consensus-engine.ts, auto-recalibration-engine.ts, models.ts, forecast-page.tsx, analytics-page.tsx
+- Built /src/components/forecast/prophet-decomposition-chart.tsx (~480 lines): 4 stacked recharts (Trend, Seasonal, Holiday, Combined), BD season color coding, interactive month selection with breakdown tooltip, realistic BD demo data
+- Built /src/components/forecast/consensus-pipeline-panel.tsx (~470 lines): 5-step pipeline flow diagram, step detail panels for each step, Consensus vs Baseline chart, override form with real consensus engine integration
+- Built /src/components/forecast/recalibration-dashboard.tsx (~540 lines): status summary, MAPE distribution histogram, products table, backtest results panel, recalibration history timeline
+- Integrated into forecast-page.tsx: added decomposition/pipeline/recalibration views with tab buttons (BarChart3, GitMerge, Activity icons)
+- Integrated into analytics-page.tsx: added decomp/pipeline/recal tabs with corresponding components
+- Cleaned up unused imports/variables, verified lint passes, dev server running
+
+Stage Summary:
+- 3 new forecast components: prophet-decomposition-chart.tsx, consensus-pipeline-panel.tsx, recalibration-dashboard.tsx
+- All integrated into Forecast Dashboard and Analytics pages
+- Prophet decomposition: 4 stacked charts with interactive month selection
+- Consensus pipeline: 5-step flow with real engine integration and override form
+- Recalibration dashboard: MAPE distribution, product table, backtest results, history timeline
+- All components: 'use client', dark mode compatible, responsive, card-based, Lucide icons, shadcn/ui
+- Lint passes, dev server running OK
+
+---
+Task ID: 7
+Agent: full-stack-developer
+Task: Dashboard Polish - Error Boundary, Loading States, Responsive Fixes
+
+Work Log:
+- Created /src/components/dashboard/error-boundary.tsx: React class-based ErrorBoundary with friendly fallback (Alert destructive, collapsible stack trace, Retry button, Report Issue link), dark mode compatible
+- Created /src/components/dashboard/page-skeleton.tsx: Four skeleton variants (DashboardSkeleton, ForecastSkeleton, TableSkeleton, ChartSkeleton) with responsive layout and shadcn/ui Skeleton
+- Updated /src/components/dashboard/dashboard-layout.tsx: Wrapped ContentRouter with ErrorBoundary, added min-h-screen flex flex-col to SidebarInset, footer gets mt-auto for sticky bottom
+- Fixed inventory-grid.tsx: Changed overflow-hidden to overflow-x-auto on table wrapper for mobile horizontal scroll
+- Fixed forecast-metrics-table.tsx: Wrapped Table in overflow-x-auto div
+- Fixed orders-page.tsx: Added overflow-x-auto to tab navigation, shrink-0 to buttons
+- Fixed forecast-page.tsx: Added overflow-x-auto to view toggle, shrink-0 to toggle buttons, fixed skeleton grid from grid-cols-2 to grid-cols-1 md:grid-cols-2
+
+Stage Summary:
+- Error boundary catches runtime errors with friendly UI and recovery options
+- Page skeletons provide loading feedback matching actual page layouts
+- Dashboard layout has sticky footer and proper flex column structure
+- Tables and tab navigations scroll horizontally on mobile
+- All changes are minimal and non-breaking

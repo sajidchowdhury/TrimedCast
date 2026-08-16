@@ -59,7 +59,7 @@ export function OrdersPage() {
       <CNYRiskBanner cnyAtRiskCount={ordersCnyAtRisk} />
 
       {/* Tab navigation */}
-      <div className="flex items-center gap-1 border-b border-border pb-2">
+      <div className="flex items-center gap-1 border-b border-border pb-2 overflow-x-auto">
         {[
           { key: 'orders' as const, label: 'Recommended Orders', icon: ShoppingCart },
           { key: 'timeline' as const, label: 'Order Timeline', icon: GitBranch },
@@ -70,7 +70,7 @@ export function OrdersPage() {
             key={t.key}
             variant={tab === t.key ? 'default' : 'ghost'}
             size="sm"
-            className="text-xs"
+            className="text-xs shrink-0"
             onClick={() => setTab(t.key)}
           >
             <t.icon className="h-3.5 w-3.5 mr-1" />

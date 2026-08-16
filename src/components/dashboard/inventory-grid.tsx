@@ -1229,7 +1229,7 @@ export function InventoryGrid() {
       )}
 
       {/* === Data Table === */}
-      <div className="rounded-md border border-border/60 overflow-hidden">
+      <div className="rounded-md border border-border/60 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30">

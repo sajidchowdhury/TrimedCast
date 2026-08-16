@@ -104,6 +104,7 @@ export function ForecastMetricsTable({ metrics, dataPoints, className }: Forecas
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -141,6 +142,7 @@ export function ForecastMetricsTable({ metrics, dataPoints, className }: Forecas
               ))}
             </TableBody>
           </Table>
+          </div>
 
           {/* Bias indicator */}
           <div className="px-4 py-2.5 border-t border-border flex items-center justify-between">

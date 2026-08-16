@@ -16,6 +16,7 @@ import { AnalyticsPage } from './pages/analytics-page';
 import { BillingPage } from './pages/billing-page';
 import { ApiExplorerPage } from './pages/api-explorer-page';
 import { SettingsPage } from './pages/settings-page';
+import { SOEControlTower } from './soe-control-tower';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function ContentRouter() {
@@ -37,6 +38,8 @@ export function ContentRouter() {
         return <SuppliersPage />;
       case 'analytics':
         return <AnalyticsPage />;
+      case 'soe':
+        return <SOEControlTower />;
       case 'ai-assistant':
         return <ForecastPage />;
       case 'billing':

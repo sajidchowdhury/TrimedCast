@@ -40,9 +40,15 @@ import { SeaVsAirComparison } from '@/components/forecast/sea-vs-air-comparison'
 import { PromoWhatIfSlider } from '@/components/forecast/promo-whatif-slider';
 import { AIQueryBar } from '@/components/forecast/ai-query-bar';
 
+// Decomposition, Consensus Pipeline, and Recalibration components
+import { ProphetDecompositionChart } from '@/components/forecast/prophet-decomposition-chart';
+import { ConsensusPipelinePanel } from '@/components/forecast/consensus-pipeline-panel';
+import { RecalibrationDashboard } from '@/components/forecast/recalibration-dashboard';
+
 import {
   TrendingUp, RefreshCw, Brain, BarChart3, Target,
   LineChart, Layers, Settings2, Megaphone, FlaskConical,
+  GitMerge, Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -58,7 +64,7 @@ export function ForecastPage() {
   } = useForecastStore();
 
   const [activeSeason, setActiveSeason] = useState<BDSeason | null>(null);
-  const [view, setView] = useState<'consensus' | 'comparison' | 'promo' | 'whatif' | 'advanced' | 'ai'>('consensus');
+  const [view, setView] = useState<'consensus' | 'comparison' | 'promo' | 'whatif' | 'advanced' | 'ai' | 'decomposition' | 'pipeline' | 'recalibration'>('consensus');
   const currentSeason = getCurrentBDSeason();
 
   // Load products on mount
@@ -86,12 +92,15 @@ export function ForecastPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex items-center gap-1 bg-muted rounded-md p-0.5">
+          <div className="flex items-center gap-1 bg-muted rounded-md p-0.5 overflow-x-auto">
             {[
               { key: 'consensus' as const, label: 'Consensus', icon: Layers },
               { key: 'comparison' as const, label: 'Compare', icon: BarChart3 },
+              { key: 'decomposition' as const, label: 'Decomp', icon: BarChart3 },
+              { key: 'pipeline' as const, label: 'Pipeline', icon: GitMerge },
               { key: 'promo' as const, label: 'Promo', icon: Megaphone },
               { key: 'whatif' as const, label: 'What-If', icon: FlaskConical },
+              { key: 'recalibration' as const, label: 'Recal', icon: Activity },
               { key: 'advanced' as const, label: 'Advanced', icon: Settings2 },
               { key: 'ai' as const, label: 'AI', icon: Brain },
             ].map((v) => (
@@ -99,7 +108,7 @@ export function ForecastPage() {
                 key={v.key}
                 onClick={() => setView(v.key)}
                 className={cn(
-                  'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-sm transition-all',
+                  'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-sm transition-all shrink-0',
                   view === v.key
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -139,7 +148,7 @@ export function ForecastPage() {
       {forecastLoading && (
         <div className="space-y-4">
           <Skeleton className="h-[450px] w-full rounded-lg" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Skeleton className="h-[200px] rounded-lg" />
             <Skeleton className="h-[200px] rounded-lg" />
           </div>
@@ -249,6 +258,21 @@ export function ForecastPage() {
       {/* AI QUERY VIEW */}
       {!forecastLoading && view === 'ai' && (
         <AIQueryBar />
+      )}
+
+      {/* DECOMPOSITION VIEW */}
+      {!forecastLoading && view === 'decomposition' && (
+        <ProphetDecompositionChart />
+      )}
+
+      {/* CONSENSUS PIPELINE VIEW */}
+      {!forecastLoading && view === 'pipeline' && (
+        <ConsensusPipelinePanel />
+      )}
+
+      {/* RECALIBRATION VIEW */}
+      {!forecastLoading && view === 'recalibration' && (
+        <RecalibrationDashboard />
       )}
     </div>
   );
