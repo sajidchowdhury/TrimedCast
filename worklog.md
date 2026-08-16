@@ -2260,3 +2260,44 @@ Stage Summary:
 - Confetti animation on welcome step
 - CNY risk insight card on forecast step
 - Pushed as commit 582f10a to sajidchowdhury/TrimedCast
+
+---
+Task ID: Session-12
+Agent: Main Developer
+Task: Session 12 - Subscription Model — Trial + Feature Gating
+
+Work Log:
+- Read roadmap Session 12 spec: 14-day trial, feature gating, free/pro tiers, upgrade prompts
+- Read existing billing.ts (1624 lines) — generic SaaS starter/pro/enterprise with USD pricing
+- Read auth/context.tsx — AuthTenant already has status + trial_ends_at
+- Read verify-otp route — 14-day trial already set on signup (line 64)
+- Read dashboard header.tsx — integrated trial banner
+- Created src/lib/subscription/tiers.ts (220 lines):
+  BD-specific: Free + Pro (12K BDT/yr) instead of generic USD tiers
+  17 GatedFeature types with bilingual descriptions
+  FREE_TIER_LIMITS: 3-month forecast, 10 products, no CNY/order triggers
+  PRO_TIER_LIMITS: 12-month forecast, unlimited products, all features
+- Created src/lib/subscription/gates.ts (170 lines):
+  checkFeatureGate(): trial -> all Pro unlocked; free -> check tier features
+  checkNumericLimit(), getEffectiveTierLimits(), resolveTrimedCastTier()
+  isTenantInTrial(), getTrialDaysRemaining(), isTrialExpired()
+- Created src/lib/subscription/check.ts (165 lines):
+  DB-backed: checkTenantFeatureAccess(), getTenantSubscriptionStatus()
+- Created src/components/dashboard/trial-banner.tsx (160 lines):
+  TrialBanner: countdown with urgency colors (emerald/amber/rose)
+  TrialExpiredBanner, FreeTierBanner
+- Created src/components/dashboard/upgrade-prompt.tsx (200 lines):
+  UpgradePrompt: inline card, UpgradeDialog: modal, FeatureLockedOverlay: blur+lock
+- Created GET /api/v1/subscription/status
+- Integrated trial banner into dashboard header
+- Verified 14-day trial on signup
+- Lint passed, browser verified, pushed to GitHub
+
+Stage Summary:
+- 7 files (5 new + 2 modified), 1189 lines added
+- BD-specific subscription: Free/Pro with 12K BDT/yr
+- 17 gated features with bilingual descriptions
+- 14-day trial with full Pro access
+- Trial banner with urgency colors in dashboard header
+- Upgrade prompt (inline + modal + overlay) for gated features
+- Pushed as commit 5ed9066 to sajidchowdhury/TrimedCast
