@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api/response';
 import { createOtp } from '@/lib/auth/otp';
 import { validateEmail } from '@/lib/auth/password';
+import { sendOtpEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +39,9 @@ export async function POST(request: NextRequest) {
     try {
       const otpCode = await createOtp(email, 'reset_password', user.tenantId);
 
-      // TODO: Send OTP via email (Session 3: Email Service Integration)
+      // Send OTP via email
+      await sendOtpEmail(email, otpCode, 'reset_password');
+
       const isDev = process.env.NODE_ENV === 'development';
 
       return apiSuccess({

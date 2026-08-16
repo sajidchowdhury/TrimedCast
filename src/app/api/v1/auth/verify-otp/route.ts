@@ -6,11 +6,12 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api/response';
-import { verifyOtp, isOtpVerified } from '@/lib/auth/otp';
+import { verifyOtp } from '@/lib/auth/otp';
 import { hashPassword } from '@/lib/auth/password';
 import { generateAcId } from '@/lib/auth/ac-id';
 import { createAuthSession } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+import { sendWelcomeEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,6 +139,15 @@ export async function POST(request: NextRequest) {
     const ipAddress = request.headers.get('x-forwarded-for') || undefined;
     const userAgent = request.headers.get('user-agent') || undefined;
     const token = await createAuthSession(created.user.id, created.tenant.id, ipAddress, userAgent);
+
+    // Send welcome email (fire and forget — don't block account creation)
+    sendWelcomeEmail(
+      email,
+      shop_name,
+      acId,
+      shop_name,
+      division
+    ).catch(err => console.error('[Auth/VerifyOtp] Welcome email failed:', err));
 
     // Audit
     await createAuditLog({

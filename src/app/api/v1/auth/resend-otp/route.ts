@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server';
 import { apiSuccess, apiError } from '@/lib/api/response';
 import { createOtp, getOtpCooldownSeconds } from '@/lib/auth/otp';
+import { sendOtpEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +31,9 @@ export async function POST(request: NextRequest) {
     try {
       const otpCode = await createOtp(email, purpose || 'signup');
 
-      // TODO: Send OTP via email (Session 3: Email Service Integration)
+      // Send OTP via email
+      await sendOtpEmail(email, otpCode, (purpose || 'signup') as 'signup' | 'login' | 'reset_password' | 'invite');
+
       const isDev = process.env.NODE_ENV === 'development';
 
       return apiSuccess({
