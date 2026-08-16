@@ -33,6 +33,7 @@ import { AuditLogTriggerButton } from './audit-log-panel';
 import { AskAITriggerButton, AskAIPanel } from './ask-ai-panel';
 import { useAIStore } from '@/lib/dashboard/ai-store';
 import { useAuth } from '@/lib/auth/context';
+import { TrialBanner } from './trial-banner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +73,12 @@ export function DashboardHeader() {
   const { theme, setTheme } = useTheme();
   const { user, tenant, isAuthenticated, isLoading: authLoading, logout } = useAuth();
 
+  // Trial status
+  const trialDaysRemaining = tenant?.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(tenant.trial_ends_at).getTime() - Date.now()) / 86400000))
+    : 0;
+  const isTrial = tenant?.status === 'trial' && trialDaysRemaining > 0;
+
   // Get user initials for avatar
   const userInitials = user?.name
     ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -102,6 +109,14 @@ export function DashboardHeader() {
             {tenant.ac_id}
           </Badge>
         </>
+      )}
+
+      {/* Trial banner (inline in header) */}
+      {isTrial && (
+        <TrialBanner
+          daysRemaining={trialDaysRemaining}
+          onUpgrade={() => useDashboardStore.getState().setActivePage('billing')}
+        />
       )}
 
       <div className="flex-1" />
@@ -188,7 +203,7 @@ export function DashboardHeader() {
                     {tenant.shop_name || tenant.name} · {tenant.ac_id}
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                    Plan: {tenant.plan} · Division: {tenant.division}
+                    Plan: {isTrial ? 'Trial (Pro)' : tenant.plan} · Division: {tenant.division}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
