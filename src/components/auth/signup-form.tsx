@@ -268,8 +268,8 @@ export function SignupForm() {
 
   // --- Step 3: Continue to onboarding ---
   const handleContinue = useCallback(() => {
-    router.push('/dashboard');
-  }, [router]);
+    router.push(`/onboarding?ac_id=${encodeURIComponent(acId)}`);
+  }, [router, acId]);
 
   // --- Update form field ---
   const updateField = (field: keyof FormData, value: string) => {
