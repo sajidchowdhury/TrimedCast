@@ -16,18 +16,18 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TrimedCast — Seasonal Demand & Inventory Forecasting",
-  description: "Integrated Seasonal Demand & Inventory Forecasting System for Bangladesh Motorcycle Parts Businesses. Consensus forecasting, order triggers, S&OP lifecycle.",
-  keywords: ["TrimedCast", "Bangladesh", "Motorcycle Parts", "Forecasting", "Seasonal Demand", "Inventory", "S&OP", "EOQ", "Safety Stock"],
+  description: "Integrated Seasonal Demand & Inventory Forecasting System for Bangladesh Motorcycle Parts Businesses. Stop guessing. Start forecasting.",
+  keywords: ["TrimedCast", "Bangladesh", "Motorcycle Parts", "Forecasting", "Seasonal Demand", "Inventory", "S&OP", "EOQ", "Safety Stock", "CNY Risk"],
   authors: [{ name: "TrimedCast Team" }],
   openGraph: {
     title: "TrimedCast — Seasonal Demand & Inventory Forecasting",
-    description: "Integrated forecasting system for BD motorcycle parts businesses",
+    description: "Stop guessing seasonal demand. TrimedCast forecasts when and how much to order for BD motorcycle parts dealers.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "TrimedCast — Seasonal Demand & Inventory Forecasting",
-    description: "Integrated forecasting system for BD motorcycle parts businesses",
+    description: "Stop guessing seasonal demand. TrimedCast forecasts when and how much to order for BD motorcycle parts dealers.",
   },
 };
 
