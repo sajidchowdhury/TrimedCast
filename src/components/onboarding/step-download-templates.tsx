@@ -3,6 +3,7 @@
 // ============================================
 // TrimedCast - Onboarding Step 2: Download Templates
 // All 7 CSV import types with download buttons
+// Mobile responsive with staggered animation
 // ============================================
 
 import { motion } from 'framer-motion';
@@ -52,8 +53,12 @@ export function StepDownloadTemplates() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="space-y-1">
-        <h2 className="text-xl font-bold text-foreground">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-1"
+      >
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground">
           Download CSV templates
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -61,26 +66,27 @@ export function StepDownloadTemplates() {
         </p>
         <p className="text-xs text-muted-foreground mt-1">
           These templates show the exact format TrimedCast expects for each data type.
+          Fill them with your data and upload in the next step.
         </p>
-      </div>
+      </motion.div>
 
       {/* Template Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="space-y-2">
         {CSV_TEMPLATES.map((template, i) => {
           const isDownloaded = downloadedTemplates.includes(template.id);
           return (
             <motion.div
               key={template.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.06 }}
+              className={`flex items-center gap-3 p-3 sm:p-4 rounded-lg border-2 transition-all ${
                 isDownloaded
                   ? 'border-emerald-500/30 bg-emerald-500/5'
                   : 'border-border bg-background hover:border-emerald-500/20'
               }`}
             >
-              <span className="text-2xl">{template.icon}</span>
+              <span className="text-xl sm:text-2xl flex-shrink-0">{template.icon}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{template.label}</p>
                 <p className="text-xs text-muted-foreground truncate">{template.labelBn}</p>
@@ -89,15 +95,19 @@ export function StepDownloadTemplates() {
                 variant={isDownloaded ? 'ghost' : 'outline'}
                 size="sm"
                 onClick={() => handleDownload(template.id, template.filename)}
-                className={isDownloaded
-                  ? 'text-emerald-500 hover:bg-emerald-500/10'
-                  : 'border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'
-                }
+                className={`min-h-[44px] flex-shrink-0 ${
+                  isDownloaded
+                    ? 'text-emerald-500 hover:bg-emerald-500/10'
+                    : 'border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'
+                }`}
               >
                 {isDownloaded ? (
                   <CheckCircle2 className="w-4 h-4" />
                 ) : (
-                  <Download className="w-4 h-4" />
+                  <>
+                    <Download className="w-4 h-4 sm:mr-1" />
+                    <span className="hidden sm:inline text-xs">CSV</span>
+                  </>
                 )}
               </Button>
             </motion.div>
@@ -108,12 +118,14 @@ export function StepDownloadTemplates() {
       {/* Progress */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-            style={{ width: `${(downloadedTemplates.length / CSV_TEMPLATES.length) * 100}%` }}
+          <motion.div
+            className="h-full rounded-full bg-emerald-500"
+            initial={false}
+            animate={{ width: `${(downloadedTemplates.length / CSV_TEMPLATES.length) * 100}%` }}
+            transition={{ duration: 0.3 }}
           />
         </div>
-        <span>{downloadedTemplates.length}/{CSV_TEMPLATES.length} downloaded</span>
+        <span className="tabular-nums">{downloadedTemplates.length}/{CSV_TEMPLATES.length}</span>
       </div>
 
       {/* Navigation */}
@@ -121,7 +133,7 @@ export function StepDownloadTemplates() {
         <Button
           variant="ghost"
           onClick={prevStep}
-          className="text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           Back
@@ -129,14 +141,14 @@ export function StepDownloadTemplates() {
         <Button
           variant="ghost"
           onClick={skipStep}
-          className="text-muted-foreground hover:text-foreground ml-auto"
+          className="text-muted-foreground hover:text-foreground ml-auto min-h-[44px]"
         >
           <SkipForward className="w-4 h-4 mr-1" />
           Skip
         </Button>
         <Button
           onClick={nextStep}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-lg shadow-emerald-500/25"
+          className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-lg shadow-emerald-500/25 min-h-[44px]"
         >
           {allDownloaded ? 'All Downloaded!' : 'Continue'}
           <ArrowRight className="w-4 h-4 ml-1" />
