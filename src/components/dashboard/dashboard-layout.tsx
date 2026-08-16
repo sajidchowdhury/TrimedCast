@@ -3,6 +3,7 @@
 // ============================================
 // Dashboard Layout — Main application shell
 // Sidebar + Header + Main Content + Right Panel
+// AuthProvider wraps everything for auth context
 // Sticky footer, ErrorBoundary, page transitions
 // ============================================
 
@@ -13,26 +14,29 @@ import { ContentRouter } from './content-router';
 import { AuditLogPanel } from './audit-log-panel';
 import { ErrorBoundary } from './error-boundary';
 import { FloatingHelpButton } from './floating-help-button';
+import { AuthProvider } from '@/lib/auth/context';
 
 export function DashboardLayout() {
   return (
-    <SidebarProvider defaultOpen>
-      <AppSidebar />
-      <SidebarInset className="min-h-screen flex flex-col">
-        <DashboardHeader />
-        <main className="flex-1 p-4 md:p-5 overflow-auto">
-          <ErrorBoundary>
-            <ContentRouter />
-          </ErrorBoundary>
-        </main>
-        <footer className="mt-auto border-t border-border py-3 px-4 text-center">
-          <p className="text-xs text-muted-foreground">
-            TrimedCast — Integrated Seasonal Demand &amp; Inventory Forecasting System for Bangladesh Motorcycle Parts
-          </p>
-        </footer>
-      </SidebarInset>
-      <AuditLogPanel />
-      <FloatingHelpButton />
-    </SidebarProvider>
+    <AuthProvider>
+      <SidebarProvider defaultOpen>
+        <AppSidebar />
+        <SidebarInset className="min-h-screen flex flex-col">
+          <DashboardHeader />
+          <main className="flex-1 p-4 md:p-5 overflow-auto">
+            <ErrorBoundary>
+              <ContentRouter />
+            </ErrorBoundary>
+          </main>
+          <footer className="mt-auto border-t border-border py-3 px-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              TrimedCast — Integrated Seasonal Demand &amp; Inventory Forecasting System for Bangladesh Motorcycle Parts
+            </p>
+          </footer>
+        </SidebarInset>
+        <AuditLogPanel />
+        <FloatingHelpButton />
+      </SidebarProvider>
+    </AuthProvider>
   );
 }

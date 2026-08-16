@@ -43,3 +43,32 @@ export {
   getUserSessions,
   cleanupExpiredSessions,
 } from './session-store';
+
+// Middleware utilities
+export {
+  PUBLIC_ROUTES,
+  PUBLIC_ROUTE_PREFIXES,
+  AUTH_PAGES,
+  ROLE_RESTRICTED_ROUTES,
+  SUSPENSION_BLOCKED_PREFIXES,
+  isPublicRoute,
+  isAuthPage,
+  getRequiredRoles,
+  isBlockedForSuspended,
+  validateSession,
+  canAccessRoute,
+  type SessionValidationResult,
+} from './middleware';
+
+// Auth context (React — client-side only)
+export {
+  AuthProvider,
+  useAuth,
+  usePermission,
+  usePermissionGuard,
+  useRoleGuard,
+  type AuthUser,
+  type AuthTenant,
+  type AuthState,
+  type AuthContextValue,
+} from './context';

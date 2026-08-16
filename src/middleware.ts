@@ -1,105 +1,117 @@
 // ============================================
 // TrimedCast - Auth Middleware
-// Route protection: unauthenticated users
-// redirected to /login for protected routes
+// Route protection with role-based access
+// and tenant status checks
+//
+// Flow:
+// 1. Public routes → allow through
+// 2. Auth pages + already logged in → redirect /dashboard
+// 3. Protected routes + no session → redirect /login
+// 4. Protected routes + invalid/expired session → clear cookie + /login
+// 5. Role-restricted routes + insufficient role → redirect /dashboard (403)
+// 6. Tenant suspended + accessing operational route → redirect /billing
+// 7. Valid session → attach headers → allow
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import {
+  isPublicRoute,
+  isAuthPage,
+  getRequiredRoles,
+  isBlockedForSuspended,
+  validateSession,
+  canAccessRoute,
+} from '@/lib/auth/middleware';
 
-// Public routes that don't require authentication
-const PUBLIC_ROUTES = [
-  '/',
-  '/login',
-  '/signup',
-  '/pricing',
-  '/forgot-password',
-  '/reset-password',
-  '/accept-invite',
-];
+// Session cookie name
+const SESSION_COOKIE = 'trimedcast-session';
 
-// Public route prefixes (anything under these paths is public)
-const PUBLIC_ROUTE_PREFIXES = [
-  '/api/v1/auth/',     // Auth API endpoints
-  '/api/health',       // Health check
-  '/_next/',           // Next.js static assets
-  '/favicon',          // Favicon
-  '/api/imports/file', // File upload endpoint (has its own auth)
-];
-
-// Auth pages (redirect to dashboard if already logged in)
-const AUTH_PAGES = [
-  '/login',
-  '/signup',
-  '/forgot-password',
-  '/reset-password',
-];
-
-/**
- * Check if a path matches any public route prefix
- */
-function isPublicRoute(pathname: string): boolean {
-  if (PUBLIC_ROUTES.includes(pathname)) return true;
-  return PUBLIC_ROUTE_PREFIXES.some(prefix => pathname.startsWith(prefix));
-}
-
-/**
- * Check if a path is an auth page (login/signup)
- */
-function isAuthPage(pathname: string): boolean {
-  return AUTH_PAGES.includes(pathname);
-}
+// Header keys for downstream consumption
+const HEADER_USER_ID = 'x-user-id';
+const HEADER_TENANT_ID = 'x-tenant-id';
+const HEADER_USER_ROLE = 'x-user-role';
+const HEADER_TENANT_STATUS = 'x-tenant-status';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes
+  // ---- 1. Public routes → always allow ----
   if (isPublicRoute(pathname)) {
-    // If user is logged in and visiting auth page, redirect to dashboard
+    // If user is logged in and visiting an auth page, redirect to dashboard
     if (isAuthPage(pathname)) {
-      const token = request.cookies.get('trimedcast-session')?.value;
+      const token = request.cookies.get(SESSION_COOKIE)?.value;
       if (token) {
-        // Verify session is still valid
-        const session = await db.userSession.findUnique({
-          where: { token },
-          select: { isActive: true, expiresAt: true },
-        });
-
-        if (session?.isActive && session.expiresAt > new Date()) {
-          return NextResponse.redirect(new URL('/dashboard', request.url));
+        const result = await validateSession(token);
+        if (result.isValid) {
+          // Preserve redirect param if present
+          const redirectTo = request.nextUrl.searchParams.get('redirect') || '/dashboard';
+          return NextResponse.redirect(new URL(redirectTo, request.url));
         }
+        // Invalid session on auth page — clear cookie, let them see the auth page
+        const response = NextResponse.next();
+        response.cookies.delete(SESSION_COOKIE);
+        return response;
       }
     }
     return NextResponse.next();
   }
 
-  // For protected routes, check session
-  const token = request.cookies.get('trimedcast-session')?.value;
+  // ---- 2. Protected routes → check session ----
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
 
   if (!token) {
-    // No token — redirect to login
+    // No token → redirect to login with return URL
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Verify session
-  const session = await db.userSession.findUnique({
-    where: { token },
-    select: { isActive: true, expiresAt: true, userId: true, tenantId: true },
-  });
+  // ---- 3. Validate session against DB ----
+  const result = await validateSession(token);
 
-  if (!session || !session.isActive || session.expiresAt <= new Date()) {
-    // Invalid/expired session — clear cookie and redirect to login
+  if (!result.isValid) {
+    // Invalid/expired session → clear cookie + redirect to login
     const response = NextResponse.redirect(new URL('/login', request.url));
-    response.cookies.delete('trimedcast-session');
+    response.cookies.delete(SESSION_COOKIE);
     return response;
   }
 
-  // Valid session — attach user info to headers for downstream use
+  // ---- 4. Role-based route protection ----
+  const requiredRoles = getRequiredRoles(pathname);
+  if (requiredRoles && result.role) {
+    if (!canAccessRoute(result.role, pathname)) {
+      // User doesn't have the required role → redirect to dashboard
+      // (They're authenticated, just not authorized for this specific route)
+      const dashboardUrl = new URL('/dashboard', request.url);
+      dashboardUrl.searchParams.set('error', 'access_denied');
+      return NextResponse.redirect(dashboardUrl);
+    }
+  }
+
+  // ---- 5. Tenant status checks ----
+  // If tenant is suspended/past_due and user tries to access operational routes,
+  // redirect to billing so they can resolve the payment issue
+  if (
+    result.tenantStatus &&
+    (result.tenantStatus === 'suspended' || result.tenantStatus === 'past_due') &&
+    isBlockedForSuspended(pathname)
+  ) {
+    // Allow access to billing, settings, and auth routes only
+    const billingUrl = new URL('/billing', request.url);
+    billingUrl.searchParams.set('suspended', 'true');
+    return NextResponse.redirect(billingUrl);
+  }
+
+  // ---- 6. Valid session → attach user context headers ----
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-user-id', session.userId);
-  requestHeaders.set('x-tenant-id', session.tenantId);
+  requestHeaders.set(HEADER_USER_ID, result.userId || '');
+  requestHeaders.set(HEADER_TENANT_ID, result.tenantId || '');
+  if (result.role) {
+    requestHeaders.set(HEADER_USER_ROLE, result.role);
+  }
+  if (result.tenantStatus) {
+    requestHeaders.set(HEADER_TENANT_STATUS, result.tenantStatus);
+  }
 
   return NextResponse.next({
     request: {

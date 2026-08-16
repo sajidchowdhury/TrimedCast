@@ -1,6 +1,7 @@
 // ============================================
 // TrimedCast API - Authentication Utilities
 // DB-backed sessions with RBAC
+// Supports Bearer token, cookie, and middleware headers
 // ============================================
 
 import { db } from '@/lib/db';
@@ -29,6 +30,19 @@ export interface AuthContext {
   isAuthenticated: boolean;
 }
 
+// --- Auth Error (for requireAuth) ---
+
+export class AuthError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly statusCode: number = 401
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
 /**
  * Create a new authenticated session
  * Returns the session token
@@ -44,18 +58,42 @@ export async function createAuthSession(
 
 /**
  * Get auth context from request headers (Bearer token)
+ * Falls back to middleware-injected headers (x-user-id, x-tenant-id)
+ * Falls back to cookie-based session
  */
 export async function getAuthContext(): Promise<AuthContext> {
   try {
     const hdrs = await headers();
+
+    // 1. Try Bearer token (API calls from client)
     const authHeader = hdrs.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { userId: '', tenantId: '', role: '', isAuthenticated: false };
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      return getAuthContextFromToken(token);
     }
-    
-    const token = authHeader.substring(7);
-    return getAuthContextFromToken(token);
+
+    // 2. Try middleware-injected headers (page requests through middleware)
+    const mwUserId = hdrs.get('x-user-id');
+    const mwTenantId = hdrs.get('x-tenant-id');
+    const mwUserRole = hdrs.get('x-user-role');
+    if (mwUserId && mwTenantId) {
+      // Verify user is still active
+      const user = await db.user.findUnique({
+        where: { id: mwUserId },
+        select: { role: true, isActive: true },
+      });
+      if (user?.isActive) {
+        return {
+          userId: mwUserId,
+          tenantId: mwTenantId,
+          role: mwUserRole || user.role,
+          isAuthenticated: true,
+        };
+      }
+    }
+
+    // 3. Fall back to cookie
+    return getAuthContextFromCookies();
   } catch {
     return { userId: '', tenantId: '', role: '', isAuthenticated: false };
   }
@@ -104,6 +142,41 @@ export async function getAuthContextFromCookies(): Promise<AuthContext> {
   } catch {
     return { userId: '', tenantId: '', role: '', isAuthenticated: false };
   }
+}
+
+/**
+ * Require authentication — throws AuthError if not authenticated
+ * Use in API routes: const ctx = await requireAuth();
+ */
+export async function requireAuth(): Promise<AuthContext> {
+  const context = await getAuthContext();
+  if (!context.isAuthenticated) {
+    throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+  }
+  return context;
+}
+
+/**
+ * Require a specific permission — throws AuthError if not authorized
+ * Use in API routes: const ctx = await requirePermission('forecasts.approve');
+ */
+export async function requirePermission(permission: string): Promise<AuthContext> {
+  const context = await requireAuth();
+  if (!hasPermission(context.role, permission)) {
+    throw new AuthError('FORBIDDEN', `Permission denied: ${permission}`, 403);
+  }
+  return context;
+}
+
+/**
+ * Require one of the specified roles — throws AuthError if not in role
+ */
+export async function requireRole(...roles: string[]): Promise<AuthContext> {
+  const context = await requireAuth();
+  if (!roles.includes(context.role)) {
+    throw new AuthError('FORBIDDEN', `Role denied: requires one of [${roles.join(', ')}]`, 403);
+  }
+  return context;
 }
 
 /**
