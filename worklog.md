@@ -2224,3 +2224,180 @@ Stage Summary:
 - PAGE_HELP extended with team content (Bengali/English bilingual)
 - Commit: feat(session-15): User Management UI + API (144 files, 3,163 insertions)
 - Pushed to GitHub: 06afac2
+---
+Task ID: 1
+Agent: session-16-rbac
+Task: Session 16: Role-Based Access Control (RBAC) Components
+
+Work Log:
+- Created /src/components/rbac/types.ts: RBAC types and constants
+  - RoleInfo, PermissionCheck, PermissionCheckResult, FieldSecurityConfig, RateLimitConfig interfaces
+  - RBAC_RESOURCE_ACTIONS constant (all 57 resource.action strings)
+  - ROLE_COLORS mapping (Tailwind classes for each role: bg, text, border, dot)
+  - BENGALI_ROLE_LABELS (Bengali translations for all 5 roles)
+  - Props interfaces: PermissionGuardProps, RoleGuardProps, FieldGuardProps, ReadOnlyGuardProps, PermissionGateProps
+  - RbacGuardResult interface for useRbacGuard hook
+- Created /src/stores/rbac-store.ts: Zustand RBAC store
+  - State: role, permissions, restrictedFields, roleInfo, isLoading, lastSyncAt
+  - Actions: syncFromApi (fetches /api/v1/security/permissions), setRole (demo/preview mode), reset
+  - Computed: hasPermission, hasAnyPermission, hasAllPermissions, isFieldRestricted, canPerform, isReadOnly, canViewFinancials, canApproveForecasts
+  - Uses deriveFromRole() to auto-populate permissions/fields from rbac.ts helpers
+- Created /src/components/rbac/permission-guard.tsx: 5 guard components + hook
+  - PermissionGuard: renders children only if user has permission(s), supports 'any'/'all' mode
+  - RoleGuard: renders children only if user has role(s), supports 'any'/'all' mode
+  - FieldGuard: hides or masks fields based on role's restricted fields from FIELD_SECURITY
+  - ReadOnlyGuard: disables edit actions for read-only roles (finance), showDisabled or hide mode
+  - PermissionGate: skeleton while loading, then permission check with children/fallback
+  - useRbacGuard: combined hook returning allowed, isLoading, role, isReadOnly, hasPermission, hasAnyPermission, hasAllPermissions, isFieldRestricted
+- Created /src/components/rbac/role-selector.tsx: Role selector dropdown
+  - Uses shadcn Select component with role color dots indicators
+  - Supports Bengali labels (showBn prop)
+  - Color-coded role indicators from ROLE_COLORS
+  - Props: currentRole, onRoleChange, showBn, className, disabled
+- Lint passes clean with zero errors
+
+Stage Summary:
+- 4 files created: types.ts, rbac-store.ts, permission-guard.tsx, role-selector.tsx
+- All components are 'use client' and use useAuth() from @/lib/auth/context
+- All guard components support fallback prop for denied states
+- FieldGuard uses isFieldRestricted() from @/lib/api/rbac
+- RBAC store provides full permission/role/field computed checks
+- Role selector supports Bengali labels for Bangladesh locale
+
+---
+Task ID: 6
+Agent: RBAC API Developer
+Task: Session 16 - Role-Based Access Control (RBAC) API Routes
+
+Work Log:
+- Created /src/app/api/v1/security/check-permission/route.ts (POST):
+  - Single permission check: body { permission: string } → { allowed, checked, role, missing? }
+  - Multiple permission check: body { permissions: string[], mode: 'any'|'all' } → { allowed, checked, mode, role, missing? }
+  - Falls back to warehouse_manager for demo mode (resolves first active user from DB)
+  - Uses hasGranularPermission(), isValidRole() from rbac.ts
+
+- Created /src/app/api/v1/security/my-permissions/route.ts (GET):
+  - Comprehensive RBAC profile endpoint for RBAC store sync
+  - Returns: user_id, tenant_id, authenticated, role, permissions, restricted_fields, role_info (label, description, hierarchy_level, capabilities), rate_limits, rate_limit_status
+  - Uses getRoleInfo(), getRateLimitStatus() from rbac.ts
+  - Falls back to first active user for demo mode
+
+- Created /src/app/api/v1/security/security-events/route.ts (GET):
+  - Paginated list of security events for the tenant
+  - RBAC: warehouse_manager or executive only (403 for others)
+  - Query params: page, per_page, severity, event_type, since (ISO date), resolved (boolean)
+  - Uses Prisma.SecurityEventWhereInput for type-safe where clause
+  - Graceful degradation: if query fails (missing table, etc.), returns empty list
+  - Formats dates to ISO strings, parses JSON details field
+
+- Created /src/app/api/v1/security/filter-fields/route.ts (POST):
+  - Filters restricted fields from response data based on user's role
+  - Body: { data: Record<string, unknown> | Record<string, unknown>[], role?: string }
+  - Supports both single records and arrays
+  - If role not provided, uses authenticated user's role; falls back to warehouse_manager
+  - Returns: { filtered_data, removed_fields, role, restricted_fields }
+  - Uses isFieldRestricted(), getRestrictedFields() from rbac.ts
+
+- All 4 routes pass `bun run lint` with zero errors/warnings
+
+---
+Task ID: 3
+Agent: Session 16 RBAC Developer
+Task: Session 16 - Role-Based Access Control (RBAC) Middleware & Security Event Logger
+
+Work Log:
+- Read existing context files: rbac.ts (full RBAC definitions, ROLE_PERMISSIONS, FIELD_SECURITY, checkRateLimit, validateGovernanceNote), auth.ts (AuthContext, requireAuth, requirePermission, requireRole), audit.ts (createAuditLog), response.ts (apiError, forbiddenError, etc.)
+- Verified SecurityEvent model already exists in prisma/schema.prisma (lines 740-765) with fields: id, type, userId, tenantId (nullable), tokenTenantId, targetTenantId, ipAddress, userAgent, url, requestMethod, details, severity, resolved, resolvedBy, resolvedAt, occurredAt, createdAt. Used existing schema as-is (no db:push needed).
+- Created /src/lib/api/security-event.ts:
+  - SECURITY_EVENT_TYPES constant with 7 event types: ACCESS_DENIED, PERMISSION_ESCALATION_ATTEMPT, RATE_LIMIT_EXCEEDED, CROSS_TENANT_ACCESS, SUSPICIOUS_ACTIVITY, ROLE_CHANGE, SESSION_HIJACK_SUSPECT
+  - logSecurityEvent() — Creates SecurityEvent DB record + AuditLog entry; never blocks on failure
+  - checkSuspiciousActivity() — Counts ACCESS_DENIED events in last 15 minutes, auto-creates SUSPICIOUS_ACTIVITY event if >5 denials
+  - getSecurityEventsForTenant() — Paginated retrieval with severity, eventType, and date filters
+  - resolveSecurityEvent() — Mark event as resolved with resolver tracking
+  - getSecurityEventStats() — Aggregate dashboard stats: unresolved count, 24h/7d counts, by-severity and by-type groupings
+- Created /src/lib/api/rbac-middleware.ts:
+  - withRbac(options, handler) — Main higher-order function wrapping Next.js API route handlers:
+    Step 1: Authentication via getAuthContext()
+    Step 2: Permission check via hasGranularPermission()
+    Step 3: Role check (single or multiple roles)
+    Step 4: Governance note validation (for forecast.approve, forecast.update, sop.advance, sop.override, sop.approve)
+    Step 5: Rate limiting via checkRateLimit() with X-RateLimit-* response headers
+    Step 6: Execute handler with RbacContext (auth)
+    Step 7: Auto-filter response fields based on FIELD_SECURITY
+    Step 8: Add rate limit headers to response
+    Error handling: AuthError → proper 401/403 responses, unexpected → 500
+  - filterResponseFields(data, role) — Recursive field stripping for nested objects and arrays using FIELD_SECURITY config
+  - validateGovernanceNote() — Re-export from rbac.ts for convenience
+  - checkRateLimitForUser() — Wrapper around rbac.ts checkRateLimit
+  - createSecurityEvent() — Auto-severity logging (ACCESS_DENIED→medium, ESCALATION→critical, RATE_LIMIT→low, etc.)
+  - withCrudRbac(options, handler) — Convenience wrapper that auto-maps HTTP methods to resource.action permissions
+  - Helper functions: extractIpAddress(), extractUserAgent(), isGovernanceRequired(), getSeverityForEventType()
+- Lint: Clean (0 errors, 1 pre-existing warning in unrelated file)
+
+Files Created:
+- /src/lib/api/security-event.ts
+- /src/lib/api/rbac-middleware.ts
+
+---
+Task ID: 5
+Agent: RBAC Dashboard Developer
+Task: Session 16 - Role-Based Access Control (RBAC) Dashboard UI
+
+Work Log:
+- Created /src/components/rbac/permission-matrix.tsx: Permission matrix grid component (Tab 1)
+  - RESOURCE_GROUPS: 12 categories (Products, Inventory, Sales Orders, Purchase Orders, Suppliers, Forecasts, Promo Events, S&OP, Users, Audit, Financial, Other)
+  - getPermissionStatus(): Determines cell status (full/read/field_restricted/none/conditional) per role×resource.action
+  - Status icons: Check (full), Eye (read), Lock (field-restricted), X (none), AlertTriangle (conditional)
+  - Color coding: emerald=full, sky=read, amber=restricted, red=denied, yellow=conditional
+  - Category header rows with uppercase tracking
+  - Sticky first column for mobile scrolling
+  - Role column highlighting via highlightRole prop
+  - Tooltip on each cell showing role→permission→status
+  - Legend bar with all 5 status types
+- Created /src/components/rbac/field-security-table.tsx: Field security table (Tab 3)
+  - FIELD_CATEGORIES: Product Cost Fields, Supplier Contract Fields, Order Value Fields
+  - getFieldAccess(): Returns visible/hidden/masked per role×field
+  - Finance sees values but contract terms hidden; sales/marketing see cost fields masked, contract fields hidden
+  - Summary badges per role showing restricted field count
+  - Category header rows with descriptions
+  - Field labels + monospace field names in each row
+  - Financial fields reference footer
+- Created /src/components/rbac/rate-limit-panel.tsx: Rate limit visualization (Tab 4)
+  - RATE_LIMIT_CATEGORIES: API Requests, AI Queries, Forecast Runs, Data Imports
+  - Role-tabbed layout using Tabs component
+  - Per-category cards with Gauge icon, limit badge, progress bar
+  - Simulated usage visualization (35% for warehouse_manager, 20% for others)
+  - Progress bar color coding: emerald (<60%), amber (60-80%), red (>80%)
+  - "Not Allowed" badge + X icon for categories with 0 limit
+  - Role summary bar showing total req/min
+- Created /src/components/rbac/rbac-dashboard.tsx: Main RBAC dashboard (5 tabs)
+  - Header: Shield icon + title, subtitle, EN/বাং toggle, RoleSelector, active role badge
+  - Tab 1 (Permission Matrix): Uses PermissionMatrix component, highlight column by selected role
+  - Tab 2 (Role Details): 5 role cards with hover effects
+    - Each card: role name, Bengali label, hierarchy level badge, permission count badge
+    - Permission breakdown (read/write/approve counts)
+    - Key capabilities (top 5, green badges with Check icon)
+    - Key restrictions (top 3, red badges with X icon)
+    - Expand/collapse to show full permission list with scrollable max-h-48
+    - Expanded view includes restricted fields section
+  - Tab 3 (Field Security): Uses FieldSecurityTable component
+  - Tab 4 (Rate Limits): Uses RateLimitPanel component
+  - Tab 5 (Governance Rules):
+    - Alert component explaining governance policy (10 char minimum)
+    - Table of 5 governed operations (forecast.approve, forecast.update, sop.advance, sop.override, sop.approve)
+    - Each row: operation label, permission badge, description, roles with access, note required indicator
+    - Summary cards: Min Note Length (10), Governed Operations (5), Roles with Governed Ops (2)
+    - Test Governance Note: Input field with real-time validation
+    - Green Check if >=10 chars, Red X if <10 chars
+    - Character counter (current/10)
+- Updated /src/app/page.tsx: Renders RbacDashboard with header/footer layout
+- Lint: Clean (0 errors)
+
+Files Created:
+- /src/components/rbac/permission-matrix.tsx
+- /src/components/rbac/field-security-table.tsx
+- /src/components/rbac/rate-limit-panel.tsx
+- /src/components/rbac/rbac-dashboard.tsx
+
+Files Modified:
+- /src/app/page.tsx
