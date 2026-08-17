@@ -2401,3 +2401,130 @@ Files Created:
 
 Files Modified:
 - /src/app/page.tsx
+
+---
+Task ID: 17-2
+Agent: Main Developer
+Task: Session 17 - Seasonality Type Management API
+
+Work Log:
+- Added forecast_settings.crud and forecast_settings.read permissions to all roles in /src/lib/api/auth.ts
+  - admin, warehouse_manager: forecast_settings.crud + forecast_settings.read
+  - sales_manager, marketing_manager, finance, executive, viewer: forecast_settings.read
+- Created /src/app/api/v1/seasonality-types/route.ts (GET + POST)
+  - GET: List all seasonality types for tenant. RBAC: forecast_settings.read. Query params: active_only, search. Fallback to resolveTenant() for unauthenticated demo. Order: isDefault desc, name asc. Parses months JSON to number[] in response.
+  - POST: Create seasonality type. RBAC: forecast_settings.crud. Validates: name uniqueness (tenantId_name unique), multiplier 0.1-5.0, months 1-12 integers, hex color format. Auto-generates snake_case name from label if omitted. Audit log on create.
+- Created /src/app/api/v1/seasonality-types/[id]/route.ts (GET + PUT + DELETE)
+  - GET: Single by ID, tenant-scoped. RBAC: forecast_settings.read.
+  - PUT: Update. RBAC: forecast_settings.crud. Cannot change name of isDefault=true (403). Validates multiplier, months, color. Before/after audit log.
+  - DELETE: Hard delete. RBAC: forecast_settings.crud. Cannot delete isDefault=true (403 with message to deactivate instead). Audit log.
+- Created /src/app/api/v1/seasonality-types/bulk-toggle/route.ts
+  - POST: Bulk activate/deactivate. Body: {ids: string[], isActive: boolean}. RBAC: forecast_settings.crud. Skips isDefault types (reported in response as skipped_default). Audit log with metadata.
+- Created /src/app/api/v1/seasonality-types/presets/route.ts
+  - GET: Returns static BD reference data — no auth required. Three sections:
+    - presets: DEMO_SEASONALITY_TYPES with months parsed from JSON
+    - months: BD_MONTHS (12 entries with number, name, nameBn, season)
+    - holidays: BD_HOLIDAYS (13 entries: national, religious, international; some with seasonality link)
+- All files pass `bun run lint` with zero errors.
+
+---
+Task ID: 17-3
+Agent: Seasonality Types & Store Developer
+Task: Session 17 - Seasonality Type Management (Types + Store)
+
+Work Log:
+- Created /src/components/seasonality/types.ts
+  - SeasonalityType interface (id, name, label, label_bn, description, multiplier, months[], color, is_active, is_default, timestamps)
+  - CreateSeasonalityTypeInput interface (name optional auto-generated, label required, multiplier, months[], color, is_active optional)
+  - UpdateSeasonalityTypeInput interface (all optional: label, label_bn, description, multiplier, months, color, is_active)
+  - MONTH_NAMES_EN / MONTH_NAMES_BN / MONTH_SHORT_EN / MONTH_SHORT_BN constants (12 entries each)
+  - BD_HOLIDAYS: 7 entries (Eid ul-Fitr, Eid ul-Adha, Durga Puja, Pohela Boishakh, Independence Day, Victory Day, Chinese New Year) with name, nameBn, month, type
+  - PRESET_COLORS: 12 color palette entries
+  - MULTIPLIER_MIN (0.1) / MULTIPLIER_MAX (5.0) constants
+  - SEASONALITY_PRESETS: 6 BD-specific presets (winter_peak, monsoon_dip, eid_peak, cny_shutdown, puja_peak, pre_winter) with name, label, labelBn, description, multiplier, months, color
+- Created /src/stores/seasonality-store.ts (Zustand store)
+  - State: types[], isLoading, error, searchQuery, activeOnly
+  - fetchTypes: GET /api/v1/seasonality-types with active_only and search query params
+  - createType: POST /api/v1/seasonality-types, re-fetches after success
+  - updateType: PUT /api/v1/seasonality-types/{id}, re-fetches after success
+  - deleteType: DELETE /api/v1/seasonality-types/{id}, re-fetches after success
+  - bulkToggle: POST /api/v1/seasonality-types/bulk-toggle, body {ids, is_active}
+  - setSearchQuery, setActiveOnly, clearError UI state actions
+  - activeTypes(): filters types by is_active
+  - defaultTypes(): filters types by is_default
+  - customTypes(): filters types by !is_default
+  - filteredTypes(): applies activeOnly filter + search query (label, name, label_bn, description)
+  - getTypeByName(): lookup by name
+  - getActiveMonthsForDate(): returns active types whose months include the date's month (JS 0-indexed → 1-indexed)
+  - getCombinedMultiplierForDate(): product of all active types' multipliers for that month, defaults to 1.0
+- All files pass `bun run lint` with zero errors.
+
+---
+Task ID: 17-4
+Agent: Session 17 Developer
+Task: Seasonality Type Management Dashboard UI
+
+Work Log:
+- Created /src/components/seasonality/month-badge.tsx
+  - MonthBadge: compact pill showing month short name (EN/BN) with color from parent type
+  - MonthBadgeGroup: renders sorted month badges in a flex wrap layout
+  - Color derived from seasonality type with opacity for inactive state
+- Created /src/components/seasonality/multiplier-display.tsx
+  - MultiplierDisplay: shows "1.8×" format with color coding
+    - Green/emerald for >1 (demand up), red for <1 (demand down), gray for =1 (neutral)
+    - TrendingUp/TrendingDown/Minus icons from Lucide
+    - Optional bar chart showing relative magnitude vs MULTIPLIER_MAX
+    - Three sizes: sm, md, lg
+    - Optional label ("Demand Up", "Demand Down", "Neutral")
+  - CombinedMultiplierDisplay: shows product of multiple multipliers
+- Created /src/components/seasonality/seasonality-card.tsx
+  - Individual card for each SeasonalityType
+  - Color-coded left border + top strip
+  - Color dot + label (BN if showBn) + name badge (snake_case) + default badge (Shield icon)
+  - Description (line-clamp-2)
+  - Multiplier display with color-coded badge
+  - Month badges (MonthBadgeGroup) with color and BN support
+  - Active/Inactive toggle switch
+  - Edit button (Pencil icon) and Delete button (Trash2 icon, disabled for isDefault)
+  - Tooltips on all action buttons and default badge
+  - Opacity-60 when inactive
+- Created /src/components/seasonality/seasonality-form.tsx
+  - Dialog component for Create/Edit seasonality types
+  - Preset quick-add chips (SEASONALITY_PRESETS) - only shown for new (not edit)
+  - Fields: Label (required), Label Bn (optional with Bengali placeholder), Description (textarea)
+  - Multiplier: dual input (Slider + number Input), range 0.1-5.0 step 0.1, color-coded badge
+  - Months: 4×3 grid of Checkbox labels (Jan-Dec or Bengali names) with Select All / Clear All buttons
+  - Color picker: PRESET_COLORS swatches (12 colors with check mark on selected) + custom hex input with live preview
+  - Active toggle: Switch with description
+  - Form validation: label required, at least 1 month, multiplier in range
+  - Submit creates CreateSeasonalityTypeInput or calls update
+  - Loading state on submit button
+- Created /src/components/seasonality/seasonality-timeline.tsx
+  - 12-month horizontal year timeline visualization
+  - Color bars for each active seasonality type spanning their months
+  - BD holiday markers (religious=amber, cultural=purple, national=emerald, international=sky)
+  - Combined multiplier per month shown below each column with color coding
+  - Bar chart showing combined demand multiplier by month (green=up, red=down, gray=neutral)
+  - Tooltips showing individual type contributions per month
+  - Type legend with color dots + labels + multipliers
+  - Holiday legend with colored dots + BD holiday names
+  - BN/EN month labels support
+- Created /src/components/seasonality/seasonality-dashboard.tsx
+  - Main orchestrating component for the Seasonality Type Management page
+  - Header: Sun icon, "Seasonality Type Management" title, BN subtitle
+  - Bengali/English toggle button (🇧🇩/🇬🇧)
+  - Stats badges: total, active, default counts
+  - Two views: List View (default) and Timeline View (Tabs component)
+  - List View: Search input, Active Only toggle, Add New button, card grid (1 col mobile, 2 col desktop)
+  - Empty state: Snowflake icon, "No seasonality types found" with Add New CTA
+  - Delete confirmation: AlertDialog with type details and warning about affected products
+  - Mock data fallback: uses SEASONALITY_PRESETS when API unavailable (for demo)
+  - Error banner with dismiss button
+  - Loading spinner state
+  - Full CRUD: create, edit (pre-fills form), delete (with confirmation), toggle active
+- Updated /src/app/page.tsx
+  - Replaced RBAC Dashboard with Seasonality Dashboard
+  - Header: "TC" logo, "TrimedCast / Seasonality", "Session 17" badge
+  - Main: SeasonalityDashboard component
+  - Footer: Footer component from landing
+- All files pass `bun run lint` with zero errors.

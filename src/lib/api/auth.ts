@@ -204,6 +204,7 @@ const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'sales_orders.crud', 'purchase_orders.crud', 'forecasts.crud', 'forecasts.approve',
     'recommended_orders.crud', 'settings.crud', 'imports.crud', 'users.manage',
     'sop_cycles.crud', 'promo_events.crud', 'audit_log.read',
+    'forecast_settings.crud', 'forecast_settings.read',
     'billing.manage', 'subscription.manage', 'team.manage', 'api_explorer.access',
   ],
   warehouse_manager: [
@@ -211,31 +212,37 @@ const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'sales_orders.crud', 'purchase_orders.crud', 'forecasts.crud', 'forecasts.approve',
     'recommended_orders.crud', 'settings.crud', 'imports.crud', 'users.manage',
     'sop_cycles.crud', 'promo_events.crud', 'audit_log.read',
+    'forecast_settings.crud', 'forecast_settings.read',
   ],
   sales_manager: [
     'products.read', 'inventory.read', 'suppliers.read', 'motorcycle_models.read',
     'sales_orders.crud', 'purchase_orders.read', 'forecasts.read',
     'recommended_orders.read', 'settings.read', 'promo_events.read',
+    'forecast_settings.read',
   ],
   marketing_manager: [
     'products.read', 'inventory.read', 'suppliers.read',
     'forecasts.read', 'forecasts.generate', 'recommended_orders.read',
     'settings.read', 'promo_events.crud',
+    'forecast_settings.read',
   ],
   finance: [
     'products.read', 'inventory.read', 'suppliers.read',
     'sales_orders.read', 'purchase_orders.read', 'forecasts.read',
     'recommended_orders.read', 'settings.read', 'audit_log.read',
+    'forecast_settings.read',
   ],
   executive: [
     'products.read', 'inventory.read', 'suppliers.read', 'motorcycle_models.read',
     'sales_orders.read', 'purchase_orders.read', 'forecasts.read', 'forecasts.approve',
     'recommended_orders.read', 'settings.read', 'sop_cycles.crud', 'audit_log.read',
+    'forecast_settings.read',
   ],
   viewer: [
     'products.read', 'inventory.read', 'suppliers.read', 'motorcycle_models.read',
     'sales_orders.read', 'purchase_orders.read', 'forecasts.read',
     'recommended_orders.read', 'settings.read',
+    'forecast_settings.read',
   ],
 };
 
