@@ -9,6 +9,8 @@ import { apiAccepted, apiError, forbiddenError } from '@/lib/api/response';
 import { getAuthContext, canDo, resolveTenant } from '@/lib/api/auth';
 import { createJob, processJob } from '@/lib/api/forecast-job-manager';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

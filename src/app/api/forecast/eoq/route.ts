@@ -18,6 +18,8 @@ import {
   DEFAULT_REVIEW_PERIOD_DAYS,
   type ProductEOQSafetyStock,
 } from '@/lib/forecasting/eoq-safety-stock';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

@@ -10,6 +10,8 @@ import { getAuthContext } from '@/lib/api/auth';
 import { validateEmail, validatePhone } from '@/lib/auth/password';
 import { createAuditLog } from '@/lib/api/audit';
 import { sendInviteEmail } from '@/lib/email';
+export const runtime = 'nodejs';
+
 
 const VALID_ROLES = ['admin', 'warehouse_manager', 'sales_manager', 'marketing_manager', 'finance', 'executive', 'viewer'];
 const MAX_TEAM_MEMBERS = 5; // Pro plan limit

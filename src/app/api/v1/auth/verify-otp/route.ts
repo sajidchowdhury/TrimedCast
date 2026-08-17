@@ -12,6 +12,8 @@ import { generateAcId } from '@/lib/auth/ac-id';
 import { createAuthSession } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
 import { sendWelcomeEmail } from '@/lib/email';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

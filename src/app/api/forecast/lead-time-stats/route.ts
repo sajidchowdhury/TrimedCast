@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveTenantId } from '@/lib/tenant-resolver';
 import { calculateLeadTimeStats, type LeadTimeStats } from '@/lib/forecasting/eoq-safety-stock';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

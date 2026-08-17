@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { autoMapColumns, validateMapping } from '@/lib/etl/column-mapper';
 import { IMPORT_TYPE_SCHEMAS, type ImportType, type ColumnMapping } from '@/lib/etl/import-types';
+export const runtime = 'nodejs';
+
 
 export async function GET(
   request: NextRequest,

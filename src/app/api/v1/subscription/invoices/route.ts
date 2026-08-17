@@ -14,6 +14,8 @@ import {
   parsePagination,
 } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 const VALID_STATUSES = ['draft', 'open', 'paid', 'void', 'uncollectible'];
 

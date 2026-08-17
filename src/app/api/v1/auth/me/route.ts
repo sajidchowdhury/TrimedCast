@@ -6,6 +6,8 @@
 import { db } from '@/lib/db';
 import { apiSuccess, unauthorizedError } from '@/lib/api/response';
 import { getAuthContext, hasPermission } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 export async function GET() {
   try {

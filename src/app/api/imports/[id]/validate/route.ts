@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { runAllValidations } from '@/lib/etl/validator';
 import { IMPORT_TYPE_SCHEMAS, type ImportType, type ColumnMapping } from '@/lib/etl/import-types';
+export const runtime = 'nodejs';
+
 
 export async function POST(
   request: NextRequest,

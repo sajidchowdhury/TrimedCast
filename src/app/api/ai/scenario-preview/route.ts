@@ -19,6 +19,8 @@ import {
   DEFAULT_HOLDING_COST_PCT,
 } from '@/lib/forecasting/eoq-safety-stock';
 import { getBDSeason } from '@/lib/forecasting/models';
+export const runtime = 'nodejs';
+
 
 // =============================================
 // Constants for BD-China Supply Chain

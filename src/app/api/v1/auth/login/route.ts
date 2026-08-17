@@ -6,9 +6,11 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api/response';
-import { createAuthSession, hasPermission } from '@/lib/api/auth';
+import { createAuthSession, hasPermission, resolveTenantByAcId } from '@/lib/api/auth';
 import { verifyPassword } from '@/lib/auth/password';
-import { resolveTenantByAcId, isValidAcId } from '@/lib/auth/ac-id';
+import { isValidAcId } from '@/lib/auth/ac-id';
+export const runtime = 'nodejs';
+
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   admin: ['products.crud', 'inventory.crud', 'forecasts.approve', 'settings.crud', 'billing.manage', 'team.manage'],

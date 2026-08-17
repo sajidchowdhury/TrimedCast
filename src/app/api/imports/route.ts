@@ -9,6 +9,8 @@ import { db } from '@/lib/db';
 import { parseExcelFile, isValidFileType, getMaxFileSize, formatFileSize } from '@/lib/etl/excel-parser';
 import { autoMapColumns } from '@/lib/etl/column-mapper';
 import { IMPORT_TYPE_SCHEMAS, type ImportType } from '@/lib/etl/import-types';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

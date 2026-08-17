@@ -9,6 +9,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiSuccess, forbiddenError, internalError } from '@/lib/api/response';
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

@@ -15,6 +15,8 @@ import {
 } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
 import { db } from '@/lib/db';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

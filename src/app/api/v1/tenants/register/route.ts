@@ -10,6 +10,8 @@ import { apiCreated, apiError, validationError, conflictError, internalError } f
 import { generateToken } from '@/lib/api/auth';
 import { createSubscription, TierSlug } from '@/lib/api/billing';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 const VALID_TIERS: TierSlug[] = ['starter', 'professional', 'enterprise'];
 

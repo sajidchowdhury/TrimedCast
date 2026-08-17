@@ -10,6 +10,8 @@ import { apiCreated, apiError, notFoundError, validationError } from '@/lib/api/
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
 import { format, addDays } from 'date-fns';
+export const runtime = 'nodejs';
+
 
 interface ConfirmOrderRequest {
   productId: string;

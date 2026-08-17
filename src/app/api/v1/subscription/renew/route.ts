@@ -13,6 +13,8 @@ import {
   internalError,
 } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 // BDT Tier Pricing
 const TIER_PRICING: Record<string, Record<string, number>> = {

@@ -13,6 +13,8 @@ import {
   notFoundError,
 } from '@/lib/api/response';
 import { getAuthContext, canDo, tenantScope } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 export async function GET(
   request: NextRequest,

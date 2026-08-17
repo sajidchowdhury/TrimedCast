@@ -10,6 +10,8 @@ import { verifyOtp } from '@/lib/auth/otp';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { revokeAllUserSessions } from '@/lib/auth/session-store';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

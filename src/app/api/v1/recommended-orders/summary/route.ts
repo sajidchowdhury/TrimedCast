@@ -6,6 +6,8 @@
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api/response';
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 export async function GET() {
   try {

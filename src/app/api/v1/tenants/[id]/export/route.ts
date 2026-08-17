@@ -15,6 +15,8 @@ import {
 import { getAuthContext } from '@/lib/api/auth';
 import { exportTenantData, canExport, getExportTablesList } from '@/lib/api/data-export';
 import { db } from '@/lib/db';
+export const runtime = 'nodejs';
+
 
 export async function GET(
   request: NextRequest,

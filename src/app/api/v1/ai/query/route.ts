@@ -10,6 +10,8 @@ import { db } from '@/lib/db';
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
 import { getBDSeason, BD_SEASONS } from '@/lib/forecasting/models';
 import { isCNYShutdown, isCNYRisk, CNY_CALENDAR } from '@/lib/forecasting/prophet-engine';
+export const runtime = 'nodejs';
+
 
 // =============================================
 // System Prompt

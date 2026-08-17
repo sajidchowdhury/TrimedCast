@@ -7,6 +7,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api/response';
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 function getBDSeason(date: Date = new Date()): { current: string; next: string; daysToNext: number } {
   const month = date.getMonth() + 1; // 1-12

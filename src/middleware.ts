@@ -120,6 +120,8 @@ export async function middleware(request: NextRequest) {
   });
 }
 
+export const runtime = 'nodejs';
+
 export const config = {
   // Match all routes except Next.js internals and static files
   matcher: [

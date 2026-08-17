@@ -108,6 +108,18 @@ export function isValidAcId(acId: string): boolean {
 }
 
 /**
+ * Resolve tenant ID from an AC-ID
+ * Returns the tenant ID if found, null otherwise
+ */
+export async function resolveTenantByAcId(acId: string): Promise<string | null> {
+  const tenant = await db.tenant.findUnique({
+    where: { acId },
+    select: { id: true },
+  });
+  return tenant?.id ?? null;
+}
+
+/**
  * Get division name from AC-ID
  */
 export function getDivisionFromAcId(acId: string): string | null {

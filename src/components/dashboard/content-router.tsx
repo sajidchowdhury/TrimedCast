@@ -18,6 +18,7 @@ import { ApiExplorerPage } from './pages/api-explorer-page';
 import { SettingsPage } from './pages/settings-page';
 import { HelpPage } from './pages/help-page';
 import { SOEControlTower } from './soe-control-tower';
+import { UserManagementPage } from '@/components/users/user-management-page';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function ContentRouter() {
@@ -47,6 +48,8 @@ export function ContentRouter() {
         return <BillingPage />;
       case 'api-explorer':
         return <ApiExplorerPage />;
+      case 'team':
+        return <UserManagementPage />;
       case 'settings':
         return <SettingsPage />;
       case 'help':

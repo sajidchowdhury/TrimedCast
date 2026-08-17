@@ -12,6 +12,8 @@ import {
   checkRecalibration,
   type RecalibrationCheck,
 } from '@/lib/forecasting/eoq-safety-stock';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

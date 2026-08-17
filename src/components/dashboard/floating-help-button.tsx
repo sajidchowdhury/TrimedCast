@@ -25,6 +25,9 @@ export function FloatingHelpButton() {
   const activePage = useDashboardStore((s) => s.activePage);
   const help = PAGE_HELP[activePage];
 
+  // Gracefully handle pages without help content
+  if (!help) return null;
+
   return (
     <>
       {/* Floating Button */}

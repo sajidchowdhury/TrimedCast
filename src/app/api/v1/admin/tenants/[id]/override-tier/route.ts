@@ -15,6 +15,8 @@ import {
 import { getAuthContext } from '@/lib/api/auth';
 import { db } from '@/lib/db';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 const VALID_TIERS = ['starter', 'professional', 'enterprise'];
 

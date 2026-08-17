@@ -9,6 +9,8 @@ import { apiSuccess, apiError, unauthorizedError } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
 import { revokeAllUserSessions } from '@/lib/auth/session-store';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

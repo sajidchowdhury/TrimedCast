@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveTenantId } from '@/lib/tenant-resolver';
 import { getBDSeason, type BDSeason, type SeasonInfo, BD_SEASONS } from '@/lib/forecasting/models';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

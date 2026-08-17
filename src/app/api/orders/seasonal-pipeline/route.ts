@@ -28,6 +28,8 @@ import {
   type CNYStrategy,
 } from '@/lib/forecasting/order-trigger';
 import { getBDSeason, type BDSeason } from '@/lib/forecasting/models';
+export const runtime = 'nodejs';
+
 
 // ── Response Types ──
 

@@ -17,6 +17,8 @@ import {
 } from '@/lib/api/response';
 import { getAuthContext, canDo, tenantScope } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 // Required target fields per import type for validation
 const REQUIRED_FIELDS: Record<string, string[]> = {

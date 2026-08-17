@@ -7,6 +7,8 @@ import { db } from '@/lib/db';
 import { apiSuccess, unauthorizedError, notFoundError, internalError } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
 import { evaluateTenantStatus, getTierDefinition, getCurrentPeriodUsage } from '@/lib/api/billing';
+export const runtime = 'nodejs';
+
 
 export async function GET() {
   try {

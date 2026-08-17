@@ -14,6 +14,8 @@ import {
   notFoundError,
 } from '@/lib/api/response';
 import { getAuthContext, tenantScope } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 // MAPE threshold for flagging SKUs exceeding acceptable forecast error
 const MAPE_THRESHOLD_PCT = 20;

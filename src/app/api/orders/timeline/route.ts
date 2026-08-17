@@ -19,6 +19,8 @@ import {
   type OrderTriggerResult,
 } from '@/lib/forecasting/order-trigger';
 import { getBDSeason } from '@/lib/forecasting/models';
+export const runtime = 'nodejs';
+
 
 // ── Shared helper: format date ──
 const fmt = (d: Date) => d.toISOString().split('T')[0];

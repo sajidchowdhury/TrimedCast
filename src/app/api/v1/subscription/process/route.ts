@@ -11,6 +11,8 @@ import {
   validationError,
   internalError,
 } from '@/lib/api/response';
+export const runtime = 'nodejs';
+
 
 // BDT Tier Pricing
 const TIER_PRICING: Record<string, Record<string, number>> = {

@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import {
   Settings, User, Building2, Bell, Shield, Database,
-  Globe, Palette, Clock, Key,
+  Globe, Palette, Clock, Key, Users,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useDashboardStore } from '@/lib/dashboard/store';
 
 export function SettingsPage() {
   return (
@@ -125,6 +126,35 @@ export function SettingsPage() {
             </SettingRow>
             <SettingRow label="CNY Risk Warnings" description="Chinese New Year supply risk">
               <Switch defaultChecked />
+            </SettingRow>
+          </CardContent>
+        </Card>
+
+      {/* Account & Team — Quick Link to Team page */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Account & Team
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <SettingRow label="Team Members" description="Invite, manage roles, deactivate">
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => useDashboardStore.getState().setActivePage('team')}>
+                <Users className="h-3 w-3 mr-1" />
+                Manage Team
+              </Button>
+            </SettingRow>
+            <SettingRow label="Profile" description="Name, phone, password">
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => useDashboardStore.getState().setActivePage('team')}>
+                <User className="h-3 w-3 mr-1" />
+                Edit Profile
+              </Button>
+            </SettingRow>
+            <SettingRow label="Active Sessions" description="Manage logged-in devices">
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => useDashboardStore.getState().setActivePage('team')}>
+                View Sessions
+              </Button>
             </SettingRow>
           </CardContent>
         </Card>

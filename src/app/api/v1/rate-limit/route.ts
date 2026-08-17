@@ -18,6 +18,8 @@ import {
   type TenantRateLimitCategory,
 } from '@/lib/api/tenant-rate-limit';
 import { db } from '@/lib/db';
+export const runtime = 'nodejs';
+
 
 const CATEGORIES: TenantRateLimitCategory[] = ['api', 'forecast', 'ai', 'import'];
 

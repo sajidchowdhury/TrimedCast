@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 // =============================================
 // In-Memory Conversation Store

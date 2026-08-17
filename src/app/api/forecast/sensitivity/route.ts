@@ -15,6 +15,8 @@ import {
   DEFAULT_ORDERING_COST_BDT,
   DEFAULT_HOLDING_COST_PCT,
 } from '@/lib/forecasting/eoq-safety-stock';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

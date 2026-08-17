@@ -26,6 +26,8 @@ import {
   type RegressionDataPoint,
   type ConsensusResult,
 } from '@/lib/forecasting/advanced-models';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

@@ -15,6 +15,8 @@ import {
   generateDemoSalesHistory,
   generateDemoPurchaseHistory,
 } from '@/lib/demo-data/content';
+export const runtime = 'nodejs';
+
 
 export async function POST(req: NextRequest) {
   try {

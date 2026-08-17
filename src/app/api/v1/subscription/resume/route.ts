@@ -11,6 +11,8 @@ import {
   internalError,
 } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 export async function POST() {
   try {

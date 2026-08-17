@@ -16,6 +16,8 @@ import {
 } from '@/lib/api/response';
 import { getAuthContext, canDo, tenantScope } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 // --- Harmonization rules per import type ---
 // These simulate data transformations applied during the harmonize step

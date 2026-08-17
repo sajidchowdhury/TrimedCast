@@ -9,6 +9,8 @@ import { apiSuccess, apiError } from '@/lib/api/response';
 import { createOtp } from '@/lib/auth/otp';
 import { validateEmail } from '@/lib/auth/password';
 import { sendOtpEmail } from '@/lib/email';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

@@ -15,6 +15,8 @@ import {
 } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
 import { generateInvoice } from '@/lib/api/billing';
+export const runtime = 'nodejs';
+
 
 // --- GET: List invoices ---
 export async function GET(request: NextRequest) {

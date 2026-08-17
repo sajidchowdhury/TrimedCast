@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveTenantId } from '@/lib/tenant-resolver';
+export const runtime = 'nodejs';
+
 
 interface ForecastPointInput {
   date: string;

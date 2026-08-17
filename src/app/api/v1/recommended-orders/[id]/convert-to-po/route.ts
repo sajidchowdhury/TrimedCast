@@ -8,6 +8,8 @@ import { db } from '@/lib/db';
 import { apiCreated, notFoundError, forbiddenError, apiError, conflictError } from '@/lib/api/response';
 import { getAuthContext, canDo, resolveTenant } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function POST(
   request: NextRequest,

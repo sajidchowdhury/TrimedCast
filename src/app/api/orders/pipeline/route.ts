@@ -12,6 +12,8 @@ import {
   type OrderTriggerInput,
   type PipelineResult,
 } from '@/lib/forecasting/order-trigger';
+export const runtime = 'nodejs';
+
 
 export async function POST(req: NextRequest) {
   try {

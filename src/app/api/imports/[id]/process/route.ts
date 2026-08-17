@@ -12,6 +12,8 @@ import { runHarmonization } from '@/lib/etl/harmonizer';
 import { batchInsert } from '@/lib/etl/batch-inserter';
 import { calculateQualityScore } from '@/lib/etl/quality-score';
 import { IMPORT_TYPE_SCHEMAS, type ImportType, type ColumnMapping, type QualityStats } from '@/lib/etl/import-types';
+export const runtime = 'nodejs';
+
 
 export async function POST(
   request: NextRequest,

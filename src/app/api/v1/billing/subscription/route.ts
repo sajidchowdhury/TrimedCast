@@ -19,6 +19,8 @@ import {
   getTierDefinition,
 } from '@/lib/api/billing';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 const VALID_TIERS: TierSlug[] = ['starter', 'professional', 'enterprise'];
 

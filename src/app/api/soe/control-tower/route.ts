@@ -10,6 +10,8 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api/response';
 import { getAuthContext, resolveTenant } from '@/lib/api/auth';
 import { format, addMonths, startOfMonth, endOfMonth, differenceInDays, subDays } from 'date-fns';
+export const runtime = 'nodejs';
+
 
 // --- Types ---
 

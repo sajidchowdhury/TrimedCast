@@ -19,6 +19,7 @@ export type DashboardPage =
   | 'billing'
   | 'api-explorer'
   | 'settings'
+  | 'team'
   | 'help';
 
 export interface SopCycleData {

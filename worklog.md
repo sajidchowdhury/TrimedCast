@@ -2112,3 +2112,90 @@ Stage Summary:
 - 4-step cancellation flow with reason selection, feedback, feature loss preview, confirmation
 - Invoice history with paginated table and expandable line items
 - Lifecycle timeline with color-coded event icons
+
+---
+Task ID: 2
+Agent: Session 15 Developer
+Task: Session 15 - User Management UI + API
+
+Work Log:
+- Created 9 API route files for complete user management:
+
+1. PUT /api/v1/auth/profile (src/app/api/v1/auth/profile/route.ts)
+   - Any authenticated user can update own name and phone
+   - Validates BD phone format with validatePhone/normalizePhone
+   - Audit log with before/after changes
+
+2. PUT /api/v1/auth/password (src/app/api/v1/auth/password/route.ts)
+   - Any authenticated user can change own password
+   - Validates current password with bcrypt verifyPassword
+   - Validates new password strength with validatePasswordStrength
+   - Prevents reuse of same password
+   - Audit log (no sensitive data logged)
+
+3. PUT /api/v1/users/[id] (src/app/api/v1/users/[id]/route.ts)
+   - Admin updates team member (name, phone, role)
+   - Admin only (users.manage permission), tenant-scoped
+   - Can't edit own account through this endpoint (directed to /auth/profile)
+   - Validates role against 7 valid roles
+   - Validates BD phone format
+   - Audit log with granular before/after changes
+
+4. DELETE /api/v1/users/[id] (src/app/api/v1/users/[id]/route.ts)
+   - Admin removes user from team
+   - Can't delete self
+   - Revokes all sessions first via revokeAllUserSessions
+   - Soft delete (isActive=false) if user has audit logs, hard delete otherwise
+   - Audit log created BEFORE deletion for traceability
+
+5. POST /api/v1/users/[id]/reactivate (src/app/api/v1/users/[id]/reactivate/route.ts)
+   - Admin reactivates deactivated user
+   - Sets isActive = true
+   - Validates user exists and is currently deactivated
+   - Audit log
+
+6. GET /api/v1/users/sessions (src/app/api/v1/users/sessions/route.ts)
+   - Lists all active sessions for current user
+   - Uses getUserSessions from session-store
+   - Returns id, ip_address, user_agent, created_at, expires_at
+
+7. DELETE /api/v1/users/sessions/[id] (src/app/api/v1/users/sessions/[id]/route.ts)
+   - Revoke specific session (log out other device)
+   - Must belong to current user (security check)
+   - Checks session is still active before revoking
+   - Audit log
+
+8. GET /api/v1/users/activity (src/app/api/v1/users/activity/route.ts)
+   - User activity/audit log
+   - Admin sees all tenant activity, others see only their own
+   - Paginated with parsePagination helper
+   - Filters: entity, action, user_id (admin only), date_from, date_to
+   - Includes user name/email in each entry
+   - Parses JSON changes/metadata fields
+
+9. POST /api/v1/users/reinvite (src/app/api/v1/users/reinvite/route.ts)
+   - Resend invitation to pending user
+   - Admin only
+   - Only for users with inviteToken (not yet accepted)
+   - Generates new token and 7-day expiry
+   - Resends invite email via sendInviteEmail
+   - Audit log
+
+All endpoints follow existing code patterns:
+- getAuthContext + canDo for RBAC
+- Tenant-scoped queries
+- Try/catch with console.error
+- apiSuccess/apiError response helpers
+- createAuditLog for audit trail
+- NextRequest + Promise<{id:string}> params pattern
+- No test code written
+
+Files Created:
+- src/app/api/v1/auth/profile/route.ts
+- src/app/api/v1/auth/password/route.ts
+- src/app/api/v1/users/[id]/route.ts (PUT + DELETE)
+- src/app/api/v1/users/[id]/reactivate/route.ts
+- src/app/api/v1/users/sessions/route.ts
+- src/app/api/v1/users/sessions/[id]/route.ts
+- src/app/api/v1/users/activity/route.ts
+- src/app/api/v1/users/reinvite/route.ts

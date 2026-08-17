@@ -535,6 +535,50 @@ export const PAGE_HELP: Record<DashboardPage, PageHelpContent> = {
       'এক্সেল ফাইল আপলোডের আগে ইম্পোর্ট গাইড দেখুন',
     ],
   },
+
+  team: {
+    page: 'team',
+    title: 'User Management',
+    titleBn: 'ব্যবহারকারী ব্যবস্থাপন',
+    summary: 'Manage your team members, roles, sessions, and profile. Invite new members, change roles, deactivate users, and review activity.',
+    summaryBn: 'আপনার টিম মেম্বার, রোল, সেশন এবং প্রোফাইল পরিচালনা করুন। নতুন মেম্বার আমন্ত্রণ করুন, রোল পরিবর্তন করুন, ব্যবহারকারী নিষ্ক্রিয় করুন এবং কার্যকলাপ পর্যালোচনা করুন।',
+    sections: [
+      {
+        title: 'Profile',
+        titleBn: 'প্রোফাইল',
+        content: 'View and edit your name, phone number, and change your password. Your role and account info are displayed here.',
+        contentBn: 'আপনার নাম, ফোন নম্বর দেখুন এবং সম্পাদনা করুন এবং পাসওয়ার্ড পরিবর্তন করুন। আপনার রোল এবং অ্যাকাউন্ট তথ্য এখানে প্রদর্শিত হয়।',
+      },
+      {
+        title: 'Team Members',
+        titleBn: 'টিম মেম্বার',
+        content: 'Admins can invite new team members, change roles, deactivate or remove members. Team size is limited by your plan.',
+        contentBn: 'অ্যাডমিন নতুন টিম মেম্বার আমন্ত্রণ করতে পারেন, রোল পরিবর্তন করতে পারেন, মেম্বার নিষ্ক্রিয় বা অপসারণ করতে পারেন। টিম সাইজ আপনার প্ল্যান দ্বারা সীমিত।',
+      },
+      {
+        title: 'Sessions',
+        titleBn: 'সেশন',
+        content: 'View all active sessions across devices. Revoke sessions to log out other devices for security.',
+        contentBn: 'সব ডিভাইসের সক্রিয় সেশন দেখুন। নিরাপত্তার জন্য অন্য ডিভাইস থেকে লগ আউট করতে সেশন বাতিল করুন।',
+      },
+      {
+        title: 'Activity Log',
+        titleBn: 'কার্যকলাপ লগ',
+        content: 'Review all actions taken by team members — logins, updates, deletions, and system events. Filter by entity, action, or user.',
+        contentBn: 'টিম মেম্বারদের সমস্ত কাজ পর্যালোচনা করুন — লগইন, আপডেট, ডিলিট এবং সিস্টেম ইভেন্ট। এনটিটি, অ্যাকশন বা ব্যবহারকারী দ্বারা ফিল্টার করুন।',
+      },
+    ],
+    tips: [
+      'Only admins can invite team members and change roles',
+      'You cannot deactivate or remove your own account',
+      'Check the activity log regularly for security auditing',
+    ],
+    tipsBn: [
+      'শুধুমাত্র অ্যাডমিন টিম মেম্বার আমন্ত্রণ এবং রোল পরিবর্তন করতে পারেন',
+      'আপনি আপনার নিজের অ্যাকাউন্ট নিষ্ক্রিয় বা অপসারণ করতে পারবেন না',
+      'নিরাপত্তা অডিটিংয়ের জন্য নিয়মিত কার্যকলাপ লগ চেক করুন',
+    ],
+  },
 };
 
 // ---- Import Column Specs for Help Panel ----

@@ -20,6 +20,8 @@ import {
   getRestrictedFields,
   isValidRole,
 } from '@/lib/api/rbac';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

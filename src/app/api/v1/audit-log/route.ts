@@ -7,6 +7,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiPaginated, apiError, forbiddenError, unauthorizedError, parsePagination } from '@/lib/api/response';
 import { getAuthContext, canDo } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {

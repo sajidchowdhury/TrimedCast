@@ -9,6 +9,8 @@ import { apiSuccess, apiError } from '@/lib/api/response';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { createAuthSession } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

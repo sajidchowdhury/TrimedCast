@@ -12,6 +12,8 @@ import {
 } from '@/lib/api/response';
 import { getAuthContext } from '@/lib/api/auth';
 import { getValidTransitions, getTierDefinition } from '@/lib/api/billing';
+export const runtime = 'nodejs';
+
 
 export async function GET() {
   try {

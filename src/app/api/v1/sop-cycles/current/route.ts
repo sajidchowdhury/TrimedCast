@@ -8,6 +8,8 @@
 import { db } from '@/lib/db';
 import { apiSuccess, unauthorizedError, apiError } from '@/lib/api/response';
 import { getAuthContext, tenantScope } from '@/lib/api/auth';
+export const runtime = 'nodejs';
+
 
 const STAGE_ORDER = ['validation', 'approval', 'operationalization', 'governance'] as const;
 type SopStage = (typeof STAGE_ORDER)[number];

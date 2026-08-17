@@ -9,6 +9,8 @@ import { apiSuccess, unauthorizedError, forbiddenError, notFoundError, internalE
 import { getAuthContext } from '@/lib/api/auth';
 import { reactivateTenant } from '@/lib/api/billing';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function PUT(
   request: NextRequest,

@@ -32,6 +32,8 @@ import {
   DEFAULT_LEAD_TIME,
   type OrderTriggerInput,
 } from '@/lib/forecasting/order-trigger';
+export const runtime = 'nodejs';
+
 
 export async function POST(request: NextRequest) {
   try {

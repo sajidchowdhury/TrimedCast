@@ -8,6 +8,8 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError, forbiddenError, unauthorizedError, validationError } from '@/lib/api/response';
 import { getAuthContext, canDo } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 function formatSettings(s: {
   id: string;

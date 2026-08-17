@@ -16,6 +16,8 @@ import { getAuthContext } from '@/lib/api/auth';
 import { db } from '@/lib/db';
 import { logAdminImpersonation } from '@/lib/api/security-audit';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 export async function POST(
   request: NextRequest,

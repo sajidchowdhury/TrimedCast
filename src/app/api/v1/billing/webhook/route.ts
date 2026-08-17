@@ -14,6 +14,8 @@ import {
   TenantStatus,
 } from '@/lib/api/billing';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 interface WebhookPayload {
   type: string;

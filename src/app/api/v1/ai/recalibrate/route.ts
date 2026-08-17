@@ -19,6 +19,8 @@ import {
   type RecalibrationStatus,
   type RecalibrationEvent,
 } from '@/lib/forecasting/auto-recalibration';
+export const runtime = 'nodejs';
+
 
 // =============================================
 // GET: Check recalibration status

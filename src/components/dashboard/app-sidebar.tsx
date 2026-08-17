@@ -22,6 +22,7 @@ import {
   Zap,
   CircleHelp,
   LogOut,
+  Users,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -66,6 +67,7 @@ const secondaryNav: NavItem[] = [
 
 const systemNav: NavItem[] = [
   { page: 'billing', label: 'Billing', icon: CreditCard, permissions: ['billing.manage'] },
+  { page: 'team', label: 'Team', icon: Users, permissions: ['team.manage', 'users.manage'] },
   { page: 'api-explorer', label: 'API Explorer', icon: Code2, permissions: ['api_explorer.access'] },
   { page: 'settings', label: 'Settings', icon: Settings, permissions: ['settings.crud', 'settings.read'] },
   { page: 'help', label: 'Help', icon: CircleHelp },

@@ -19,6 +19,8 @@ import {
   resumeJob,
 } from '@/lib/api/scheduler';
 import { db } from '@/lib/db';
+export const runtime = 'nodejs';
+
 
 export async function GET(
   request: NextRequest,

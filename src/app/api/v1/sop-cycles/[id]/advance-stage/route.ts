@@ -18,6 +18,8 @@ import {
 } from '@/lib/api/response';
 import { getAuthContext, canDo, tenantScope } from '@/lib/api/auth';
 import { createAuditLog } from '@/lib/api/audit';
+export const runtime = 'nodejs';
+
 
 const STAGE_ORDER = ['validation', 'approval', 'operationalization', 'governance'] as const;
 type SopStage = (typeof STAGE_ORDER)[number];

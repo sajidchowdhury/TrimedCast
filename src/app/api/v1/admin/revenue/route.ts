@@ -14,6 +14,8 @@ import {
 import { getAuthContext } from '@/lib/api/auth';
 import { calculateRevenueMetrics } from '@/lib/api/billing';
 import { db } from '@/lib/db';
+export const runtime = 'nodejs';
+
 
 export async function GET(request: NextRequest) {
   try {
