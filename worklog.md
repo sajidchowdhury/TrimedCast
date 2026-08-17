@@ -2907,3 +2907,95 @@ Work Log:
 
 - All lint checks passed with zero errors
 - Dev server compiled successfully
+
+---
+Task ID: 2
+Agent: Main Developer
+Task: Session 22 — Data Import Wizard Dashboard
+
+Work Log:
+- Created /src/components/import-wizard/types.ts (180+ lines): Complete type system
+  - ImportType: 7 types (sales_history, product_catalog, inventory_snapshot, purchase_history, supplier_list, promo_events, motorcycle_models)
+  - ImportStatus: 11 statuses (uploading → uploaded → mapping → mapped → validating → validated → harmonizing → harmonized → processing → completed | failed)
+  - ImportRecord, ColumnMapping, ValidationIssue interfaces
+  - IMPORT_TYPE_CONFIG: 7 import types with English/Bengali labels, icons, colors, descriptions, required fields
+  - STATUS_CONFIG: 11 statuses with labels, Bengali labels, colors, step numbers
+  - TARGET_FIELDS: available target fields per import type with required flag
+  - WIZARD_STEPS: 5-step wizard (type → upload → mapping → validation → processing)
+  - MOCK_IMPORTS: 8 realistic past imports (3 sales_history, 2 product_catalog, 1 inventory_snapshot, 1 purchase_history, 1 supplier_list)
+  - MOCK_COLUMN_MAPPINGS: 6 column mappings for sales_history with confidence scores and sample values
+  - MOCK_VALIDATION_ISSUES: 6 issues (3 errors: invalid date, negative qty, unknown SKU; 3 warnings: duplicate row, missing region, future date)
+
+- Created /src/stores/import-store.ts (210+ lines): Zustand store
+  - State: imports[], selectedImport, columnMappings, validationIssues, isLoading, error, typeFilter, searchQuery
+  - Wizard state: wizardStep, selectedImportType, uploadedFile, uploadProgress, processingProgress, processingRow
+  - Actions: fetchImports (API with mock fallback), uploadFile (with progress simulation), mapColumns, runValidation, harmonize, processImport (with row-by-row progress), selectImport
+  - Wizard navigation: setWizardStep, setSelectedImportType, nextStep, prevStep, resetWizard
+  - UI: setTypeFilter, setSearchQuery, clearError
+  - Selectors: useFilteredImports, useImportsByType, useRecentImports, useSuccessRate
+
+- Created /src/components/import-wizard/import-type-selector.tsx: Card grid for selecting import type
+  - 7 type cards with icon, English + Bengali name, description, required fields count, color accent
+  - Selected state: ring highlight + checkmark
+  - Responsive: 1 col mobile, 2 cols tablet, 3 cols desktop, 4 cols xl
+
+- Created /src/components/import-wizard/upload-zone.tsx: Drag & drop file upload
+  - Dashed border drop zone with click to browse
+  - Accepted formats: .xlsx, .xls, .csv, max 10MB
+  - Progress bar during upload with percentage
+  - Shows file name, size, row count after successful upload
+  - Import type badge displayed
+  - Error validation for file type and size
+
+- Created /src/components/import-wizard/column-mapper.tsx: Column mapping interface
+  - Table: Source Column → Target Field, Confidence badge, Sample Values
+  - Target field: Select dropdown with all available fields for import type
+  - Confidence badges: green (>80%), amber (>50%), red (<50%)
+  - Missing required fields warning
+  - "Confirm Mapping" button (disabled if required fields missing)
+
+- Created /src/components/import-wizard/validation-results.tsx: Validation output
+  - Summary cards: Total Rows, Valid, Errors, Warnings
+  - Quality score: circular SVG progress indicator (0-100%)
+  - Issues table: Row #, Column, Value, Issue, Severity (error/warning)
+  - Severity icons: red X for errors, amber ! for warnings
+  - "Fix Issues" and "Proceed Anyway" buttons
+
+- Created /src/components/import-wizard/import-progress.tsx: 6-step processing progress
+  - Stepper: Upload → Map → Validate → Harmonize → Process → Complete
+  - Each step: icon, label, status (done/current/pending/failed)
+  - Overall progress bar with percentage
+  - Current step description text
+  - Row processing count: "Row X of Y"
+  - Time elapsed display
+
+- Created /src/components/import-wizard/import-history.tsx: Past imports table
+  - Columns: Date, Type (with icon), File Name, Rows, Quality (color-coded), Status (color-coded), Duration
+  - Type filter dropdown + search by file name
+  - Pagination (10 per page)
+  - Row click opens detail dialog
+
+- Created /src/components/import-wizard/import-dashboard.tsx: Main orchestrating component
+  - Header: Upload icon, "Data Import" title, Bengali subtitle "তথ্য আমদানি"
+  - Tabs: "New Import" | "Import History"
+  - New Import tab: 5-step wizard (Select Type → Upload → Map → Validate → Process)
+    - Wizard stepper bar with step icons and labels
+    - Step transitions with Back/Next navigation
+    - Each step renders appropriate sub-component
+    - Processing shows row-by-row progress with completion card
+    - "Import Another" button after completion
+  - Import History tab: ImportHistory table with filter/search/pagination
+  - Import Detail Dialog: shows full record details with progress visualization
+  - Error display with dismiss button
+  - Mock data fallback when API is unavailable
+
+- Updated /src/app/page.tsx: Import Dashboard page
+  - Replaced Forecast Dashboard with Import Dashboard
+  - Same layout: sticky header, main content, sticky footer
+  - Badge: "Session 22"
+
+- All components use 'use client' directive
+- All use shadcn/ui components (Card, Button, Badge, Table, Select, Tabs, Dialog, Progress, Input)
+- All use Lucide icons
+- Responsive: mobile-first design
+- Lint: 0 errors, 0 warnings

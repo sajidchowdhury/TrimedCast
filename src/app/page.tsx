@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================
-// TrimedCast — Forecast Results Dashboard
-// Session 21: Demand Forecasting Results
+// TrimedCast — Data Import Wizard Dashboard
+// Session 22: Import Dashboard
 // ============================================
 
-import { ForecastDashboard } from '@/components/forecast-results/forecast-dashboard';
+import { ImportDashboard } from '@/components/import-wizard/import-dashboard';
 import { Footer } from '@/components/landing/footer';
 
-export default function ForecastResultsPage() {
+export default function ImportWizardPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased">
       {/* Header */}
@@ -19,11 +19,11 @@ export default function ForecastResultsPage() {
               <span className="text-white font-bold text-sm">TC</span>
             </div>
             <span className="font-semibold text-base">TrimedCast</span>
-            <span className="text-muted-foreground text-sm hidden sm:inline">/ Forecast Results</span>
+            <span className="text-muted-foreground text-sm hidden sm:inline">/ Data Import</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
-              Session 21
+              Session 22
             </span>
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function ForecastResultsPage() {
 
       {/* Main Content */}
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-6">
-        <ForecastDashboard />
+        <ImportDashboard />
       </main>
 
       {/* Footer */}
