@@ -2077,3 +2077,38 @@ Created 7 files in `/src/components/subscription/` and updated billing page:
 - Responsive: mobile-first, grid cols adapt, scroll overflow for long lists
 - All components marked 'use client'
 - Lint clean (0 errors)
+---
+Task ID: 14
+Agent: main
+Task: Session 14: Subscription Management + Renewal + Expiry
+
+Work Log:
+- Updated Prisma schema with 10+ new Subscription fields (billingCycle, autoRenew, lastRenewalAttempt, renewalReminderSent, paymentRetryAt, expiredAt, downgradedAt, dataRetentionEnd, cancellationReason, cancellationFeedback)
+- Added SubscriptionEvent model for lifecycle tracking (12 event types)
+- Added 2 new indexes on Subscription (nextPaymentAt, gracePeriodEnd)
+- Pushed schema to SQLite database
+- Built subscription lifecycle engine (engine.ts, 41KB) with 13 exported functions
+- Built renewal processor (renewal.ts, 28KB) with 8 exported functions including proration calculator
+- Built expiry handler (expiry.ts, 28KB) with 8 exported functions including data retention management
+- Created 7 API routes: status, change-plan, cancel, resume, renew, invoices, process
+- All API routes support demo mode when unauthenticated (returns mock data)
+- Created 8 frontend components: subscription-manager, plan-change-dialog, cancellation-flow, renewal-panel, invoice-list, lifecycle-timeline, subscription-store, types
+- Updated billing-page.tsx with two tabs: Subscription Management + Billing Portal
+- Added /api/v1/subscription/ and /api/v1/payment/ to middleware public routes
+- Fixed middleware to allow subscription API routes through without auth redirect
+- Fixed subscription store to handle non-JSON responses and demo data format
+- Tested end-to-end with agent-browser: Overview, Change Plan, Invoices, Lifecycle tabs all verified
+- Tested cancellation flow: 4-step wizard works (reason → feedback → what you'll lose → confirm)
+- All lint checks pass clean
+- Committed and pushed to GitHub (commit ea5bcb1, 22 files changed, 7,983 insertions)
+
+Stage Summary:
+- Complete subscription lifecycle management system with 29 exported backend functions
+- 7 API endpoints for subscription operations (all with demo mode support)
+- Full subscription management UI with 4-tab layout, BDT pricing (৳2,400/৳6,900/৳17,400)
+- Grace period: 7 days after payment failure, Data retention: 30 days after expiry
+- Payment retry: exponential backoff (1d, 2d, 4d, max 3 retries)
+- Auto-renewal with toggle, manual renewal, plan change with proration
+- 4-step cancellation flow with reason selection, feedback, feature loss preview, confirmation
+- Invoice history with paginated table and expandable line items
+- Lifecycle timeline with color-coded event icons
