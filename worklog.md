@@ -2528,3 +2528,64 @@ Work Log:
   - Main: SeasonalityDashboard component
   - Footer: Footer component from landing
 - All files pass `bun run lint` with zero errors.
+
+---
+Task ID: 16
+Agent: Main Developer
+Task: Session 16: Role-Based Access Control (RBAC)
+
+Work Log:
+- Created src/components/rbac/types.ts — RBAC types, ROLE_COLORS, BENGALI_ROLE_LABELS, RBAC_RESOURCE_ACTIONS (57 permissions)
+- Created src/stores/rbac-store.ts — Zustand store with syncFromApi(), setRole(), hasPermission(), isFieldRestricted(), canPerform()
+- Created src/components/rbac/permission-guard.tsx — PermissionGuard, RoleGuard, FieldGuard, ReadOnlyGuard, PermissionGate, useRbacGuard()
+- Created src/components/rbac/role-selector.tsx — Role selector dropdown with Bengali labels
+- Created src/lib/api/rbac-middleware.ts — withRbac() HOF, filterResponseFields(), validateGovernanceNote(), checkRateLimitForUser(), withCrudRbac()
+- Created src/lib/api/security-event.ts — logSecurityEvent(), checkSuspiciousActivity(), getSecurityEventsForTenant(), resolveSecurityEvent()
+- Created src/app/api/v1/security/check-permission/route.ts — POST permission check (single/batch)
+- Created src/app/api/v1/security/my-permissions/route.ts — GET full RBAC profile
+- Created src/app/api/v1/security/security-events/route.ts — GET paginated security events
+- Created src/app/api/v1/security/filter-fields/route.ts — POST field filtering by role
+- Created src/components/rbac/permission-matrix.tsx — Permission Matrix grid (12 categories × 5 roles)
+- Created src/components/rbac/field-security-table.tsx — Field Security table (3 categories × 5 roles)
+- Created src/components/rbac/rate-limit-panel.tsx — Rate Limit panel with per-role tabs
+- Created src/components/rbac/rbac-dashboard.tsx — Main dashboard with 5 tabs
+- Updated src/app/page.tsx to render RBAC Dashboard
+
+Stage Summary:
+- 34 files changed, complete RBAC system
+- Permission Matrix with color-coded cells (✅/🔍/🚫/🔒/⚠️)
+- 5 guard components for permission/role/field/read-only gating
+- withRbac() middleware for automatic API route protection
+- Security event logging with suspicious activity detection
+- 4 new API endpoints: check-permission, my-permissions, security-events, filter-fields
+- Pushed to GitHub as commit 0223b49
+
+---
+Task ID: 17
+Agent: Main Developer
+Task: Session 17: Seasonality Type Management UI
+
+Work Log:
+- Created src/app/api/v1/seasonality-types/route.ts — GET (list) + POST (create) with validation
+- Created src/app/api/v1/seasonality-types/[id]/route.ts — GET + PUT + DELETE with tenant scoping
+- Created src/app/api/v1/seasonality-types/bulk-toggle/route.ts — POST bulk activate/deactivate
+- Created src/app/api/v1/seasonality-types/presets/route.ts — GET BD presets, months, holidays
+- Created src/components/seasonality/types.ts — Types, MONTH_NAMES, BD_HOLIDAYS, PRESET_COLORS, SEASONALITY_PRESETS
+- Created src/stores/seasonality-store.ts — Zustand store with CRUD, filtering, computed getters
+- Created src/components/seasonality/seasonality-dashboard.tsx — Main dashboard with List/Timeline views
+- Created src/components/seasonality/seasonality-card.tsx — Type card with color, multiplier, months, actions
+- Created src/components/seasonality/seasonality-form.tsx — Create/Edit dialog with presets, slider, month checkboxes, color picker
+- Created src/components/seasonality/seasonality-timeline.tsx — Year timeline with colored bars and holiday markers
+- Created src/components/seasonality/month-badge.tsx — Compact month display pill
+- Created src/components/seasonality/multiplier-display.tsx — Color-coded multiplier (green↑/red↓/gray=)
+- Updated src/app/page.tsx to render Seasonality Dashboard
+
+Stage Summary:
+- 18 files changed, 3026 insertions
+- Complete CRUD API for SeasonalityType with RBAC
+- Dashboard with List view (card grid) + Timeline view (year calendar)
+- 6 BD seasonality presets: winter_peak, monsoon_dip, eid_peak, cny_shutdown, puja_peak, pre_winter
+- Bengali/English toggle with full BN support
+- Mock data fallback when API returns empty
+- Color-coded multipliers, month selector, color picker, multiplier slider
+- Pushed to GitHub as commit 06680f8
