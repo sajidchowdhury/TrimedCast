@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================
-// TrimedCast — Central Dashboard Overview
-// Session 20: Control Tower Dashboard
+// TrimedCast — Forecast Results Dashboard
+// Session 21: Demand Forecasting Results
 // ============================================
 
-import { OverviewDashboard } from '@/components/overview/overview-dashboard';
+import { ForecastDashboard } from '@/components/forecast-results/forecast-dashboard';
 import { Footer } from '@/components/landing/footer';
 
-export default function OverviewPage() {
+export default function ForecastResultsPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased">
       {/* Header */}
@@ -19,11 +19,11 @@ export default function OverviewPage() {
               <span className="text-white font-bold text-sm">TC</span>
             </div>
             <span className="font-semibold text-base">TrimedCast</span>
-            <span className="text-muted-foreground text-sm hidden sm:inline">/ Control Tower</span>
+            <span className="text-muted-foreground text-sm hidden sm:inline">/ Forecast Results</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
-              Session 20
+              Session 21
             </span>
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function OverviewPage() {
 
       {/* Main Content */}
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-6">
-        <OverviewDashboard />
+        <ForecastDashboard />
       </main>
 
       {/* Footer */}

@@ -2841,3 +2841,69 @@ Work Log:
 
 All components use 'use client', shadcn/ui, Lucide icons, Framer Motion animations, responsive design, BDT formatting.
 Lint: 0 errors. Build: successful. Page: 200 OK.
+
+---
+Task ID: 2
+Agent: Main Developer
+Task: Session 21 - Forecast Results Dashboard
+
+Work Log:
+- Created /src/components/forecast-results/types.ts: All types, constants, and mock data
+  - ForecastResult, ForecastTimePoint, DecompositionData, ModelComparison interfaces
+  - FORECAST_METHODS (6 methods with colors and Bengali labels)
+  - ACCURACY_RATING (excellent/good/fair/poor with Bengali translations)
+  - BD_SEASONS (4 Bangladesh seasons: Winter, Summer, Monsoon, Pre-Winter)
+  - getAccuracyRating(), getMethodConfig() helper functions
+  - MOCK_FORECASTS: 10 forecast results across 5 methods, 4 seasons, MAPEs 5.2–28.1
+  - MOCK_TIME_SERIES: 24 monthly points (Jan 2024–Dec 2025), actuals for first 18 months
+  - MOCK_DECOMPOSITION: 24 monthly decomposition points (observed, trend, seasonal, residual)
+  - MOCK_MODEL_COMPARISON: 5 methods compared (Prophet 8.2%, ARIMA 12.5%, ETS 15.1%, Ensemble 7.3%, Naive 22.8%)
+
+- Created /src/stores/forecast-result-store.ts: Zustand store
+  - State: forecasts, selectedForecast, timeSeries, decomposition, modelComparison, isLoading, error, methodFilter, seasonFilter, searchQuery
+  - Actions: fetchForecasts (with API fallback to mock), selectForecast, generateForecast, approveForecast
+  - UI: setMethodFilter, setSeasonFilter, setSearchQuery, clearError
+  - Computed: useFilteredForecasts, useAverageMape, useAccuracyDistribution
+
+- Created /src/components/forecast-results/forecast-summary-cards.tsx: 4 summary cards
+  - Total Forecasts (with recalibrated count), Avg MAPE (with rating badge), Methods Used (colored dots), CNY Flagged
+
+- Created /src/components/forecast-results/forecast-table.tsx: Full table + mobile cards
+  - Desktop: 9-column table with Product, Season, Method, Predicted Qty, Confidence Band, MAPE, CNY Risk, Date, Actions
+  - Mobile: card layout with condensed info
+  - MAPE color-coded: emerald <10, sky <20, amber <30, red >=30
+  - Filters: search by product/SKU, method dropdown, season dropdown
+  - Row click opens detail sheet
+  - Actions: View Detail, Approve, Regenerate
+
+- Created /src/components/forecast-results/forecast-detail-panel.tsx: Slide-out Sheet
+  - Product title + SKU, Method/Season/CNY badges
+  - Key metrics: Predicted Qty, Confidence Band, MAPE, Confidence %, Baseline Demand
+  - Forecast vs Actual chart (AreaChart with confidence band shading, solid actual line, dashed predicted line)
+  - Decomposition charts (2x2 grid): Observed (bar), Trend (line), Seasonal (line), Residual (bar)
+  - Action buttons: Approve, Regenerate, Download CSV
+
+- Created /src/components/forecast-results/model-comparison-chart.tsx:
+  - Bar chart comparing MAPE, RMSE, MAE across 5 methods
+  - Comparison table with star icon for best method (lowest MAPE)
+  - Color-coded per method
+
+- Created /src/components/forecast-results/accuracy-distribution.tsx:
+  - Stacked horizontal bar showing Excellent/Good/Fair/Poor segments
+  - Legend with count badges and percentage ranges
+
+- Created /src/components/forecast-results/season-breakdown.tsx:
+  - 4 season cards: Winter, Summer, Monsoon, Pre-Winter
+  - Each: emoji icon, Bengali name, forecast count, avg MAPE
+  - Color-coded backgrounds matching season
+
+- Created /src/components/forecast-results/forecast-dashboard.tsx: Main orchestrator
+  - Header with "Demand Forecasting" / "চাহিদা পূর্বাভাস"
+  - Summary Cards → Season Breakdown + Accuracy Distribution → Table → Model Comparison
+  - Detail Panel (Sheet) on forecast selection
+  - Error/loading states
+
+- Updated /src/app/page.tsx: Replaced Control Tower with Forecast Dashboard, Session 21 badge
+
+- All lint checks passed with zero errors
+- Dev server compiled successfully
