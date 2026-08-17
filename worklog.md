@@ -2199,3 +2199,28 @@ Files Created:
 - src/app/api/v1/users/sessions/[id]/route.ts
 - src/app/api/v1/users/activity/route.ts
 - src/app/api/v1/users/reinvite/route.ts
+---
+Task ID: session-15
+Agent: main
+Task: Session 15: User Management UI + API
+
+Work Log:
+- Reviewed project state: existing User model, auth API, RBAC, sessions
+- Built 8 new API endpoints for user management
+- Built 10 new frontend components for user management
+- Integrated Team page into dashboard (sidebar, content router, store)
+- Added team help content to PAGE_HELP (Bengali + English)
+- Fixed FloatingHelpButton null safety for new pages
+- Updated Settings page with Account & Team section
+- E2E verified with agent-browser: Team page, tabs, invite, profile edit, password change
+- Lint passes clean, pushed to GitHub
+
+Stage Summary:
+- 8 API endpoints: PUT /auth/profile, PUT /auth/password, PUT /users/{id}, POST /users/{id}/reactivate, DELETE /users/{id}, GET /users/sessions, DELETE /users/sessions/{id}, GET /users/activity, POST /users/reinvite
+- 10 UI components: user-management-page, team-members-panel, invite-dialog, user-profile-card, profile-form, password-change-form, role-badge, sessions-panel, activity-log, user-store
+- Team navigation added to sidebar with team.manage/users.manage permissions
+- Settings page enhanced with Account & Team section (Manage Team, Edit Profile, View Sessions)
+- DashboardPage type extended with 'team' page
+- PAGE_HELP extended with team content (Bengali/English bilingual)
+- Commit: feat(session-15): User Management UI + API (144 files, 3,163 insertions)
+- Pushed to GitHub: 06afac2
