@@ -2674,3 +2674,92 @@ Work Log:
 - All lint errors fixed: queueMicrotask for setState in effect, type aliases for empty object types
 - All prices formatted with BDT symbol (৳)
 - Responsive: mobile card layout, desktop table
+
+---
+
+Task ID: 2
+Agent: Main Developer
+Task: Session 19 - Purchase Order Management Dashboard
+
+Work Log:
+- Created /src/components/orders/types.ts: Complete type definitions and mock data
+  - PurchaseOrder, POStatus, POItem interfaces
+  - RecommendedOrder, ROStatus interfaces
+  - PO_STATUS_CONFIG: 6 statuses with label, Bengali label, color, icon
+  - URGENCY_CONFIG: 4 urgency levels (critical/high/normal/low) with pulse animation for critical
+  - CNY_STRATEGIES: 5 strategies with Bengali labels and descriptions
+  - PO_TRANSITIONS: valid status transition map
+  - getNextStatusOptions(): helper for action buttons
+  - getCNYStrategyLabel(): label lookup helper
+  - MOCK_PURCHASE_ORDERS: 8 POs (2 draft, 2 submitted, 1 confirmed, 1 in_transit, 1 received, 1 cancelled)
+  - MOCK_RECOMMENDED_ORDERS: 12 recommended orders (2 critical, 3 high, 5 normal, 2 low urgency)
+
+- Created /src/stores/purchase-order-store.ts: Zustand store for PO management
+  - State: orders[], isLoading, error, statusFilter, cnyRiskFilter, searchQuery
+  - Actions: fetchOrders (with mock fallback), updateOrderStatus (optimistic), cancelOrder
+  - UI: setStatusFilter, setCnyRiskFilter, setSearchQuery, clearError
+  - Computed: filteredOrders, ordersByStatus, totalByStatus, cnyAtRiskOrders
+
+- Created /src/stores/recommended-order-store.ts: Zustand store for recommended orders
+  - State: orders[], isLoading, error, urgencyFilter, statusFilter, cnyRiskFilter
+  - Actions: fetchOrders (with mock fallback), approveOrder, rejectOrder, convertToPO
+  - UI: setUrgencyFilter, setStatusFilter, setCnyRiskFilter, clearError
+  - Computed: filteredOrders, criticalOrders, pendingOrders, cnyAtRiskOrders
+
+- Created /src/components/orders/po-stats-cards.tsx: Top-level summary cards
+  - Total POs with total value in BDT
+  - Pending Action (draft + submitted count)
+  - In Transit with deliveries this week
+  - CNY At Risk count
+  - Responsive 4-column grid layout
+
+- Created /src/components/orders/purchase-order-table.tsx: PO table with filters
+  - Status filter tabs: All | Draft | Submitted | Confirmed | In Transit | Received | Cancelled
+  - CNY Risk toggle filter
+  - Search by PO number, supplier, product
+  - Status badges with color coding from PO_STATUS_CONFIG
+  - CNY Risk badge with red flag icon
+  - Total amount in BDT (৳)
+  - Action dropdown: View, Submit, Confirm, Mark In Transit, Mark Received, Cancel
+  - Desktop: full table; Mobile: card layout
+
+- Created /src/components/orders/purchase-order-detail-sheet.tsx: Detail slide-out
+  - PO number as title with status badge
+  - Timeline stepper: Draft → Submitted → Confirmed → In Transit → Received
+  - Filled dots (completed), pulsing dot (current), empty dots (pending)
+  - Connecting lines between steps
+  - Cancelled state shows red banner
+  - Order info: Date, Expected Delivery, Lead Time
+  - CNY Risk banner with alert styling
+  - Supplier info card
+  - Items table: SKU, Name, Qty, Unit Cost, Line Total
+  - Total Amount in BDT (large, prominent)
+  - Status transition action buttons
+
+- Created /src/components/orders/recommended-orders-panel.tsx: Action center
+  - Urgency filter tabs: Critical | High | Normal | Low with counts
+  - Status filter: All | Pending | Approved | Converted | Rejected
+  - CNY Risk filter toggle
+  - Stock gap visualization: inline bar showing current vs reorder point
+  - Urgency badges with pulse animation for critical
+  - Shipment mode badges (Sea/Air with Ship/Plane icons)
+  - Row actions: Approve (green), Reject (red) for pending; Convert to PO for approved
+  - Batch actions: Select multiple → Approve All / Convert All to PO
+  - Desktop: full table; Mobile: card layout
+
+- Created /src/components/orders/orders-dashboard.tsx: Main dashboard
+  - Header with ShoppingCart icon and Bengali subtitle
+  - POStatsCards at top
+  - Two tabs: "Purchase Orders" | "Recommended Orders"
+  - Error banner with dismiss
+  - Loading spinner
+  - Mock data fallback when API returns empty or errors
+
+- Updated /src/app/page.tsx: Replaced Products Dashboard with Orders Dashboard
+  - Session 19 badge
+  - "Purchase Orders" breadcrumb
+
+- Lint: All errors fixed (zero errors)
+- All prices formatted with BDT symbol (৳)
+- Responsive: mobile card layout, tablet card layout, desktop table
+- Mock data loads correctly on API auth redirect
