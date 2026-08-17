@@ -2589,3 +2589,88 @@ Stage Summary:
 - Mock data fallback when API returns empty
 - Color-coded multipliers, month selector, color picker, multiplier slider
 - Pushed to GitHub as commit 06680f8
+
+---
+Task ID: 2
+Agent: Main Developer
+Task: Session 18 - Product & Supplier Management Dashboard
+
+Work Log:
+- Created /src/components/products/types.ts (280+ lines): Complete type definitions
+  - Product, CreateProductInput, UpdateProductInput interfaces
+  - Supplier, CreateSupplierInput, UpdateSupplierInput interfaces
+  - MotorcycleModel, SeasonalityOption interfaces
+  - PRODUCT_CATEGORIES (12 BD motorcycle parts categories with Bengali labels)
+  - SUPPLIER_COUNTRIES (10 Asia-focused countries with Bengali labels)
+  - PRODUCT_UNITS (8 unit types)
+  - Helper functions: getCategoryLabel, getCountryLabel, getStockStatus
+  - StockStatus type: healthy | low | out
+  - MOCK_PRODUCTS (12 BD motorcycle parts with full inventory data)
+  - MOCK_SUPPLIERS (6 suppliers: China, Japan, India, Thailand, Bangladesh)
+  - MOCK_MOTORCYCLE_MODELS (8 models: Honda, Bajaj, TVS, Yamaha, Hero)
+
+- Created /src/stores/product-store.ts: Zustand store for product CRUD + filtering
+  - State: products[], isLoading, error, searchQuery, categoryFilter, lowStockFilter, activeOnly, pagination
+  - CRUD: fetchProducts (with query params), createProduct, updateProduct, deleteProduct
+  - UI state: setSearchQuery, setCategoryFilter, setLowStockFilter, setActiveOnly, clearError
+  - Computed: filteredProducts, lowStockProducts, categoryGroups, stockSummary
+
+- Created /src/stores/supplier-store.ts: Zustand store for supplier CRUD + filtering
+  - State: suppliers[], isLoading, error, searchQuery, countryFilter, cnyFilter
+  - CRUD: fetchSuppliers, createSupplier, updateSupplier, deleteSupplier
+  - UI state: setSearchQuery, setCountryFilter, setCnyFilter, clearError
+  - Computed: filteredSuppliers, cnyAffectedSuppliers, countryGroups
+
+- Created /src/components/products/product-table.tsx: Responsive product table
+  - Desktop: Table with SKU, Name, Category, Supplier, Unit Cost (BDT), Stock, Status, Actions columns
+  - Mobile: Card layout with key details and badges
+  - Search input, Category filter (Select), Low Stock toggle, Active Only toggle
+  - Stock color-coded badges: green (healthy), amber (low), red (out of stock)
+  - DropdownMenu per row: View, Edit, Delete
+  - Pagination controls
+  - Empty state with Package icon
+
+- Created /src/components/products/product-form-dialog.tsx: Create/Edit dialog
+  - 15+ fields: SKU (with auto-generate), Name, Category, Sub-category, Motorcycle Model, Supplier, Unit Cost, Selling Price, Unit, Min Order Qty, EOQ, Max Stock, Lead Time, Seasonal toggle, Season Type, Season Weight
+  - Dropdown data loaded from API with mock fallback
+  - Form validation: SKU + Name + Category required
+  - Seasonal section conditionally shown with amber styling
+  - Season Weight slider (0.1-3.0)
+
+- Created /src/components/products/product-detail-sheet.tsx: Slide-out detail panel
+  - Organized sections: Product Details, Motorcycle Model, Pricing (BDT with margin calc), Supplier, Inventory (bar charts), Seasonality
+  - InventoryBar component with color-coded bars for On Hand, Available, Reserved, Reorder Point, Safety Stock
+  - Edit/Delete actions at bottom
+
+- Created /src/components/suppliers/supplier-table.tsx: Responsive supplier table
+  - Columns: Name, Code, Country, Lead Time, Reliability (badge), CNY Affected (badge), Products Count
+  - Search, Country filter, CNY Affected filter (Select)
+  - Reliability badges: green (>=90%), amber (>=75%), red (<75%)
+  - Mobile card layout with badges
+
+- Created /src/components/suppliers/supplier-form-dialog.tsx: Create/Edit dialog
+  - Fields: Name (required), Code, Country (Select), Lead Time, Reliability (slider 0-100%), CNY Affected (Switch), Contact Email, Contact Phone, Notes (textarea)
+
+- Created /src/components/suppliers/supplier-detail-sheet.tsx: Slide-out detail panel
+  - Sections: Supply Details, Contact Information, Notes, Assigned Products list
+  - Reliability badge color-coded
+  - Contact email as mailto link
+  - Assigned products list with max-height scroll
+
+- Created /src/components/products/products-dashboard.tsx: Main dashboard
+  - Header with Package icon, Bengali subtitle
+  - Stats bar: Total Products, Active Products (green), Low Stock (amber), Total Suppliers
+  - Two tabs: Products | Suppliers (shadcn Tabs with count badges)
+  - Full CRUD flows for both products and suppliers
+  - Delete confirmation AlertDialogs for both
+  - Error banner with dismiss
+  - Loading spinner
+  - Mock data fallback when API returns empty
+
+- Updated /src/app/page.tsx: Replaced Seasonality Dashboard with Products Dashboard
+  - Session 18 badge
+  - "Products & Suppliers" breadcrumb
+
+- All lint errors fixed: queueMicrotask for setState in effect, type aliases for empty object types
+- All prices formatted with BDT symbol (৳)
+- Responsive: mobile card layout, desktop table
