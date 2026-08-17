@@ -2763,3 +2763,81 @@ Work Log:
 - All prices formatted with BDT symbol (৳)
 - Responsive: mobile card layout, tablet card layout, desktop table
 - Mock data loads correctly on API auth redirect
+
+---
+Task ID: 2
+Agent: Main Developer
+Task: Session 20 - Central Dashboard Overview (Control Tower)
+
+Work Log:
+- Created /src/components/overview/types.ts: Complete type system for dashboard overview
+  - DashboardKPIs, UrgentOrder, RecentForecast, SeasonalSummary, SopCycle, DashboardData interfaces
+  - BD_SEASONS map (Winter/শীত, Summer/গ্রীষ্ম, Monsoon/বর্ষা, Pre-Winter/হেমন্ত) with icons, colors, months
+  - MODULE_LINKS: 8 quick-access module links (Products, Orders, Seasonality, Forecast, Users, RBAC, Subscriptions, Payments)
+  - ActivityItem and AlertItem interfaces for feed and alerts
+  - getCurrentBDSeason() helper for dynamic season detection
+  - MOCK_DASHBOARD_DATA: realistic mock (247 SKUs, ৳1.85Cr, 8 stockout risk, 5 urgent orders, 5 recent forecasts)
+  - MOCK_ACTIVITY_ITEMS: 8 activity feed items across modules
+  - MOCK_ALERTS: 4 alerts (1 critical, 2 warning, 1 info)
+  - SOP_STAGES and SOP_STAGE_ORDER for S&OP cycle progress
+
+- Created /src/stores/overview-store.ts: Zustand store for dashboard state
+  - State: data (DashboardData | null), isLoading, error, lastRefresh
+  - Actions: fetchDashboard() (calls /api/v1/dashboard with mock fallback), refreshDashboard()
+  - Graceful error handling: falls back to mock data on API failure
+
+- Created /src/components/overview/kpi-hero-cards.tsx: 4 hero KPI cards
+  - Inventory Value (৳1.85 Cr with trend arrow)
+  - Stock Health (96.8% healthy, donut indicator SVG, at-risk count)
+  - Pending Orders (5 POs + 12 SOs = 17 total)
+  - Forecast Accuracy (87.7% accuracy, MAPE 12.3%, recalibrate badge)
+  - Each card: color accent bar, icon, sub-metrics, hover lift, staggered Framer Motion entrance
+
+- Created /src/components/overview/season-sop-banner.tsx: Season & SOP banner
+  - Left: Current BD season with icon, Bengali name, months range, days countdown to next season
+  - Right: SOP cycle status with progress bar and stage label
+  - Season-aware gradient background and border color
+
+- Created /src/components/overview/inventory-health-chart.tsx: Inventory health visualization
+  - Horizontal stacked bar: Healthy (green) | Low Stock (amber) | At Risk (red) | Overstock (sky)
+  - Percentage labels on segments
+  - 4 stat boxes below with counts, percentages, and icons
+
+- Created /src/components/overview/urgent-orders-list.tsx: Top 5 urgent orders
+  - Each row: product name, SKU, recommended qty, urgency badge (critical=pulse), trigger date
+  - Critical count footer with pulsing indicator
+  - "View All" button for 5+ orders
+  - Empty state: green "All Clear" message
+
+- Created /src/components/overview/recent-activity-feed.tsx: Activity timeline
+  - 8 mock activity items with module-specific icons and badges
+  - Relative timestamps ("2 min ago", "1 hour ago", etc.)
+  - ScrollArea with max-height overflow
+  - Module color-coded badges
+
+- Created /src/components/overview/module-links-grid.tsx: 8 module quick links
+  - Responsive grid: 2 cols mobile, 4 cols desktop
+  - Each card: icon, English + Bengali name, description, session badge
+  - Color-coded left border, hover lift + glow
+  - Click: toast notification "Navigate to [module] — available in sidebar"
+
+- Created /src/components/overview/alert-center.tsx: Alert panel
+  - 4 mock alerts with severity (critical/warning/info)
+  - Dismiss button on hover, AnimatePresence for removal
+  - Pulsing dot for critical alerts
+  - Active alert count badge, empty "All Clear" state
+
+- Created /src/components/overview/overview-dashboard.tsx: Main dashboard layout
+  - Layout: Header → Season Banner → KPI Cards → (Inventory Health + Alerts) → (Urgent Orders + Activity) → Module Links
+  - Loading skeleton states for all sections
+  - Error handling with retry button
+  - Auto-refresh every 5 minutes
+  - Refresh button with spinner overlay
+  - Staggered Framer Motion entrance animations
+
+- Updated /src/app/page.tsx: Replaced Orders Dashboard with Overview Dashboard
+  - Header: "TrimedCast / Control Tower" with Session 20 badge
+  - Sticky footer layout with flex column
+
+All components use 'use client', shadcn/ui, Lucide icons, Framer Motion animations, responsive design, BDT formatting.
+Lint: 0 errors. Build: successful. Page: 200 OK.
