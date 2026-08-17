@@ -1965,3 +1965,115 @@ Stage Summary:
 - API auth utilities enhanced with requireAuth/requirePermission/requireRole + middleware header fallback
 - Zustand auth store available for components that prefer store pattern over context
 - All changes pushed to sajidchowdhury/TrimedCast on main branch
+
+---
+Task ID: 5
+Agent: API Developer
+Task: Session 14 - Subscription Management API Routes
+
+Work Log:
+- Created 7 API route files under /api/v1/subscription/:
+  1. GET /status — Subscription status with computed info (daysUntilExpiry, inGracePeriod, canRenew, canResume, etc.)
+  2. POST /change-plan — Upgrade/downgrade with immediate vs deferred application
+  3. POST /cancel — Cancel with reason/feedback, immediate option for admins, cancel-at-period-end default
+  4. POST /resume — Resume cancelled subscription if period not ended
+  5. POST /renew — Manual renewal with payment record, invoice creation, demo auto-succeed
+  6. GET /invoices — Paginated invoice list with status filter and JSON line items parsed
+  7. POST /process — Cron endpoint for batch processing (auto-renewals, expiries, grace periods, data retention)
+- All routes use requireAuth() except process (no auth, scheduler-only)
+- All state changes record SubscriptionEvent entries
+- BDT pricing: Starter ৳2,400/mo, Professional ৳6,900/mo, Enterprise ৳17,400/mo with 17% yearly discount
+- Lint passes with zero errors
+- Agent context written to /agent-ctx/5-api-developer.md
+
+---
+Task ID: 4
+Agent: Subscription Engine Developer
+Task: Session 14 - Subscription Management + Renewal + Expiry (Backend)
+
+Work Log:
+- Created /src/lib/subscription/engine.ts (580+ lines): Core subscription lifecycle engine
+  - BDT Tier Pricing constants: Starter ৳2,400/mo ৳23,904/yr, Professional ৳6,900/mo ৳68,724/yr, Enterprise ৳17,400/mo ৳173,304/yr
+  - Date helpers: formatDateISO(), addDays(), daysBetween(), getTierPrice(), calculatePeriodEnd()
+  - recordSubscriptionEvent(): Log lifecycle events to SubscriptionEvent table with metadata JSON
+  - processSubscriptionRenewal(): Handle auto-renewal on period end — creates payment, updates period dates, syncs tenant status
+  - processPaymentFailure(): Increment fail count, set 7-day grace period, schedule retry with exponential backoff (1d/2d/4d, max 3)
+  - processPaymentRecovery(): Recover from past_due — reset fail count, clear grace period, transition to active
+  - processGracePeriodExpiry(): After grace period — suspend or expire (if max retries exceeded)
+  - processSubscriptionExpiry(): Mark expired, set 30-day data retention end, update tenant to suspended
+  - processSubscriptionDowngrade(): Downgrade expired subscription to starter after data retention period
+  - processPlanChange(): Upgrade (immediate, charge proration) or downgrade (at period end, credit proration)
+  - processCancellation(): Cancel with reason/feedback, set endsAt to period end (access continues until then)
+  - processResume(): Resume cancelled subscription before period end, re-enable auto-renew
+  - getSubscriptionStatus(): Full status with computed fields (daysUntilExpiry, inGracePeriod, gracePeriodDaysRemaining, nextAction)
+  - getSubscriptionTimeline(): All SubscriptionEvents for a subscription ordered by date desc
+  - processBatchSubscriptions(): Process all subscriptions needing attention (expired trials, auto-renewals, grace period, cancelled past endsAt, data retention past due)
+
+- Created /src/lib/subscription/renewal.ts (520+ lines): Renewal processing with payment simulation
+  - attemptRenewal(): Try to renew — simulates payment (90% success in sandbox), creates payment record, updates subscription
+  - scheduleRenewalReminder(): Check if 7-day reminder should be sent before renewal date
+  - processAutoRenewal(): Process all auto-renewals approaching period end (for cron)
+  - processManualRenewal(): Manual renewal from user — always succeeds, creates completed payment
+  - processPaymentRetry(): Retry failed payment with exponential backoff (1d→2d→4d, max 3)
+  - getRenewalStatus(): Get renewal status info (next renewal date, auto-renew, grace period, fail count)
+  - toggleAutoRenew(): Enable/disable auto-renewal with event logging
+  - calculateProration(): Calculate prorated credit/charge for mid-cycle plan changes
+  - Sandbox mode: simulatePayment() with 90% success rate, setSandboxMode()/isSandboxMode() control
+
+- Created /src/lib/subscription/expiry.ts (520+ lines): Expiry and data retention handling
+  - checkSubscriptionExpiry(): Evaluate if subscription should expire based on status/timing
+  - expireSubscription(): Mark expired, set 30-day data retention, record event with recovery window
+  - checkDataRetention(): Check if data retention period is over for downgrade
+  - downgradeExpiredSubscription(): Downgrade to starter after data retention (re-activates at free tier)
+  - getExpiryStatus(): Comprehensive expiry info (expired, daysUntilExpiry, dataRetentionEnd, canRecover)
+  - recoverExpiredSubscription(): Reactivate within data retention period — restore tier, new billing period, create payment
+  - scheduleExpiryProcessing(): Queue subscriptions for expiry processing (immediate + 3-day lookahead for notifications)
+  - processExpiryBatch(): Batch process all expiries (no-autorenew past period, cancelled past endsAt, grace period expired, data retention expired, trial expired)
+
+Key Design Decisions:
+- All state changes recorded as SubscriptionEvent with full fromStatus/toStatus and metadata JSON
+- Tenant and Subscription status always updated in sync
+- BDT pricing used throughout (not USD cents) matching Bangladesh market
+- Grace period: 7 days after first payment failure
+- Data retention: 30 days after expiry before auto-downgrade
+- Payment retry: exponential backoff (1d, 2d, 4d) with max 3 retries
+- Sandbox mode: 90% payment success rate for demo/testing
+- Proration: upgrades immediate, downgrades at period end
+- Recovery: possible only within data retention period and before downgrade
+
+All files pass TypeScript compilation and ESLint checks.
+
+---
+
+## Task ID: 6
+## Agent: Subscription Management Developer
+## Task: Session 14 - Subscription Management + Renewal + Expiry UI
+
+### Work Completed:
+
+Created 7 files in `/src/components/subscription/` and updated billing page:
+
+1. **types.ts** — Shared types, pricing constants (BDT ৳ format), tier features/descriptions, event type colors/labels, formatBDT helper
+2. **subscription-store.ts** — Zustand store managing all subscription state: status data, invoices, events, plan change, cancellation, resume, renewal, auto-renew toggle, expanded invoice
+3. **subscription-manager.tsx** — Main component with 4 tabs:
+   - **Overview Tab**: Current plan card with tier icon, status badge (trial/active/past_due/cancelled/expired), price, period dates, auto-renew status, next payment, days until expiry, grace period warning, trial progress bar, cancel/resume actions
+   - **Change Plan Tab**: Monthly/yearly toggle, 3 tier cards (Starter/Professional/Enterprise) with pricing, features preview, upgrade/downgrade buttons, feature comparison table, plan change confirmation dialog
+   - **Invoices Tab**: Renders InvoiceList component
+   - **Lifecycle Tab**: Renders LifecycleTimeline component
+4. **plan-change-dialog.tsx** — Dialog showing current→new plan, price difference, prorated charge/credit, gained/lost features, upgrade (immediate) vs downgrade (at period end) messaging, loading state, success animation
+5. **cancellation-flow.tsx** — 4-step wizard: reason selection → feedback → what you'll lose → final confirmation. Includes animated transitions, "Keep My Subscription" and "Cancel Subscription" buttons, post-cancellation state with Resume button
+6. **renewal-panel.tsx** — Auto-renew toggle with confirmation dialog, manual "Renew Now" button, payment retry status (fail count, next retry), grace period warning with "Update Payment" CTA, expiry warning, renewal history (last 3)
+7. **invoice-list.tsx** — Paginated table with Invoice #/Date/Amount/Status/Due Date, expandable row showing line items, status badges (draft/open/paid/void/uncollectible), pagination, export placeholder
+8. **lifecycle-timeline.tsx** — Vertical timeline with color-coded event dots, icons per event type, Framer Motion staggered entry animation, event metadata badges, timestamps
+
+**Updated**: `billing-page.tsx` — Now has two tabs: "Subscription Management" (renders SubscriptionManager) and "Billing Portal" (renders existing BillingPortal)
+
+### Key Design Decisions:
+- All amounts in BDT with ৳ symbol via formatBDT helper
+- Zustand for centralized state with async API actions
+- Framer Motion for tab transitions, card hover effects, cancellation step animations, timeline entry animations
+- shadcn/ui components exclusively (Card, Tabs, Badge, Switch, Button, Dialog, Table, Alert, Skeleton, Progress, ScrollArea, Separator)
+- Color coding: emerald=success/active, amber=warning/grace period, red=error/cancelled, orange=downgrade, purple=plan change
+- Responsive: mobile-first, grid cols adapt, scroll overflow for long lists
+- All components marked 'use client'
+- Lint clean (0 errors)

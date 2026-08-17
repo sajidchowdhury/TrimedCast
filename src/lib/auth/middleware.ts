@@ -22,6 +22,8 @@ export const PUBLIC_ROUTES = [
 /** Public route prefixes (anything under these paths is public) */
 export const PUBLIC_ROUTE_PREFIXES = [
   '/api/v1/auth/',     // Auth API endpoints
+  '/api/v1/subscription/', // Subscription API (handles auth internally with demo mode)
+  '/api/v1/payment/',  // Payment API (handles auth internally)
   '/api/health',       // Health check
   '/_next/',           // Next.js static assets
   '/favicon',          // Favicon

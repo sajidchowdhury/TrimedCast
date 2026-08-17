@@ -79,6 +79,7 @@ model Tenant {
   sessions         UserSession[]
   otpVerifications OtpVerification[]
   subscriptionPayments SubscriptionPayment[]
+  subscriptionEvents SubscriptionEvent[]
   seasonalityTypes SeasonalityType[]
 
   @@index([acId])
@@ -600,6 +601,7 @@ model Subscription {
   stripePriceId   String?
   
   // Billing Cycle
+  billingCycle    String   @default("monthly") // monthly, yearly
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
   trialEndsAt        DateTime?
@@ -610,11 +612,26 @@ model Subscription {
   unitAmount       Int?     // Price in BDT (12000 for pro)
   currency        String   @default("BDT")
   
+  // Renewal
+  autoRenew       Boolean  @default(true)  // Auto-renew on period end
+  lastRenewalAttempt DateTime?  // Last time renewal was attempted
+  renewalReminderSent Boolean @default(false) // Whether renewal reminder was sent
+  
   // Payment
   lastPaymentAt  DateTime?
   nextPaymentAt  DateTime?
   paymentFailCount Int    @default(0)
+  paymentRetryAt  DateTime?  // Next payment retry time (exponential backoff)
   gracePeriodEnd  DateTime?  // 7 days after payment failure
+  
+  // Expiry & Downgrade
+  expiredAt       DateTime?  // When subscription expired
+  downgradedAt    DateTime?  // When downgraded to free after expiry
+  dataRetentionEnd DateTime? // Data retained for 30 days after expiry
+  
+  // Cancellation
+  cancellationReason String?  // user_request, payment_failure, admin_action, terms_violation
+  cancellationFeedback String? // User feedback on why they cancelled
   
   // Metadata
   metadata       String?  // JSON: additional info (e.g., upgrade reason, promo code)
@@ -626,6 +643,31 @@ model Subscription {
   @@index([tenantId])
   @@index([status])
   @@index([tier])
+  @@index([nextPaymentAt])
+  @@index([gracePeriodEnd])
+}
+
+// --- Subscription Events (Lifecycle Tracking) ---
+
+model SubscriptionEvent {
+  id              String   @id @default(cuid())
+  tenantId        String
+  subscriptionId  String
+  eventType       String   // created, activated, renewed, payment_failed, payment_recovered, cancelled, resumed, expired, downgraded, plan_changed, grace_period_started, grace_period_ended
+  fromStatus      String?  // Previous subscription status
+  toStatus        String?  // New subscription status
+  fromTier        String?  // Previous tier (for plan changes)
+  toTier          String?  // New tier (for plan changes)
+  metadata        String?  // JSON: additional context (reason, payment details, etc.)
+  performedBy     String?  // User ID who triggered the event (null for system)
+  createdAt       DateTime @default(now())
+
+  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([subscriptionId])
+  @@index([eventType])
+  @@index([createdAt])
 }
 
 // --- Usage Events (Metering) ---
