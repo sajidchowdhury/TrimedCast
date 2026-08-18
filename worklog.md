@@ -3067,3 +3067,84 @@ Work Log:
   - Same layout structure with header, main, footer
 
 - Lint: All errors fixed, clean pass
+
+---
+Task ID: 2
+Agent: Main Developer
+Task: Session 24 - Multi-Tenant Admin Panel
+
+Work Log:
+- Created /src/components/admin/types.ts (200+ lines): Complete type definitions and mock data
+  - AdminTenant, RevenueMetrics, PlatformMetrics, SystemHealth, SecurityEventSummary interfaces
+  - PLAN_CONFIG: Starter/Professional/Enterprise with Bengali labels, colors, BDT prices
+  - TENANT_STATUS_CONFIG: Trial/Active/Past Due/Suspended/Cancelled with Bengali labels
+  - BD_DIVISIONS: All 8 Bangladesh divisions
+  - 8 mock tenants: Rahim Auto Parts, Karim Motor, Jamuna Auto, Square Motors, Bengal Auto, Navana Motors, Aftab Motorcycle, Pran-RFL Auto
+  - Mix of plans (3 starter, 3 professional, 2 enterprise), statuses (4 active, 2 trial, 1 past_due, 1 suspended)
+  - AC ID format: TC-2025-DHK-0001 etc.
+  - MOCK_REVENUE: MRR ৳156,000, ARR ৳1,872,000, churn 3.2%, 24 paid / 3 pending invoices
+  - MOCK_METRICS: 8 tenants, 47 users, 1,247 products, 342 forecast runs, 89 AI queries, avg MAPE 12.3%
+  - MOCK_HEALTH: healthy status, 99.9% uptime, DB 12ms, queue 3, 4 services
+  - MOCK_SECURITY: 23 events, 2 critical, 18 resolved, 5 unresolved, 5 event types
+  - Helper functions: formatBDT, getPlanBadgeClasses, getStatusBadgeClasses, getDivisionLabel
+
+- Created /src/stores/admin-store.ts: Zustand store for admin state
+  - State: tenants[], revenue, metrics, health, security, isLoading, error, tabFilter, searchQuery, planFilter, statusFilter
+  - Actions: fetchTenants, fetchRevenue, fetchMetrics, fetchHealth, fetchSecurity, suspendTenant, reactivateTenant
+  - UI actions: setTabFilter, setSearchQuery, setPlanFilter, setStatusFilter, clearError
+  - fetchAll: parallel fetch of all data
+  - Computed: filteredTenants (with search + plan + status filters), activeTenants, trialTenants
+  - Mock data fallback on API failure
+
+- Created /src/components/admin/revenue-overview.tsx: Revenue overview section
+  - 6 metric cards in 2x3 grid: MRR, ARR, Churn Rate, Avg Revenue/Tenant, Paid Invoices, Pending Invoices
+  - Tier distribution: 3 horizontal progress bars with Starter/Professional/Enterprise counts
+  - Bengali labels, BDT currency formatting
+  - Color-coded icons and values
+
+- Created /src/components/admin/platform-metrics.tsx: Platform metrics section
+  - 6 metric cards: Total Tenants, Active Tenants, Total Users, Products Tracked, Forecast Runs, AI Queries
+  - Avg MAPE card with rating (Excellent/Good/Needs Review) based on threshold
+  - Color-coded icons per metric
+
+- Created /src/components/admin/system-health-panel.tsx: System health display
+  - Overall status badge with emoji (🟢/🟡/🔴)
+  - Uptime %, DB latency ms, Queue depth jobs
+  - Services list with status dot, icon, name, latency
+  - Last checked timestamp, Refresh button
+
+- Created /src/components/admin/security-overview.tsx: Security overview
+  - 4 stat boxes: Total, Critical (red), Resolved (green), Unresolved (amber)
+  - Horizontal bar chart for top 5 event types
+  - Type label mapping: rate_limit_exceeded → Rate Limit, suspicious_login → Suspicious Login, etc.
+
+- Created /src/components/admin/tenants-table.tsx: Tenants table with filtering
+  - Columns: AC ID, Name, Division, Plan, Status, Users, Products, MRR, Trial, Actions
+  - Plan and Status badges with color coding
+  - Search by name/AC ID, Filter by Plan dropdown, Filter by Status dropdown
+  - Actions: View (eye), Suspend (ban), Reactivate (play), Extend Trial (timer)
+  - Row click opens detail dialog
+  - Responsive: hide columns on smaller screens
+
+- Created /src/components/admin/tenant-detail-dialog.tsx: Tenant detail dialog
+  - AC ID, Name, Slug, Division display
+  - Plan and Status badges
+  - User count, Product count, MRR
+  - Trial period info with expiry date and countdown
+  - Action buttons: Suspend (destructive), Reactivate, Extend Trial (+7d/+14d/+30d)
+  - Created date
+
+- Created /src/components/admin/admin-dashboard.tsx: Main orchestrating component
+  - 4 tabs: Overview, Tenants, System, Revenue
+  - Tab 1 Overview: Revenue Overview + Platform Metrics side by side on desktop
+  - Tab 2 Tenants: Tenants Table + Detail Dialog
+  - Tab 3 System: System Health + Security Overview side by side
+  - Tab 4 Revenue: Full revenue breakdown with tenant status cards
+  - Header: Shield icon, "Admin Panel" title, Bengali subtitle, Super Admin badge
+  - Loading state, mock data fallback
+
+- Updated /src/app/page.tsx: Admin Dashboard as main page
+  - Session 24 badge
+  - Same layout structure with header, main, footer
+
+- Lint: All errors fixed, clean pass

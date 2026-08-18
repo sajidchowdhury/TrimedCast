@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================
-// TrimedCast — Sales Order Management Dashboard
-// Session 23: Sales Order Management
+// TrimedCast — Multi-Tenant Admin Panel
+// Session 24: Admin Dashboard
 // ============================================
 
-import { SODashboard } from '@/components/sales-orders/so-dashboard';
+import { AdminDashboard } from '@/components/admin/admin-dashboard';
 import { Footer } from '@/components/landing/footer';
 
-export default function SalesOrderPage() {
+export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased">
       {/* Header */}
@@ -19,11 +19,11 @@ export default function SalesOrderPage() {
               <span className="text-white font-bold text-sm">TC</span>
             </div>
             <span className="font-semibold text-base">TrimedCast</span>
-            <span className="text-muted-foreground text-sm hidden sm:inline">/ Sales Orders</span>
+            <span className="text-muted-foreground text-sm hidden sm:inline">/ Admin Panel</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
-              Session 23
+              Session 24
             </span>
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function SalesOrderPage() {
 
       {/* Main Content */}
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-6">
-        <SODashboard />
+        <AdminDashboard />
       </main>
 
       {/* Footer */}
