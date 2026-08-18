@@ -3334,3 +3334,194 @@ Work Log:
   - min-h-screen flex flex-col layout with mt-auto footer behavior
 - Lint check: passed with zero errors
 - Dev server: compiles and serves successfully, store falls back to mock data when API unavailable
+
+---
+Task ID: 2
+Agent: Finance Types & Store Developer
+Task: Session 26 — Financial Analytics & Cost Intelligence Dashboard (Types, Mock Data, Zustand Store)
+
+Work Log:
+- Created /src/components/finance/types.ts (~550 lines):
+  - 9 core type interfaces: CostCategory, MarginAnalysis, RevenueTrend, CurrencyExposure, CustomsDutyItem, PaymentTerm, BudgetItem, CostToServe
+  - Type unions: CostType, TrendDirection, RiskLevel, SupplierRating, BudgetStatus, CurrencyCode, FinanceTab, ChannelType
+  - 4 configuration constants: COST_TYPE_CONFIG (7 cost types), CURRENCY_CONFIG (BDT/USD/CNY/JPY), RISK_CONFIG (4 levels), RATING_CONFIG (4 ratings)
+  - BD_TAX_RATES: Bangladesh import tax structure (Customs Duty 5-25%, SD 0-20%, VAT 15%, AIT 1-5%)
+  - 8 mock data arrays:
+    - MOCK_COST_CATEGORIES (7 categories, total ৳81,800,000)
+    - MOCK_MARGIN_ANALYSIS (17 rows: 8 categories × Retail/Wholesale/Online)
+    - MOCK_REVENUE_TRENDS (12 months Apr 2024–Mar 2025 with seasonal pattern)
+    - MOCK_CURRENCY_EXPOSURE (4 currencies with hedging data)
+    - MOCK_CUSTOMS_ITEMS (5 HS code items with BD duty calculations)
+    - MOCK_PAYMENT_TERMS (8 suppliers: 4 Chinese, 2 BD, 2 others)
+    - MOCK_BUDGET (8 FY 2024-25 Q4 categories)
+    - MOCK_COST_TO_SERVE (8 BD customers across 7 regions)
+  - 8 helper functions: formatBDT, formatPct, getRiskClasses, getRatingClasses, getVarianceStatus, getVarianceClasses, getTrendIcon, getTrendColor, computeTotalCost, computeAvgMargin
+
+- Created /src/stores/finance-store.ts (~280 lines):
+  - Zustand store with full state: 8 data arrays, isLoading, error, activeTab, searchQuery, categoryFilter, periodFilter
+  - 8 fetch actions with API call + mock fallback pattern
+  - fetchAll: parallel Promise.allSettled with extract helper
+  - UI actions: setActiveTab, setSearchQuery, setCategoryFilter, setPeriodFilter, clearError
+  - 6 computed selectors: filteredMargins, totalCost, avgMargin, currencyRisk, overduePayments, budgetVariance
+  - 5 external selector hooks: useTotalCost, useAvgMargin, useCurrencyRisk, useOverduePayments, useBudgetVariance, useFilteredMargins
+
+- Lint: Passed with zero errors
+
+---
+Task ID: 5
+Agent: Finance Components Developer
+Task: Session 26 - Budget vs Actual & Cost-to-Serve Components
+
+Work Log:
+- Created /src/components/finance/payment-terms.tsx (~230 lines):
+  - Header: "Payment Terms" / "পেমেন্ট শর্তাবলী" with CreditCard icon
+  - 4 summary cards in responsive grid: Total Outstanding (৳), Overdue Amount (red), Avg Payment Days (weighted), On-Time Rate (%)
+  - 8 supplier cards in 2-col grid with: supplier name + Bengali, credit term "XX days / দিন", avg payment days color-coded (green/amber/red), overdue amount with alert/clear indicator, credit utilization bar with color coding (≤60% green, ≤80% amber, >80% red), rating badge (excellent=emerald, good=sky, fair=amber, poor=red), invoices paid progress bar, last payment date
+  - Framer Motion stagger animations (container + item variants)
+
+- Created /src/components/finance/budget-vs-actual.tsx (~310 lines):
+  - Header: "Budget vs Actual" / "বাজেট বনাম প্রকৃত" with "FY 2024-25 Q4" period badge
+  - 3 overall summary cards: Total Budget (৳), Total Actual (৳), Overall Variance (+/- ৳ and % color-coded)
+  - 8 budget items in desktop table with columns: Category+Bengali, Budget, Actual, Variance (+/- ৳ and %), dual comparison bar (budget=gray, actual=color by status with pulse on critical), status badge
+  - Mobile: stacked cards with same data in card layout
+  - Variance chart: horizontal bar per category, left of center = under budget (green), right = over (red)
+  - Framer Motion stagger animations
+
+- Created /src/components/finance/cost-to-serve.tsx (~270 lines):
+  - Header: "Cost to Serve" / "সেবা খরচ" with Target icon
+  - 3 summary cards: Avg CTS Ratio (color-coded), Best Customer (lowest ratio), Worst Customer (highest ratio)
+  - 8 customer cards in 2-col grid: customer name+Bengali, region with Bengali, revenue (৳), cost to serve (৳), CTS Ratio % (emerald <16%, sky <20%, amber <24%, red >=24%), net margin after CTS, product count + order count badges, avg order value (৳), mini bar chart (Revenue vs CTS)
+  - CTS distribution: horizontal stacked bar with 4 zones (emerald <16%, sky 16-20%, amber 20-24%, red >=24%), customer count in each zone, legend
+  - Framer Motion stagger animations
+
+- All components: 'use client', shadcn/ui (Card, Badge, Progress, Separator, Table, ScrollArea), Lucide icons, types/store imports, responsive mobile-first, Framer Motion, TypeScript, BDT format
+- Lint: Zero errors on new files
+
+---
+Task ID: 3
+Agent: Financial Analytics Developer
+Task: Session 26 - Cost Breakdown, Margin Analysis, Revenue Trends Components
+
+Work Log:
+- Created /src/components/finance/cost-breakdown.tsx (~270 lines):
+  - Header: "Cost Breakdown" / "খরচ বিশ্লেষণ" with total operating cost display (৳81,800,000)
+  - Donut chart (pure SVG): 7 segments colored by COST_TYPE_CONFIG, center text with total amount, hover tooltip showing category name/Bengali/amount/percentage, hover highlight with opacity dimming and scale effect
+  - Category list below chart: color dot, name + Bengali, amount (৳), animated percentage bar, trend arrow (up=red ArrowUp, down=green ArrowDown, flat=gray Minus) with percentage
+  - Sorted by amount descending
+  - Responsive: chart left + list right on lg, stacked on mobile
+  - Framer Motion stagger animations (container + item variants)
+  - Fixed react-hooks/immutability lint: replaced mutating angle variable with cumulative angles array in useMemo
+
+- Created /src/components/finance/margin-analysis.tsx (~300 lines):
+  - Header: "Margin Analysis" / "মার্জিন বিশ্লেষণ" with category count badge
+  - Summary cards (3): Avg Gross Margin (emerald), Best Category (amber), Total Revenue (sky)
+  - Margin table (desktop): Product Category+Bengali, Channel+Bengali, Revenue, COGS, Gross Profit, Margin % (color-coded badge: emerald >35%, sky >25%, amber >20%, red <=20%), Trend icon
+  - Margin cards (mobile): compact card layout with same data
+  - Search by category or channel (uses store's searchQuery/setSearchQuery)
+  - Sort toggle button (High→Low / Low→High by margin)
+  - Margin distribution bar: horizontal stacked bar showing revenue-weighted margin distribution across categories with hover labels and legend
+  - Framer Motion stagger animations
+
+- Created /src/components/finance/revenue-trends.tsx (~330 lines):
+  - Header: "Revenue Trends" / "আয় প্রবণতা" with 12-month and FY badges
+  - 12-month area chart (pure SVG, hand-built):
+    - X-axis: months (Apr 2024 - Mar 2025) with year labels
+    - Y-axis: ৳ amounts with nice tick marks
+    - 3 layers: Revenue (emerald area+line), COGS (sky area+line), Gross Profit (amber dashed area+line showing visible gap)
+    - Margin line overlay (violet dashed, mapped to right Y-axis 0-50%)
+    - Seasonal index indicator dots: green circles for peak months (index >1.1), red circles for dip months (index <0.9)
+    - CNY impact annotation on Feb: red dot + "CNY ↓" label
+    - Interactive hover: crosshair + tooltip box with Rev/COGS/Profit/Margin details
+    - Chart legend below
+  - Key insights section: Peak month with amount, Low month with amount, Avg monthly revenue, CNY impact annotation (red callout with detailed explanation)
+  - Responsive: full width with min-width 600px and horizontal scroll, scales on mobile
+  - All amounts in BDT format
+  - Framer Motion stagger animations
+
+- All components: 'use client', shadcn/ui (Card, Badge, Button, Table, Input, ScrollArea, Separator, Tooltip), Lucide icons, types/store imports, responsive mobile-first, Framer Motion, TypeScript
+- Lint: Zero errors
+
+---
+Task ID: 4
+Agent: Finance Component Developer
+Task: Session 26 - Currency Exposure & Customs Duty Calculator Components
+
+Work Log:
+- Created /src/components/finance/currency-exposure.tsx (~270 lines):
+  - CurrencyExposurePanel component with 'use client' directive
+  - Header: "Currency Exposure" / "মুদ্রা ঝুঁকি" with "FX Risk Monitor" badge
+  - 4 currency cards in responsive grid (1-col mobile, 2-col tablet, 4-col desktop):
+    - Each card shows: flag emoji + code + Bengali name (🇧🇩 BDT, 🇺🇸 USD, 🇨🇳 CNY, 🇯🇵 JPY)
+    - Exchange rate: "1 {CODE} = X.XX BDT"
+    - Total exposure in BDT (large bold number)
+    - Hedged vs Unhedged: animated horizontal bar (green hedged / red unhedged proportion)
+    - Pending Payables and Receivables in BDT
+    - Risk badge: low=emerald, medium=amber, high=orange pulse, critical=red pulse
+    - CNY card: special "CNY Volatility Warning" banner when risk=high
+  - Summary row with 4 metrics:
+    - Total FX Exposure (৳), Total Unhedged (৳), Overall Risk Level (worst among currencies), Hedging Recommendation
+  - Loading skeleton state
+  - Framer Motion: container stagger, card slide-in, animated progress bars, summary slide-in
+  - Imports from types (CURRENCY_CONFIG, RISK_CONFIG, formatBDT, formatPct, getRiskClasses) and finance-store (useFinanceStore, useCurrencyRisk)
+
+- Created /src/components/finance/customs-calculator.tsx (~370 lines):
+  - CustomsCalculator component with 'use client' directive
+  - Header: "Customs Duty Calculator" / "কাস্টমস শুল্ক ক্যালকুলেটর" with "BD Import Tax Structure" badge
+  - Collapsible tax rate reference section using Collapsible/CollapsibleTrigger/CollapsibleContent:
+    - Customs Duty: 5-25% (varies by HS code)
+    - Supplementary Duty: 0-20%
+    - VAT: 15% (standard)
+    - Advance Income Tax: 1-5%
+  - Items table (5 items from mock data) using Table/TableHeader/TableBody/TableRow/TableCell:
+    - Columns: HS Code, Description (+ Bengali), Origin, Qty, Unit Value, Total Value, CD%, SD%, VAT%, AIT%, Total Duty, Landed Cost (bold, emerald)
+    - Click row to expand duty calculation breakdown (AnimatePresence)
+    - DutyBreakdown sub-component shows per-tax amounts
+  - Interactive calculator input section:
+    - HS Code, Description, Origin Country (Select: China/Japan/India/Thailand)
+    - Quantity, Unit Value (BDT)
+    - Duty Rate %, SD Rate %, VAT Rate %, AIT Rate % inputs (with defaults)
+    - Real-time calculation using useMemo as inputs change
+    - Result grid: Total Value, Customs Duty, Supp. Duty, VAT, AIT, Total Duty, Landed Cost
+    - Proper BD VAT calculation: VAT on (CIF + CD + SD), AIT on CIF
+  - Summary totals: Total Import Value, Total Duties, Total Landed Cost, Effective Duty Rate %
+  - Framer Motion: container stagger, item slide-in, row animations, AnimatePresence for breakdown
+
+- Updated /src/app/page.tsx:
+  - Replaced Warehouse dashboard with Session 26 Financial Analytics dashboard
+  - Imports CurrencyExposurePanel and CustomsCalculator
+  - Both sections in semantic <section> tags with aria-labels
+  - Session 26 badge in header
+
+- All components: 'use client', shadcn/ui (Card, Badge, Button, Table, Input, Select, Separator, Collapsible), Lucide icons, types/store imports, responsive mobile-first, Framer Motion, TypeScript strict, BDT format (৳)
+- Lint: Zero errors
+
+---
+Task ID: 6
+Agent: Finance Dashboard Orchestrator
+Task: Session 26 - Finance Dashboard Orchestrator & Page Update
+
+Work Log:
+- Created /src/components/finance/finance-dashboard.tsx: Main orchestrating dashboard component
+  - FinanceDashboard export with useFinanceStore (fetchAll on mount, activeTab navigation)
+  - Header: DollarSign icon with emerald accent, "Financial Analytics" title, Bengali subtitle "আর্থিক বিশ্লেষণ"
+  - 6 tabs using shadcn Tabs component (Overview, Margin, Currency, Customs, Payments, Budget)
+  - Overview tab: CostBreakdown + RevenueTrends side-by-side on desktop (lg:grid-cols-2), stacked on mobile
+  - Margin tab: MarginAnalysisPanel
+  - Currency tab: CurrencyExposurePanel
+  - Customs tab: CustomsCalculator
+  - Payments tab: PaymentTermsPanel
+  - Budget tab: BudgetVsActualPanel + CostToServePanel stacked
+  - Loading state: DashboardSkeleton with 6 pulse rectangles in responsive grid
+  - Error state: ErrorBanner with dismiss button (clearError from store)
+  - Tab change updates store's activeTab via setActiveTab
+  - TAB_CONFIG array with icons per tab (LayoutDashboard, Percent, Globe2, Calculator, CreditCard, Scale)
+  - Tab labels truncated to 3 chars on mobile for space efficiency
+
+- Updated /src/app/page.tsx: Replaced Warehouse Dashboard with Finance Dashboard
+  - FinanceDashboard import from finance-dashboard component
+  - Sticky header with TC brand, "TrimedCast / Financial Analytics" breadcrumb, Session 26 badge
+  - Main content area with max-w-7xl container
+  - Footer from landing/footer component
+  - min-h-screen flex flex-col layout for sticky footer
+
+- Lint: Zero errors
