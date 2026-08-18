@@ -2999,3 +2999,71 @@ Work Log:
 - All use Lucide icons
 - Responsive: mobile-first design
 - Lint: 0 errors, 0 warnings
+
+---
+Task ID: 2
+Agent: Main Developer
+Task: Session 23 - Sales Order Management Dashboard
+
+Work Log:
+- Created /src/components/sales-orders/types.ts: Complete type definitions
+  - SalesOrder, SOStatus, SOItem interfaces
+  - SO_STATUS_CONFIG with label, labelBn, color for 5 statuses
+  - SO_STATUS_ORDER for lifecycle progression
+  - SO_CHANNELS: 6 BD sales channels (retail, wholesale, online/Daraz, service_center, dealer, export) with Bengali labels
+  - BD_REGIONS: 8 BD divisions with Bengali labels
+  - Helper functions: getChannelDisplay, getRegionDisplay, formatBDT
+  - MOCK_SALES_ORDERS: 12 realistic orders across all statuses (3 pending, 3 confirmed, 2 shipped, 2 delivered, 2 cancelled)
+  - BD motorcycle part names, BDT prices, BD shop names, dates spanning last 30 days
+
+- Created /src/stores/sales-order-store.ts: Zustand store
+  - State: orders[], selectedOrder, isLoading, error, statusFilter, channelFilter, regionFilter, searchQuery
+  - Actions: fetchOrders (API with mock fallback), createOrder, updateOrderStatus, cancelOrder, fulfillOrder, selectOrder
+  - UI: setStatusFilter, setChannelFilter, setRegionFilter, setSearchQuery, clearError
+  - Computed: filteredOrders, ordersByStatus, totalRevenue, pendingCount, deliveredCount, overdueOrders
+  - API response mapping with mapApiOrder helper
+
+- Created /src/components/sales-orders/so-summary-cards.tsx: 4 stat cards
+  - Total Orders, Revenue (৳ BDT), Pending Fulfillment, Delivered (with percentage)
+  - Color-coded icons (emerald, amber, sky, violet)
+  - Bengali subtitles for each card
+
+- Created /src/components/sales-orders/so-table.tsx: Full data table
+  - Desktop: full table with Order #, Date, Customer, Channel, Region, Items, Total, Status, Actions
+  - Mobile: responsive card layout with inline action buttons
+  - Status filter tabs: All | Pending | Confirmed | Shipped | Delivered | Cancelled
+  - Channel & Region dropdown filters with mobile toggle
+  - Search by order # or customer name
+  - Status badges with color from SO_STATUS_CONFIG
+  - Row click opens detail sheet
+  - Actions dropdown: View, Confirm, Ship, Mark Delivered, Cancel (context-sensitive)
+
+- Created /src/components/sales-orders/so-form-dialog.tsx: Create new order dialog
+  - Customer Name (required), Channel select, Region select
+  - Dynamic items: add/remove products with name, SKU, qty, unit price
+  - Line totals and grand total in ৳ BDT
+  - Submit creates order via store (API with offline fallback)
+  - Loading state with spinner
+
+- Created /src/components/sales-orders/so-detail-sheet.tsx: Slide-out detail sheet
+  - Order number with status badge (English + Bengali)
+  - Horizontal stepper timeline: Pending → Confirmed → Shipped → Delivered
+  - Completed (filled green), Current (pulsing), Future (gray) states
+  - Cancelled state with red alert banner
+  - Order info grid: Date, Customer, Channel (Bengali), Region (Bengali)
+  - Items table: Product, SKU, Qty, Unit Price, Line Total
+  - Grand Total in prominent emerald styling
+  - Context-sensitive action buttons: Confirm, Ship, Mark Delivered, Cancel
+
+- Created /src/components/sales-orders/so-dashboard.tsx: Main orchestrating component
+  - Header with ShoppingBag icon, title + Bengali subtitle
+  - "New Order" button
+  - Error banner with dismiss
+  - Loading spinner
+  - SOSummaryCards + SOTable + SOFormDialog + SODetailSheet
+
+- Updated /src/app/page.tsx: Sales Order Dashboard as main page
+  - Session 23 badge
+  - Same layout structure with header, main, footer
+
+- Lint: All errors fixed, clean pass
