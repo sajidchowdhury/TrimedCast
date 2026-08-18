@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================
-// TrimedCast — Procurement & Supplier Management
-// Session 27: Supplier Scorecard & Procurement
+// TrimedCast — Product Catalog & Inventory Intelligence
+// Session 28: Product Catalog & Inventory
 // ============================================
 
-import { ProcurementDashboard } from '@/components/procurement/procurement-dashboard';
+import { CatalogDashboard } from '@/components/catalog/catalog-dashboard';
 import { Footer } from '@/components/landing/footer';
 
-export default function ProcurementPage() {
+export default function CatalogPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased">
       {/* Header */}
@@ -19,11 +19,11 @@ export default function ProcurementPage() {
               <span className="text-white font-bold text-sm">TC</span>
             </div>
             <span className="font-semibold text-base">TrimedCast</span>
-            <span className="text-muted-foreground text-sm hidden sm:inline">/ Procurement & Suppliers</span>
+            <span className="text-muted-foreground text-sm hidden sm:inline">/ Product Catalog & Inventory</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
-              Session 27
+              Session 28
             </span>
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function ProcurementPage() {
 
       {/* Main Content */}
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-6">
-        <ProcurementDashboard />
+        <CatalogDashboard />
       </main>
 
       {/* Footer */}

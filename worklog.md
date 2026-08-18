@@ -3724,3 +3724,184 @@ Work Log:
   - Removed useMemo wrappers that caused react-hooks/preserve-manual-memoization errors
   - Replaced with direct computation (filtered, strategicCount, highRiskCount, totalSpend, selectedSupplier, selectedScorecard, countryOptions)
   - Lint passes clean with 0 errors, 0 warnings
+
+---
+Task ID: 2
+Agent: Catalog & Inventory Intelligence Developer
+Task: Session 28 - Product Catalog & Inventory Intelligence Dashboard (Types, Mock Data, Store)
+
+Work Log:
+- Created /src/components/catalog/types.ts (600+ lines): Complete Session 28 type system, constants, mock data, and helpers
+  - Types: ABCClass, XYZClass, LifecycleStage, StockHealth, DemandPattern, Improvement, SuggestedAction, Priority, RevenueTrend, LifecycleAction
+  - Interfaces: Product (27 fields), CategorySummary, ABCAnalysis, StockAgingBucket, InventoryTurnover, DeadStockItem, LifecycleProduct, DemandVariability, StyleClasses
+  - Constants: ABC_CONFIG (A/B/C with emerald/sky/amber), XYZ_CONFIG (X/Y/Z), LIFECECYCLE_CONFIG (5 stages), STOCK_HEALTH_CONFIG (5 states), DEMAND_PATTERN_CONFIG (4 patterns), BD_PRODUCT_CATEGORIES (8 categories with Bengali names and SKU prefixes)
+  - Mock Data: MOCK_PRODUCTS (30 products across 8 categories with realistic BD motorcycle part names, Bengali names, SKU format TC-XXX-NNN, BDT pricing, ABC/XYZ/Lifecycle/Health classifications), MOCK_CATEGORY_SUMMARIES (8), MOCK_ABC_ANALYSIS (A:6/80.2%, B:10/15.1%, C:14/4.7%), MOCK_STOCK_AGING (5 buckets totaling ৳10M), MOCK_TURNOVER (8 categories), MOCK_DEAD_STOCK (5 items with suggested actions), MOCK_LIFECYCLE_PRODUCTS (10 across stages), MOCK_DEMAND_VARIABILITY (10 with patterns)
+  - Helpers: formatBDT(), getABCClasses(), getXYZClasses(), getLifecycleClasses(), getStockHealthClasses(), getDemandPatternClasses(), getDaysOfSupplyColor() — all return Tailwind CSS classes with dark mode support
+- Created /src/stores/catalog-store.ts (230+ lines): Zustand store for catalog dashboard
+  - State: products[], categories[], abcAnalysis[], stockAging[], turnover[], deadStock[], lifecycle[], demandVar[], isLoading, error, activeTab (7 tabs), searchQuery, categoryFilter, abcFilter, healthFilter, lifecycleFilter
+  - Actions: fetchProducts, fetchCategories, fetchABCAnalysis, fetchStockAging, fetchTurnover, fetchDeadStock, fetchLifecycle, fetchDemandVar, fetchAll (parallel with Promise.all), setActiveTab, setSearchQuery, setCategoryFilter, setAbcFilter, setHealthFilter, setLifecycleFilter, clearError
+  - Selectors: selectFilteredProducts (search + category + abc + health + lifecycle filters), selectTotalProducts, selectTotalStockValue, selectAvgTurnover, selectDeadStockValue, selectCriticalCount
+  - All fetch actions use fetchWithMock helper with mock data fallback so UI always renders
+- Lint passes clean with 0 errors, 0 warnings
+
+---
+Task ID: 4
+Agent: Stock Aging & Inventory Turnover Developer
+Task: Session 28 - Stock Aging & Inventory Turnover Components
+
+Work Log:
+- Created /src/components/catalog/stock-aging.tsx (200+ lines): Stock Aging Analysis component
+  - Header: "Stock Aging Analysis" / "স্টক এজিং বিশ্লেষণ" with bucket count badge
+  - Total aged stock value display card with dashed border
+  - 5 aging bucket cards (responsive grid 1→2→5 columns): 0-30 (ফ্রেশ/emerald), 31-60 (মাঝারি/sky), 61-90 (পুরনো/amber), 91-180 (অতি পুরনো/orange), 180+ (মৃত/red)
+  - Each bucket card: colored top accent bar, product count, stock value (৳), animated percentage bar, % of total
+  - Stacked horizontal bar chart with hover tooltips showing proportional distribution of all 5 buckets
+  - Legend below bar with colored squares and percentages
+  - Aging trend insight card (sky themed): "X% of stock is fresh (<30 days), Y% needs attention (>90 days)"
+  - 2 recommendation cards: 91-180 day (orange, "Consider promotional pricing or bundle offers") and 180+ day (red, "Review for markdown, return to supplier, or disposal")
+  - Both recommendations include Bengali translations
+  - Framer Motion: container/item stagger variants, animated percentage bars, animated stacked bar segments
+  - Uses useCatalogStore → stockAging, StockAgingBucket type, formatBDT helper
+
+- Created /src/components/catalog/inventory-turnover.tsx (260+ lines): Inventory Turnover Analysis component
+  - Header: "Inventory Turnover" / "ইনভেন্টরি টার্নওভার" with category count badge
+  - 3 overall metric cards (responsive grid 1→3): Avg Turnover Rate (sky), Best Category (emerald, highest turnover), Worst Category (red, lowest turnover)
+  - 8 category rows: Table on desktop (md:block), Card layout on mobile (md:hidden)
+  - Table columns: Category name+Bengali, Turnover rate (color-coded Badge: emerald>6, sky>3, amber>1.5, red≤1.5), Avg Days to Sell, Stock Value (৳), COGS 12M (৳), Improvement trend (arrow+%, up=green, down=red, flat=gray)
+  - Mobile cards: compact 3-column grid for metrics, trend at bottom
+  - Horizontal bar chart: 8 bars sorted by turnover rate descending, color-coded, animated width, industry benchmark vertical line overlay
+  - Benchmark line rendered at 4.2x position on each bar
+  - Benchmark legend: "BD auto parts industry avg: 4.2x"
+  - Industry benchmark comparison card (amber themed): shows all categories as Badges (default=above, destructive=below benchmark) with trend icons
+  - Framer Motion: container/item stagger variants, animated bar widths with sequential delays
+  - Uses useCatalogStore → turnover, InventoryTurnover + Improvement types, formatBDT/formatRate helpers
+
+- Both components: 'use client', shadcn/ui (Card, Badge, Table, Separator), Lucide icons, Framer Motion, responsive mobile-first, TypeScript strict, BDT ৳ formatting, import from catalog types & store
+- Lint passes clean with 0 errors, 0 warnings
+
+---
+Task ID: 5
+Agent: Catalog Developer
+Task: Session 28 - Dead Stock & Product Lifecycle Components
+
+Work Log:
+- Created /src/components/catalog/dead-stock.tsx (~280 lines): Dead Stock & Slow Movers panel
+  - Header: "Dead Stock & Slow Movers" / "মৃত স্টক ও ধীর গতি" with Skull icon
+  - 3 summary cards: Dead Stock Value (৳), Dead Stock Products count, Slow Movers count (turnover <2)
+  - 5 dead stock item cards (grid: 1/2/3 cols responsive):
+    - Product name + SKU + Bengali name
+    - Days since last sale as large red number with Clock icon
+    - Stock value locked in ৳
+    - Category badge (outline)
+    - Suggested action badge: markdown (মার্কডাউন)=amber+Tag, donate (দান)=sky+HandCoins, return (ফেরত)=emerald+RotateCcw, dispose (নিষ্পত্তি)=red+Trash2
+    - Priority badge: high=red+pulse+Zap, medium=amber, low=sky
+    - Stock qty remaining with Package icon
+    - "Take Action" button (destructive for high priority, outline otherwise)
+  - Slow movers section: compact Table with ScrollArea
+    - Columns: Name+Bengali, SKU, Turnover rate (amber), Days of Supply, Suggested Action badge
+    - Auto-determines action from turnover/daysOfSupply thresholds
+  - Recovery potential card: gradient emerald→sky, shows "Recovering ৳X from dead stock could improve cash flow by Y%"
+    - Animated progress bar showing improvement potential
+  - Framer Motion: container/item stagger variants for all sections
+
+- Created /src/components/catalog/product-lifecycle.tsx (~380 lines): Product Lifecycle & Demand Variability panel
+  - Header: "Product Lifecycle" / "পণ্য জীবনচক্র" with RefreshCw icon
+  - Lifecycle funnel (horizontal, centered):
+    - 5 stages: Introduction → Growth → Maturity → Decline → Discontinued
+    - Funnel widths: introduction=40%, growth=65%, maturity=85%, decline=65%, discontinued=40%
+    - Each stage: colored bar with emoji icon, label, product count Badge
+    - Arrow connectors between stages
+    - Animated scaleX entrance with staggered delays
+  - 10 lifecycle product cards (2-col grid on desktop):
+    - Product name + SKU + Bengali
+    - Current stage badge (color-coded via getLifecycleClasses)
+    - Months in stage
+    - Predicted next stage badge (with arrow)
+    - Revenue trend: up=TrendingUp/emerald, down=TrendingDown/red, flat=Minus/gray, stable=Activity/sky
+    - Recommended action badge: promote (প্রচার)=emerald+Megaphone, maintain (রক্ষণাবেক্ষণ)=sky+Shield, discount (ডিসকাউন্ট)=amber+Percent, phase-out (ফেজ-আউট)=red+Power
+    - 12-month mini sparkline SVG (color-coded by trend direction)
+  - Demand Variability section (10 products, 2-col grid):
+    - Pattern badges: stable (স্থিতিশীল)=emerald+Activity, seasonal (মৌসুমী)=sky+Waves, erratic (অনিয়মিত)=amber+Shuffle, intermittent (বিচ্ছিন্ন)=red+CircleDot
+    - Each card: product name+SKU, CV value (large bold), pattern badge, avg/max/min demand (3-col grid), zero-demand months badge (red if >0), 12-month demand profile bar chart (SVG, color-coded by pattern)
+  - MiniSparkline SVG component: simple polyline chart with color coding
+  - MiniBarChart SVG component: 12-bar chart with opacity variation
+  - generateRevenueData(): mock 12-month data based on RevenueTrend
+  - generateDemandData(): mock 12-month demand data based on DemandPattern
+  - Framer Motion: container/item stagger variants for all sections
+
+- Both components: 'use client', shadcn/ui (Card, Badge, Button, Table, Separator, ScrollArea), Lucide icons, Framer Motion, responsive mobile-first, TypeScript strict, BDT ৳ formatting, import from catalog types & store
+- ESLint passes clean with 0 errors
+
+---
+Task ID: 3
+Agent: Catalog Components Developer
+Task: Session 28 - Product Catalog & ABC/XYZ Analysis Components
+
+Work Log:
+- Created /src/components/catalog/product-catalog.tsx (~380 lines):
+  - Header: "Product Catalog" / "পণ্য ক্যাটালগ" with product count badge
+  - 5 Summary cards in responsive grid (2→3→5 cols): Total Products, Total Stock Value (৳), Avg Margin %, Critical Stock, Dead Stock
+  - Filters row with reset: Search (name/SKU), Category dropdown (8 BD categories), ABC dropdown (All/A/B/C), Health dropdown (All/Healthy/Low/Critical/Overstock/Dead), Lifecycle dropdown (All/Introduction/Growth/Maturity/Decline/Discontinued)
+  - Product count display: "Showing X of 30 products"
+  - Desktop table (lg+): 12 columns — SKU, Product Name (with Bengali), Category, Price (৳), Stock Qty, Days of Supply, Health badge, ABC badge, XYZ badge, Lifecycle badge, Turnover, Margin %
+  - Mobile: compact card layout with key info, tap to expand detail
+  - Stock Health badge color-coded (healthy=emerald, low=amber, critical=red+animate-pulse, overstock=sky, dead=slate)
+  - ABC badge: A=emerald, B=sky, C=amber; XYZ badge: X=emerald, Y=sky, Z=amber
+  - Days of Supply color: red<7, amber<30, sky<90, green otherwise
+  - Margin % color: emerald>30%, sky>20%, amber>10%, red otherwise
+  - Click row/card to expand detail with supplier, subcategory, lead time, cost price, 12M revenue, CV, dates
+  - Sort by: Name, Stock (asc for reorder), Revenue, Margin, Turnover — with directional sort icons
+  - Framer Motion stagger animations on container, items, rows
+  - Empty state with clear filters button
+
+- Created /src/components/catalog/abc-xyz-analysis.tsx (~710 lines):
+  - Header: "ABC-XYZ Classification" / "এবিসি-এক্সওয়াইজেড শ্রেণীবিন্যাস"
+  - ABC Analysis section:
+    - 3 class cards (A/B/C) in responsive row with colored borders/backgrounds
+    - Each: large class letter, color, product count, revenue %, cumulative revenue %, description
+    - A: emerald "High Value — top ~80% revenue", B: sky "Medium Value — next ~15%", C: amber "Low Value — remaining ~5%"
+    - Pareto chart (pure SVG): 30 products sorted by revenue descending, bars colored by ABC class, cumulative % dashed line overlay, 80% threshold dashed line, axis labels, legend
+  - XYZ Analysis section:
+    - 3 class cards (X/Y/Z): X=emerald "Stable Demand — CV<0.5", Y=sky "Variable Demand — 0.5≤CV<1", Z=amber "Erratic Demand — CV≥1"
+    - Each: product count, avg CV, description
+  - Combined ABC-XYZ Matrix (3×3 grid):
+    - Rows: A, B, C | Columns: X, Y, Z
+    - Each cell: product count, colored by combined importance (AX=dark emerald, BY=sky mid, CZ=light amber, gradient logic)
+    - Click cell to expand and list product names
+    - Legend for priority levels
+  - Category breakdown: 8 categories with A/B/C distribution as animated stacked horizontal bars (Framer Motion width animation)
+    - Each bar segment shows class letter and count
+    - Legend for A/B/C colors
+  - Framer Motion: container stagger, card hover lift (y:-4), matrix cell hover scale, bar width animations
+
+- Both components: 'use client', shadcn/ui (Card, Badge, Button, Table, Input, Select, ScrollArea, Separator), Lucide icons, import from catalog types & store, responsive mobile-first, TypeScript strict, BDT ৳ formatting
+- Fixed react-hooks/immutability lint error (cumSum reassignment → reduce pattern)
+- ESLint passes clean with 0 errors
+
+---
+Task ID: 6
+Agent: Catalog Dashboard Orchestrator
+Task: Session 28 - Catalog Dashboard Orchestrator & Page Update
+
+Work Log:
+- Created /src/components/catalog/catalog-dashboard.tsx: Main orchestrating dashboard component
+  - Imports and uses useCatalogStore for state management (fetchAll on mount, activeTab navigation)
+  - Header: Package icon with emerald accent, "Product Catalog & Inventory" title, Bengali subtitle "পণ্য ক্যাটালগ ও ইনভেন্টরি"
+  - 6 tabs using shadcn Tabs component:
+    1. Catalog (overview): ProductCatalog
+    2. ABC/XYZ (abc-xyz): ABCXYZAnalysis
+    3. Lifecycle (lifecycle): ProductLifecyclePanel
+    4. Aging (aging): StockAgingAnalysis + InventoryTurnoverAnalysis (stacked with Separator)
+    5. Dead Stock (dead-stock): DeadStockPanel
+    6. Turnover (turnover): InventoryTurnoverAnalysis (full width)
+  - Loading state: DashboardSkeleton with skeleton placeholders (header, KPI cards, table)
+  - Error state: Animated error banner with AlertCircle icon, dismiss button (clearError)
+  - Tab change updates store's activeTab via setActiveTab
+  - Framer Motion: header slide-in, tab content fade-in, error banner expand/collapse (AnimatePresence)
+  - Responsive: tab labels hidden on mobile (show first word only), TabsList wraps on small screens
+- Updated /src/app/page.tsx: Replaced Procurement Dashboard with Catalog Dashboard
+  - Changed imports from ProcurementDashboard to CatalogDashboard
+  - Updated header breadcrumb: "/ Product Catalog & Inventory"
+  - Updated session badge: "Session 28"
+  - Changed function name to CatalogPage
+- ESLint passes clean with 0 errors
