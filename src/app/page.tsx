@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================
-// TrimedCast — Multi-Tenant Admin Panel
-// Session 24: Admin Dashboard
+// TrimedCast — Warehouse & Logistics Dashboard
+// Session 25: Warehouse & Logistics
 // ============================================
 
-import { AdminDashboard } from '@/components/admin/admin-dashboard';
+import { WarehouseDashboard } from '@/components/warehouse/warehouse-dashboard';
 import { Footer } from '@/components/landing/footer';
 
-export default function AdminPage() {
+export default function WarehousePage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased">
       {/* Header */}
@@ -19,11 +19,11 @@ export default function AdminPage() {
               <span className="text-white font-bold text-sm">TC</span>
             </div>
             <span className="font-semibold text-base">TrimedCast</span>
-            <span className="text-muted-foreground text-sm hidden sm:inline">/ Admin Panel</span>
+            <span className="text-muted-foreground text-sm hidden sm:inline">/ Warehouse & Logistics</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
-              Session 24
+              Session 25
             </span>
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function AdminPage() {
 
       {/* Main Content */}
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-6">
-        <AdminDashboard />
+        <WarehouseDashboard />
       </main>
 
       {/* Footer */}

@@ -3148,3 +3148,189 @@ Work Log:
   - Same layout structure with header, main, footer
 
 - Lint: All errors fixed, clean pass
+
+---
+Task ID: 2
+Agent: Warehouse & Logistics Developer
+Task: Session 25 - Warehouse & Logistics Dashboard (Types, Mock Data, Zustand Store)
+
+Work Log:
+- Created /src/components/warehouse/types.ts (580+ lines): Complete type definitions, constants, mock data, and helper functions
+  - Types: Warehouse, WarehouseZone, InboundShipment, OutboundShipment, CourierPartner, PickPackJob, DeliveryStatus (+ all status/priority sub-types)
+  - Constants: WAREHOUSE_STATUS_CONFIG (active/maintenance/full with BN labels + colors), ZONE_TYPE_CONFIG (7 zone types with icons), INBOUND_STATUS_CONFIG (6 steps), OUTBOUND_STATUS_CONFIG (7 steps with failed=0), PICK_PACK_PRIORITY_CONFIG, PICK_PACK_STATUS_CONFIG
+  - COURIER_PARTNERS: 6 BD couriers (Pathao, RedX, Sundarban, SA Paribahan, eCourier, Continental) with types, coverage, on-time rates
+  - BD_WAREHOUSE_CITIES: 7 cities (Dhaka, Chattogram, Sylhet, Rajshahi, Khulna, Bogura, Narayanganj) with Bengali labels
+  - MOCK_WAREHOUSES: 4 warehouses (Dhaka Central Hub primary 72%, Chattogram Port 85%, Sylhet Dist 45%, Rajshahi Regional 60% maintenance)
+  - MOCK_ZONES: 6 zones for Dhaka Central Hub (Receiving Dock, Bulk Storage A, Picking Zone, Packing Area, Shipping Dock, Hazardous Storage)
+  - MOCK_INBOUND: 8 shipments across all statuses (at-dock, in-transit, receiving, pending, put-away, completed) from CN suppliers + BD local
+  - MOCK_OUTBOUND: 8 shipments across all statuses (dispatched, in-transit, out-for-delivery, pick-pack, ready, delivered, failed) to BD customers
+  - MOCK_PICK_PACK: 6 jobs (picking, pending, packed, qc-check, ready) with BD assignees and priority levels
+  - MOCK_DELIVERIES: 4 live tracking entries with multi-step status updates including failed delivery for Pran-RFL (address issue)
+  - Helpers: formatBDT(), getCapacityColor(), getCapacityBgColor(), getWarehouseStatusClasses(), getInboundStatusStep(), getOutboundStatusStep(), getWarehouseUtilization(), getZoneUtilization()
+
+- Created /src/stores/warehouse-store.ts (290+ lines): Zustand store with full state management
+  - State: warehouses[], zones[], inbound[], outbound[], couriers[], pickPackJobs[], deliveries[], selectedWarehouse, selectedInbound, selectedOutbound, isLoading, error, activeTab, searchQuery, warehouseFilter, statusFilter
+  - Actions: fetchWarehouses, fetchZones (with warehouseId filter), fetchInbound, fetchOutbound, fetchCouriers, fetchPickPack, fetchDeliveries, fetchAll (parallel Promise.allSettled), selectWarehouse/Inbound/Outbound, setActiveTab, setSearchQuery, setWarehouseFilter, setStatusFilter, clearError
+  - Computed: filteredInbound (search + status + warehouse), filteredOutbound (search + status + warehouse + city), filteredPickPack (search + status + warehouse), warehouseUtilization, activeInboundCount, activeOutboundCount, pendingPickPackCount
+  - External selector hooks: useFilteredInbound, useFilteredOutbound, useFilteredPickPack, useWarehouseUtilization, useActiveInboundCount, useActiveOutboundCount, usePendingPickPackCount
+  - All fetch methods fall back to mock data when API is unavailable
+
+- Lint: Passed with zero errors
+
+---
+Task ID: 5
+Agent: Session 25 Courier & Delivery UI Developer
+Task: Session 25 - Courier Partners Overview & Live Last-Mile Delivery Tracker
+
+Work Log:
+- Created /src/components/warehouse/courier-overview.tsx (~220 lines): Bangladesh courier partner overview
+  - Header: "Courier Partners / কুরিয়ার পার্টনার" with "BD Logistics Network" badge
+  - 6 courier cards in responsive grid (1 col mobile, 2 col tablet, 3 col desktop)
+  - Each card: courier name + Bengali name, type badge (express=emerald, standard=sky, freight=amber)
+  - Coverage text, on-time delivery rate as SVG circular progress indicator (green >85%, amber >75%, red <75%)
+  - Avg delivery days with Bengali "দিন", active shipments count with badge
+  - Color accent bar at top of each card matching courier logoColor
+  - Summary row: Total active shipments, Avg on-time rate, Fastest courier
+  - Framer Motion stagger entrance animations for cards and summary
+  - Reads couriers from useWarehouseStore
+
+- Created /src/components/warehouse/delivery-tracker.tsx (~280 lines): Live last-mile delivery tracker
+  - Header: "Live Delivery Tracking / লাইভ ডেলিভারি ট্র্যাকিং"
+  - Pulsing green dot with "Live" badge (CSS ping animation)
+  - 4 delivery tracking cards in 2-col responsive grid
+  - Each card: shipment ID + courier badge, tracking number (monospace)
+  - Current status with large icon: In-Transit=Truck(amber), Out for Delivery=Bike(sky), Delivered=CheckCircle(emerald), Failed=XCircle(red)
+  - Current location with Bengali label and MapPin icon
+  - Estimated delivery date + time with Clock icon
+  - Status updates timeline (vertical, most recent first): timestamp, location, status change, optional note
+  - Latest update highlighted with emerald dot, older updates progressively faded (opacity gradient)
+  - "Track on Courier Site" link button with ExternalLink icon
+  - Empty state "All deliveries completed / সকল ডেলিভারি সম্পন্ন হয়েছে" with CheckCircle
+  - Framer Motion stagger entrance + individual card animations
+  - Reads deliveries from useWarehouseStore
+
+- Both components: 'use client' directive, shadcn/ui (Card, Badge, Button, ScrollArea, Separator), Lucide icons, proper TypeScript types, responsive mobile-first, realistic BD locations with Bengali
+
+- Lint: Passed with zero errors
+
+---
+Task ID: 3
+Agent: Warehouse Overview UI Developer
+Task: Session 25 - Warehouse Overview UI Components
+
+Work Log:
+- Created /src/components/warehouse/warehouse-overview.tsx (170+ lines):
+  - 4 summary stat cards in responsive grid (2-col mobile, 4-col desktop): Total Warehouses, Total Capacity, Avg Utilization, Active Zones
+  - Each stat: icon with accent color, label + Bengali label, bold value
+  - 4 warehouse cards in 2x2 grid (1-col mobile, 2-col desktop)
+  - Each warehouse card: name + Bengali name, code badge, city with Bengali, capacity utilization animated bar (green/amber/red based on %), "X / Y sqm used" text, zone count badge, status badge (active=green, maintenance=amber, full=red), "Primary" badge for primary warehouse
+  - Click to select/deselect warehouse (ring highlight on selected)
+  - Framer Motion stagger entrance animations, animated capacity bars
+
+- Created /src/components/warehouse/zone-detail-panel.tsx (170+ lines):
+  - Header: "Zones — {Warehouse Name}" with Bengali subtitle + zone count
+  - 6 zone cards in responsive grid (1-col mobile, 2-col tablet, 3-col desktop)
+  - Each zone card: name + Bengali name, type badge (color-coded by ZONE_TYPE_CONFIG), utilization bar (pallets used / total with animation), pallet count text, temperature display (cold-storage: Snowflake + "2-8°C", hazardous: AlertTriangle + "Ambient", general: Thermometer + value), status dot (active=green, full=red, locked=gray, maintenance=amber)
+  - AnimatePresence for smooth transitions when selecting/deselecting warehouse
+  - Placeholder state when no warehouse selected: "Select a warehouse to view zones" with Bengali
+
+- Created /src/components/warehouse/pick-pack-queue.tsx (210+ lines):
+  - Header: "Pick & Pack Queue" with pending count badge + Bengali subtitle
+  - 6 job cards in 1-col mobile, 2-col desktop grid
+  - Each job card: Job ID badge (PK-001), order ID with ShoppingCart icon, assigned person with User icon, item count badge, priority badge (urgent=red with pulse animation, high=amber, normal=slate)
+  - Status stepper: 5 steps (Pending → Picking → Packed → Ready → QC Check) with completed steps in emerald with CheckCircle, current step with ring highlight, future in gray
+  - Step labels visible on sm+ screens, connector lines between steps
+  - Timestamps: startedAt and completedAt formatted in BD locale
+  - Framer Motion stagger entrance animations
+
+- Updated /src/app/page.tsx: Warehouse & Logistics Dashboard with header (TrimedCast branding, Session 25 badge), tab navigation (Overview/Inbound/Outbound), main content composing WarehouseOverview + ZoneDetailPanel + PickPackQueue with separators, loading spinner, sticky footer
+
+- All components: 'use client' directive, shadcn/ui (Card, Badge, Button, Progress, ScrollArea, Separator), Lucide icons, proper TypeScript types, responsive mobile-first, Framer Motion animations, imports from types.ts and warehouse-store.ts
+
+- Lint: Passed with zero errors
+- Dev server: Page compiled and served successfully (GET / 200)
+
+---
+Task ID: 4
+Agent: Shipment Tracking UI Developer
+Task: Session 25 - Shipment Tracking UI Components
+
+Work Log:
+- Created /src/components/warehouse/inbound-shipments.tsx (~280 lines): Inbound shipment tracking panel
+  - Header: "Inbound Shipments" / "ইনবাউন্ড শিপমেন্ট" with active count badge
+  - Status filter tabs: All | Pending | In-Transit | At Dock | Receiving | Put-Away | Completed
+  - Search input (by PO number or supplier)
+  - 6-step pipeline indicator: Pending → In-Transit → At Dock → Receiving → Put-Away → Completed
+  - Origin badge (domestic=green, international=sky), port of entry display
+  - ETA with overdue detection, pallet count, tracking number
+  - Desktop: table layout with columns; Mobile: card layout with stacked info
+  - Click row/card to select shipment and trigger onSelectShipment callback
+  - AnimatePresence for smooth list transitions, ScrollArea for overflow
+
+- Created /src/components/warehouse/outbound-shipments.tsx (~290 lines): Outbound shipment tracking panel
+  - Header: "Outbound Shipments" / "আউটবাউন্ড শিপমেন্ট" with active count badge
+  - Status filter tabs: All | Pick-Pack | Ready | Dispatched | In-Transit | Out for Delivery | Delivered | Failed
+  - Search input (by order number, customer, or city)
+  - 7-step pipeline indicator with failed state handling (red X icon)
+  - Courier badge with courier-specific colors from COURIER_PARTNERS
+  - Destination city with Bengali label
+  - Failed status shows red alert with reason, ETA with overdue, weight in kg, tracking number
+  - Desktop: table layout; Mobile: card layout
+  - Responsive design with Framer Motion animations
+
+- Created /src/components/warehouse/inbound-detail-sheet.tsx (~260 lines): Inbound shipment detail slide-out sheet
+  - Uses shadcn Sheet component (right side, sm:max-w-lg)
+  - PO Number title with status badge
+  - Supplier info section
+  - Shipment details grid: carrier, origin, port of entry, warehouse, pallet count, tracking #, ETA
+  - Full 6-step vertical timeline visualization:
+    - Each step: icon, English label, Bengali label, timestamp if completed
+    - Current step: highlighted with pulse animation (scale oscillation)
+    - Completed steps: emerald checkmark
+    - Future steps: gray with muted styling
+    - Vertical connector lines colored by completion state
+  - Items list (4 mock items): part name, SKU, qty + unit
+  - Staggered entry animation for items
+
+- Created /src/components/warehouse/outbound-detail-sheet.tsx (~280 lines): Outbound shipment detail slide-out sheet
+  - Uses shadcn Sheet component (right side, sm:max-w-lg)
+  - Order Number title with status badge
+  - Customer info section
+  - Shipment details grid: courier (with type badge), warehouse, destination (city+Bengali), weight, tracking #, ETA
+  - Full 7-step vertical timeline visualization with failed step handling
+  - Failed state: red alert banner at top with "Delivery Failed" title, reason text, "Contact Courier" button with phone icon
+  - Failed step shown separately with red X icon and pulse animation
+  - Items list (4 mock items): part name, SKU, qty + weight
+  - Staggered entry animation for items
+
+- All 4 components: 'use client' directive, shadcn/ui components (Card, Badge, Button, Table, Input, Sheet, Tabs, ScrollArea, Separator), Lucide icons, imports from types.ts and warehouse-store.ts, proper TypeScript types, responsive mobile-first design, Framer Motion animations
+
+- Lint: Passed with zero errors
+
+---
+Task ID: 6
+Agent: Warehouse Dashboard Orchestrator
+Task: Session 25 — Warehouse Dashboard Orchestrator + page.tsx Update
+
+Work Log:
+- Created /src/components/warehouse/warehouse-dashboard.tsx (210+ lines): Main orchestrating dashboard component
+  - WarehouseDashboard component using warehouse store (fetchAll on mount, activeTab for navigation)
+  - Dashboard header with Warehouse icon, "Warehouse & Logistics" title, Bengali subtitle "গুদাম ও লজিস্টিক্স"
+  - 5 tabs using shadcn Tabs component:
+    1. Overview (default): WarehouseOverview + ZoneDetailPanel + PickPackQueue
+    2. Inbound: InboundShipments + InboundDetailSheet (controlled by selectedInbound)
+    3. Outbound: OutboundShipments + OutboundDetailSheet (controlled by selectedOutbound)
+    4. Couriers: CourierOverview
+    5. Live Tracking: DeliveryTracker
+  - DashboardSkeleton: skeleton placeholders for loading state
+  - ErrorBanner: dismissible error banner with AnimatePresence
+  - Tab change updates store's activeTab via setActiveTab
+  - Sheet open/close states for inbound/outbound detail sheets with proper cleanup
+  - useCallback for stable handler references
+- Updated /src/app/page.tsx: Replaced previous partial implementation with full Warehouse Dashboard page
+  - Sticky header with TC logo, "TrimedCast" brand, "/ Warehouse & Logistics" path, Session 25 badge
+  - Main content area with WarehouseDashboard component
+  - Footer from landing/footer component
+  - min-h-screen flex flex-col layout with mt-auto footer behavior
+- Lint check: passed with zero errors
+- Dev server: compiles and serves successfully, store falls back to mock data when API unavailable
