@@ -3525,3 +3525,202 @@ Work Log:
   - min-h-screen flex flex-col layout for sticky footer
 
 - Lint: Zero errors
+
+---
+Task ID: 2
+Agent: Procurement Developer
+Task: Session 27 - Supplier Scorecard & Procurement Dashboard (Types, Mock Data & Store)
+
+Work Log:
+- Created /src/components/procurement/types.ts (680+ lines): Complete Session 27 data layer
+  - Types: SupplierTier, SupplierRisk, SupplierStatus, RFQStatus, ScoreTrend, MitigationPriority, MitigationStatus, ProcurementTab
+  - Domain Types: Supplier (24 fields), SupplierScorecard (with 5 weighted dimensions), RFQ, RFQItem, RFQResponse, RFQResponseItem, CostComparison, CostComparisonSupplier, SupplierRiskAssessment, RiskFactor, MitigationAction, PurchaseOrderBySupplier
+  - Constants: TIER_CONFIG (4 tiers with colors/Bengali labels/icons), RISK_LEVEL_CONFIG (4 levels), SUPPLIER_STATUS_CONFIG (4 statuses), RFQ_STATUS_CONFIG (6 statuses with step numbers), SCORECARD_WEIGHTS (30/25/25/12/8%), COUNTRY_FLAGS (7 countries with emoji flags)
+  - Mock Data:
+    - MOCK_SUPPLIERS: 10 suppliers across China(6), India(1), Bangladesh(1), South Korea(1), Thailand(1) with full details
+    - MOCK_SCORECARDS: Scorecards for all 10 suppliers with dimension scores/weights/trends and improvements/strengths
+    - MOCK_RFQS: 4 RFQs (sent/evaluation/awarded/draft) with 9 items total and 9 responses
+    - MOCK_COST_COMPARISONS: 4 parts compared across 2-4 suppliers each with landed costs
+    - MOCK_RISK_ASSESSMENTS: 4 high-interest suppliers with risk factors and mitigation actions
+    - MOCK_PO_BY_SUPPLIER: Purchase order summaries for all 10 suppliers
+  - Helper Functions: formatBDT(), getTierClasses(), getRiskClasses(), getScoreColor(), getScoreLabel(), computeWeightedScore()
+- Created /src/stores/procurement-store.ts (210+ lines): Zustand store
+  - State: suppliers, scorecards, rfqs, costComparisons, riskAssessments, poBySupplier, isLoading, error, activeTab, searchQuery, tierFilter, riskFilter, countryFilter
+  - Actions: fetchSuppliers, fetchScorecards, fetchRFQs, fetchCostComparisons, fetchRiskAssessments, fetchPOBySupplier, fetchAll (parallel with Promise.allSettled), UI setters, clearError
+  - Selectors: filteredSuppliers (search + tier + risk + country), activeSuppliers, strategicSuppliers, highRiskSuppliers
+  - External hooks: useFilteredSuppliers, useActiveSuppliers, useStrategicSuppliers, useHighRiskSuppliers
+  - All with mock data fallback pattern matching existing stores
+
+- Lint: Zero errors
+
+---
+Task ID: 5
+Agent: Risk Assessment Developer
+Task: Session 27 - Supplier Risk Assessment Component
+
+Work Log:
+- Created /src/components/procurement/risk-assessment.tsx (580+ lines): Supplier risk assessment & mitigation component
+  - Header: "Supplier Risk Assessment" / "সরবরাহকারী ঝুঁকি মূল্যায়ন" with "Risk Monitor" badge (pulses for critical/high risk)
+  - Summary cards (4): Low Risk, Medium Risk, High Risk, Critical Risk — each with severity-colored left border, shield icon, Bengali label
+  - Risk assessment cards (4, matching MOCK_RISK_ASSESSMENTS):
+    - Supplier name + country flag + large overall risk badge with Bengali
+    - Risk Factors section: sorted by severity (critical→low), each with severity dot (green/amber/red, pulse for critical), name + Bengali, description
+    - Mitigation Actions section: each with status icon (XCircle/Clock/CheckCircle), action + Bengali, priority badge (sky/amber/red/rose), status badge (amber for pending/in-progress, emerald for completed)
+    - Progress indicator (shadcn Progress) with risk-colored fill
+    - Last Assessed date
+    - Color accent: gradient background + left border based on overall risk level
+  - Risk Matrix (2x2): Impact (Y) vs Likelihood (X) with 4 colored quadrants (green/amber/amber/rose), supplier dots placed by risk level, legend
+  - Framer Motion stagger animations: containerVariants (staggerChildren), itemVariants, cardVariants
+  - Responsive: 2-col summary cards (sm:4), 1-col risk cards (md:2), mobile-first
+  - 'use client' directive, shadcn/ui (Card, Badge, Separator, ScrollArea, Progress), Lucide icons (AlertTriangle, Shield, ShieldCheck, ShieldAlert, CheckCircle, Clock, XCircle)
+  - All types from procurement/types.ts, store from procurement-store.ts
+  - TypeScript: Variants properly typed with `type Variants` import from framer-motion
+
+- Type check: Zero errors in risk-assessment.tsx
+- Lint: No new errors (3 pre-existing in supplier-directory.tsx)
+
+---
+Task ID: 4
+Agent: Procurement Developer
+Task: Session 27 - RFQ Management & Cost Comparison Components
+
+Work Log:
+- Created /src/components/procurement/rfq-management.tsx (530+ lines):
+  - Header: "Request for Quotation" / "দরপত্র অনুরোধ" with Active RFQ count badge
+  - 4 RFQ cards in list layout (MOCK_RFQS data from types.ts):
+    - RFQ ID badge (monospace, e.g. RFQ-2025-001)
+    - Title + Category badge (color-coded per RFQ_STATUS_CONFIG)
+    - Status pipeline stepper: 5 steps (Draft → Sent → Responses Received → Evaluation → Awarded)
+      - Completed steps: emerald circle with check icon
+      - Current step: sky circle with ring highlight
+      - Future steps: slate/gray
+      - Connector lines between steps
+      - Cancelled status: special rose display with XCircle icon
+    - Created date + Deadline with smart badges:
+      - "Closing Soon" amber badge if <3 days remaining
+      - "Overdue" rose badge if deadline passed
+    - Item count badge, Response count badge
+    - Awarded supplier info with Award icon + BDT amount
+    - Click to expand/collapse with animated ChevronDown rotation
+  - Expanded detail section (AnimatePresence):
+    - Items table: Part name + Bengali name, Specifications (hidden on mobile), Quantity, Unit
+    - Responses table (if any):
+      - Supplier name, Total Amount (৳), Lead Time, MOQ
+      - "Recommended" badge in emerald
+      - Awarded row: emerald bg + left border
+      - Recommended row: sky bg tint
+      - ScrollArea with max-h-64 for overflow
+    - Context-sensitive action buttons:
+      - Draft → "Send RFQ" (sky), "Cancel" (rose outline)
+      - Responses Received → "Evaluate" (purple), "Cancel" (rose outline)
+      - Evaluation → "Award" (emerald), "Cancel" (rose outline)
+      - Awarded/Cancelled → no actions
+    - Each action shows English + Bengali label
+  - Framer Motion: AnimatePresence mode="popLayout", layout animations, expand/collapse height+opacity transitions
+  - Responsive: specifications column hidden on mobile, lead time/MOQ hidden on sm/md breakpoints
+  - 'use client', shadcn/ui (Card, Badge, Button, Table, Separator, ScrollArea), Lucide icons
+  - Types: RFQ, RFQStatus, RFQItem, RFQResponse from types.ts
+  - Store: useProcurementStore (rfqs, fetchRFQs)
+  - All amounts in BDT format via formatBDT()
+
+- Created /src/components/procurement/cost-comparison.tsx (320+ lines):
+  - Header: "Cost Comparison" / "খরচ তুলনা" with "Multi-Source Analysis" purple badge
+  - 4 comparison cards (MOCK_COST_COMPARISONS data):
+    - Part name + Bengali name + specifications
+    - Savings indicator badge: "Save ৳X/unit (Y% cheaper)" in emerald
+    - Comparison table per part:
+      - Supplier Name, Unit Price (৳), Lead Time (days), MOQ, Quality Score (bar), Landed Cost (৳), Recommended star
+      - Best price highlighted emerald with "best" label
+      - Best lead time highlighted sky with "fastest" label
+      - Recommended supplier row: emerald bg + left border
+      - Quality Score: visual progress bar (emerald≥90, sky≥80, amber≥60, rose<60) + numeric
+    - Recommended supplier summary box below table (emerald bg, CheckCircle2 icon)
+  - Overall Recommendation card at bottom:
+    - "Overall Recommendation / সামগ্রিক সুপারিশ"
+    - "Best value: {supplier} for {part}" summary for each part
+    - Emerald themed card
+  - Framer Motion stagger animations: each card delays by index*0.08s
+  - Responsive: Lead Time hidden on <sm, MOQ hidden on <md, Quality hidden on <sm, Landed Cost hidden on <lg
+  - 'use client', shadcn/ui (Card, Badge, Table, Separator, ScrollArea), Lucide icons
+  - Types: CostComparison, CostComparisonSupplier from types.ts
+  - Store: useProcurementStore (costComparisons, fetchCostComparisons)
+  - All amounts in BDT format via formatBDT()
+
+- Lint: No new errors in rfq-management.tsx or cost-comparison.tsx (3 pre-existing in supplier-directory.tsx)
+
+---
+Task ID: 3
+Agent: Session 27 Developer
+Task: Session 27 - Supplier Directory & Scorecard Components (Part 2)
+
+Work Log:
+- Created /src/components/procurement/supplier-directory.tsx (497 lines): Supplier directory with filtering
+  - Header: "Supplier Directory" / "সরবরাহকারী ডিরেক্টরি"
+  - 4 Summary cards: Total Suppliers, Strategic Tier count, High Risk count, Total Annual Spend (৳)
+  - Filters row: Search input (by name/nameBn/city/category), Tier dropdown (All/Strategic/Preferred/Approved/Probationary), Risk dropdown (All/Low/Medium/High/Critical), Country dropdown (dynamic from data)
+  - Responsive supplier card grid (1-col mobile, 2-col desktop)
+  - Each card: Country flag emoji + name + Bengali name, City/Country, Tier badge (strategic=amber, preferred=emerald, approved=sky, probationary=rose), Status dot (active=green, under-review=amber, suspended=red, onboarding=sky), Star rating (1-5), Key metrics row (On-Time %, Quality Score, Cost Score with color-coded mini progress bars), Annual spend (৳), Risk badge, Last order date
+  - Click on card opens scorecard detail with AnimatePresence transition
+  - MiniProgress component with animated fill bar and color coding
+  - Star rating with filled/empty stars
+  - Framer Motion animations: cardVariants, summaryVariants, AnimatePresence
+  - 'use client', shadcn/ui (Card, Badge, Input, Select, Separator), Lucide icons
+
+- Created /src/components/procurement/supplier-scorecard.tsx (265 lines): Supplier scorecard detail panel
+  - Header: Supplier name + tier badge + country flag + close button
+  - Overall Score: Circular SVG gauge (0-100) with animated stroke-dashoffset, color coding (emerald>=80, sky>=60, amber>=40, rose<40), center text with score and label
+  - 5 Dimension Bars (weighted): On-Time Delivery (30%), Quality (25%), Cost Competitiveness (25%), Responsiveness (12%), Flexibility (8%)
+    - Each bar: animated fill with color, score number, weight % badge, trend icon (TrendingUp=green, TrendingDown=red, Minus=gray)
+  - Strengths section: green CheckCircle2 list
+  - Improvements section: amber AlertCircle list
+  - Key Info grid (2-col mobile, 4-col desktop): Contact, Email, Phone, MOQ, Lead Time, Payment Terms, Currency, Year Est.
+  - Framer Motion: score gauge animation, staggered dimension bars, staggered list items
+  - Props: { supplier: Supplier, scorecard: SupplierScorecard, onClose?: () => void }
+  - 'use client', shadcn/ui (Card, Badge, Separator), Lucide icons
+
+- Created /src/components/procurement/po-tracking.tsx (332 lines): Purchase order tracking by supplier
+  - Header: "PO Tracking by Supplier" / "সরবরাহকারী অনুযায়ী পিও ট্র্যাকিং"
+  - 4 Summary cards: Open POs total, Completed POs total, Total Value (৳), Avg On-Time Rate %
+  - Desktop: Table with 7 columns (Supplier, Open POs, Completed, Total Value, Avg Lead Time, On-Time Rate bar, Status)
+  - Mobile: Card layout with 3-col grid for key metrics
+  - On-Time bar: color coded (green>=90, amber>=75, rose<75) with animated fill
+  - Overdue badge: red destructive badge with count, or green "On Track" outline badge
+  - Sorted by total value descending
+  - Framer Motion: rowVariants for table rows, summaryVariants for summary cards
+  - 'use client', shadcn/ui (Card, Badge, Table, Separator), Lucide icons
+  - Responsive: table hidden on mobile, cards shown on mobile
+
+- Type check: Zero TS errors across all 3 new components
+- Framer Motion `ease: 'easeOut' as const` used to satisfy Variants type
+- motion.tr used for animated table rows in po-tracking
+
+---
+Task ID: 6
+Agent: Dashboard Orchestrator Developer
+Task: Session 27 — Procurement Dashboard Orchestrator & Page Update
+
+Work Log:
+- Created /src/components/procurement/procurement-dashboard.tsx (main orchestrating dashboard):
+  - Uses procurement store (fetchAll on mount, activeTab for navigation)
+  - Header with Users icon + emerald accent, "Procurement & Suppliers" title, Bengali subtitle "ক্রয় ও সরবরাহকারী"
+  - 5 tabs using shadcn Tabs component:
+    1. Suppliers (default) → SupplierDirectory (includes inline scorecard on supplier selection)
+    2. Scorecards → Grid of all supplier scorecards (2-col desktop, 1-col mobile) with MiniScoreGauge SVG, tier badge, 5 dimension mini-bars
+    3. RFQ → RFQManagement
+    4. Cost Compare → CostComparison
+    5. Risk → RiskAssessment + POTracking below with separator
+  - Loading state: DashboardSkeleton with skeleton placeholders
+  - Error state: animated error banner with dismiss button (clears store error + local dismissed flag)
+  - Tab change updates store's activeTab via dashboardTabToStoreTab mapping
+  - DashboardTab type ('suppliers' | 'scorecard' | 'rfq' | 'cost-comparison' | 'risk') mapped to ProcurementTab
+  - Scorecards sorted by overallScore descending
+  - Framer Motion animations for tab content transitions and scorecard grid cards
+- Updated /src/app/page.tsx:
+  - Replaced Finance Dashboard (Session 26) with Procurement Dashboard (Session 27)
+  - Sticky header with emerald TC logo, TrimedCast branding, Session 27 badge
+  - Main content area with ProcurementDashboard component
+  - Footer preserved
+- Fixed pre-existing lint errors in /src/components/procurement/supplier-directory.tsx:
+  - Removed useMemo wrappers that caused react-hooks/preserve-manual-memoization errors
+  - Replaced with direct computation (filtered, strategicCount, highRiskCount, totalSpend, selectedSupplier, selectedScorecard, countryOptions)
+  - Lint passes clean with 0 errors, 0 warnings

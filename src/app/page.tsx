@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================
-// TrimedCast — Financial Analytics & Cost Intelligence
-// Session 26: Financial Analytics
+// TrimedCast — Procurement & Supplier Management
+// Session 27: Supplier Scorecard & Procurement
 // ============================================
 
-import { FinanceDashboard } from '@/components/finance/finance-dashboard';
+import { ProcurementDashboard } from '@/components/procurement/procurement-dashboard';
 import { Footer } from '@/components/landing/footer';
 
-export default function FinancePage() {
+export default function ProcurementPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased">
       {/* Header */}
@@ -19,11 +19,11 @@ export default function FinancePage() {
               <span className="text-white font-bold text-sm">TC</span>
             </div>
             <span className="font-semibold text-base">TrimedCast</span>
-            <span className="text-muted-foreground text-sm hidden sm:inline">/ Financial Analytics</span>
+            <span className="text-muted-foreground text-sm hidden sm:inline">/ Procurement & Suppliers</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
-              Session 26
+              Session 27
             </span>
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function FinancePage() {
 
       {/* Main Content */}
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-6">
-        <FinanceDashboard />
+        <ProcurementDashboard />
       </main>
 
       {/* Footer */}
