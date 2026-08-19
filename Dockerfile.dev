@@ -1,0 +1,34 @@
+# ============================================
+# TrimedCast — Development Dockerfile
+# ============================================
+# Used with docker-compose.dev.yml for hot-reload development
+# Source code is mounted as volume, so changes reflect immediately
+
+FROM oven/bun:1.3 AS dev
+WORKDIR /app
+
+# Install ALL dependencies (including devDependencies)
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+# Copy Prisma schema
+COPY prisma ./prisma
+
+# Generate Prisma client
+RUN bunx prisma generate
+
+# Copy the rest of the source
+COPY . .
+
+# Create database directory
+RUN mkdir -p /app/db
+
+# Expose port
+EXPOSE 3000
+
+# Set hostname for container access
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000
+
+# Start in development mode with hot-reload
+CMD ["bun", "run", "dev"]

@@ -1,0 +1,61 @@
+# ============================================
+# TrimedCast — .dockerignore
+# ============================================
+# Reduces Docker build context size and speeds up builds
+
+# Dependencies (installed inside container)
+node_modules
+
+# Next.js build output (rebuilt inside container)
+.next
+out
+
+# Database (mounted as volume)
+db
+
+# Development files
+dev.log
+server.log
+*.log
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Skills (development tools)
+skills/
+
+# Agent context (development artifacts)
+agent-ctx/
+
+# Test files
+test
+coverage
+
+# Docker files (prevent recursion)
+Dockerfile
+Dockerfile.dev
+docker-compose.yml
+docker-compose.dev.yml
+.dockerignore
+
+# Misc
+.DS_Store
+*.pem
+.claude
+.z-ai-config
+tool-results/
+.zscripts/
+
+# Large images
+*.png
+*.jpg
+*.jpeg

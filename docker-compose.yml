@@ -1,0 +1,70 @@
+# ============================================
+# TrimedCast — Docker Compose Configuration
+# ============================================
+# Run: docker compose up --build
+# Access: http://localhost:3000
+
+services:
+  # ---- TrimedCast Next.js Application ----
+  trimedcast:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trimedcast-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/db/trimedcast.db
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-trimedcast-secret-change-me-in-production}
+    volumes:
+      # Persist SQLite database across container restarts
+      - trimedcast-db:/app/db
+      # Persist uploaded files if any
+      - trimedcast-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    networks:
+      - trimedcast-network
+
+  # ---- Caddy Reverse Proxy (optional) ----
+  # Provides HTTPS, compression, and proper headers
+  # Uncomment to enable
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: trimedcast-proxy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile.prod:/etc/caddy/Caddyfile
+  #     - caddy-data:/data
+  #     - caddy-config:/config
+  #   depends_on:
+  #     trimedcast:
+  #       condition: service_healthy
+  #   networks:
+  #     - trimedcast-network
+
+# ---- Named Volumes ----
+volumes:
+  trimedcast-db:
+    driver: local
+  trimedcast-uploads:
+    driver: local
+  # caddy-data:
+  #   driver: local
+  # caddy-config:
+  #   driver: local
+
+# ---- Network ----
+networks:
+  trimedcast-network:
+    driver: bridge

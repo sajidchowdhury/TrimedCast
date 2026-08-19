@@ -1,0 +1,58 @@
+# ============================================
+# TrimedCast — Production Caddyfile
+# ============================================
+# Used when enabling the Caddy reverse proxy service
+# in docker-compose.yml
+#
+# Provides: HTTPS auto-cert, compression, security headers,
+# WebSocket support, and static file caching
+
+localhost {
+    # Reverse proxy to TrimedCast app
+    reverse_proxy trimedcast:3000 {
+        header_up Host {host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote_host}
+
+        # WebSocket support
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+    }
+
+    # Security headers
+    header {
+        # Enable HSTS (6 months)
+        Strict-Transport-Security "max-age=15768000; includeSubDomains"
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS Protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer Policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server info
+        -Server
+    }
+
+    # Compress responses
+    encode gzip zstd
+
+    # Cache static assets
+    @static path *.js *.css *.woff2 *.png *.svg *.ico
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    # XTransformPort query for mini-services
+    @transform_port_query {
+        query XTransformPort=*
+    }
+    handle @transform_port_query {
+        reverse_proxy localhost:{query.XTransformPort} {
+            header_up Host {host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+}

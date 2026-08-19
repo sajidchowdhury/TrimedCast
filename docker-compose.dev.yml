@@ -1,0 +1,42 @@
+# ============================================
+# TrimedCast — Docker Compose (Development)
+# ============================================
+# Run: docker compose -f docker-compose.dev.yml up
+# Access: http://localhost:3000
+# Hot-reload enabled, source mounted as volume
+
+services:
+  trimedcast-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: trimedcast-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:/app/db/trimedcast.db
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=dev-secret-not-for-production
+    volumes:
+      # Mount source code for hot-reload
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - ./public:/app/public
+      - ./components.json:/app/components.json
+      # Persist database
+      - trimedcast-dev-db:/app/db
+      # Don't override node_modules from container
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - trimedcast-dev-network
+
+volumes:
+  trimedcast-dev-db:
+    driver: local
+
+networks:
+  trimedcast-dev-network:
+    driver: bridge
