@@ -5,8 +5,10 @@
 // Session 28: Product Catalog & Inventory
 // ============================================
 
+import Link from 'next/link';
 import { CatalogDashboard } from '@/components/catalog/catalog-dashboard';
 import { Footer } from '@/components/landing/footer';
+import { Button } from '@/components/ui/button';
 
 export default function CatalogPage() {
   return (
@@ -22,9 +24,15 @@ export default function CatalogPage() {
             <span className="text-muted-foreground text-sm hidden sm:inline">/ Product Catalog & Inventory</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium hidden sm:inline">
               Session 28
             </span>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/login">Sign in</Link>
+            </Button>
+            <Button asChild size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-lg shadow-emerald-500/25">
+              <Link href="/dashboard">Go to Dashboard</Link>
+            </Button>
           </div>
         </div>
       </header>

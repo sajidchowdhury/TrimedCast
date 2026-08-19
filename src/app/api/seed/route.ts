@@ -5,16 +5,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { hashPassword } from '@/lib/auth/password';
 export const runtime = 'nodejs';
+
+// Demo credentials (deterministic so the seeded user can always log in)
+const DEMO_AC_ID = 'TC-2025-DHK-0001';
+const DEMO_EMAIL = 'admin@bdmotors.com';
+const DEMO_PASSWORD = 'Demo1234';
 
 
 export async function POST(request: NextRequest) {
   try {
-    // Create demo tenant
+    // Create demo tenant (acId is required + unique, so set it explicitly)
     const tenant = await db.tenant.upsert({
       where: { slug: 'demo-bd-motors' },
       update: {},
       create: {
+        acId: DEMO_AC_ID,
         name: 'BD Motors Ltd.',
         slug: 'demo-bd-motors',
         domain: 'bdmotors.com',
@@ -22,15 +29,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create demo user
+    // Create demo user with a known password (passwordHash is required).
+    // Re-hash on every run so the credential stays valid even if the user
+    // already existed from a prior (broken) seed. Use the compound unique
+    // (tenantId, email) — email alone is NOT globally unique.
+    const passwordHash = await hashPassword(DEMO_PASSWORD);
     const user = await db.user.upsert({
-      where: { email: 'admin@bdmotors.com' },
-      update: {},
+      where: { tenantId_email: { tenantId: tenant.id, email: DEMO_EMAIL } },
+      update: { passwordHash },
       create: {
-        email: 'admin@bdmotors.com',
+        email: DEMO_EMAIL,
         name: 'Rakib Hassan',
         role: 'executive',
         tenantId: tenant.id,
+        passwordHash,
       },
     });
 
@@ -183,11 +195,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, acId: tenant.acId },
         user: { id: user.id, name: user.name, role: user.role },
         suppliers: suppliers.length,
         products: products.length,
         motorcycle_models: models.length,
+        demo_credentials: {
+          ac_id: tenant.acId,
+          email: DEMO_EMAIL,
+          password: DEMO_PASSWORD,
+          login_url: '/login',
+          note: 'Use these credentials on /login to reach /dashboard',
+        },
       },
     });
   } catch (error) {
