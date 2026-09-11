@@ -16,6 +16,7 @@ import {
   Database,
   Rocket,
   CalendarPlus,
+  FolderOpen,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Upload,
     phase: 'Phase 1',
     description: 'Import monthly sales (wide format)',
+  },
+  {
+    key: 'manage-uploads',
+    label: 'Manage Uploads',
+    icon: FolderOpen,
+    phase: 'Phase 1',
+    description: 'Year-wise upload list + delete',
   },
   {
     key: 'forecast',

@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
         fileSize: file.size,
         importType: 'sales_wide',
         status: 'parsed',
+        dataYear, // track which year this import belongs to
         rowCount: parsed.totalRows,
         skuCount: result.products.length,
         warnings: JSON.stringify(result.warnings),
@@ -61,6 +62,16 @@ export async function POST(req: NextRequest) {
     let purchaseCount = 0;
 
     await db.$transaction(async (tx) => {
+      // 0. REPLACE-ON-REUPLOAD: each year can have only 1 Excel upload.
+      //    Before inserting new sales, delete ALL existing sales for this year
+      //    and mark previous DataImport records for this year as 'superseded'.
+      await tx.sale.deleteMany({ where: { year: dataYear } });
+      // Mark previous completed imports for THIS YEAR as superseded
+      await tx.dataImport.updateMany({
+        where: { dataYear, status: 'completed', id: { not: dataImport.id } },
+        data: { status: 'superseded' },
+      });
+
       // 1. Upsert products
       for (const p of result.products) {
         await tx.product.upsert({
@@ -101,13 +112,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 3. Sales — delete prior rows for same SKU-year to avoid dupes on re-upload
-      const skuYearPairs = new Set<string>();
-      for (const s of result.sales) skuYearPairs.add(`${s.skuCode}|${s.year}`);
-      for (const pair of skuYearPairs) {
-        const [skuCode, yr] = pair.split('|');
-        await tx.sale.deleteMany({ where: { skuCode, year: Number(yr) } });
-      }
+      // 3. Sales — insert the new year's data (year was already cleared in step 0)
       for (const s of result.sales) {
         await tx.sale.create({
           data: {
@@ -174,7 +179,54 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const byYear = url.searchParams.get('byYear') === 'true';
+
+  if (byYear) {
+    // Return the latest import per year (active uploads only — 'completed' status)
+    const allImports = await db.dataImport.findMany({
+      where: { status: 'completed', dataYear: { not: null } },
+      orderBy: { dataYear: 'desc' },
+    });
+
+    // Group by dataYear — each year has only 1 active import
+    const yearMap = new Map<number, typeof allImports[number]>();
+    for (const imp of allImports) {
+      const yr = imp.dataYear ?? 0;
+      if (!yearMap.has(yr)) yearMap.set(yr, imp);
+    }
+
+    // Enrich with the actual sales count for that year from the DB
+    const years = Array.from(yearMap.values());
+    const enriched = await Promise.all(
+      years.map(async (imp) => {
+        const year = imp.dataYear ?? 0;
+        const saleCount = await db.sale.count({ where: { year } });
+        const skuCount = await db.sale.groupBy({
+          by: ['skuCode'],
+          where: { year },
+          _count: true,
+        });
+        return {
+          id: imp.id,
+          fileName: imp.fileName,
+          dataYear: year,
+          status: imp.status,
+          rowCount: imp.rowCount,
+          skuCount: skuCount.length,
+          saleCount,
+          fileSize: imp.fileSize,
+          createdAt: imp.createdAt.toISOString(),
+          completedAt: imp.completedAt?.toISOString() ?? null,
+        };
+      }),
+    );
+
+    return NextResponse.json({ years: enriched, count: enriched.length });
+  }
+
+  // Default: return all imports + stats
   const imports = await db.dataImport.findMany({
     orderBy: { createdAt: 'desc' },
     take: 20,

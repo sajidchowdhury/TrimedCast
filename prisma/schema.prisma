@@ -183,7 +183,8 @@ model DataImport {
   fileType     String   @default("xlsx")
   fileSize     Int
   importType   String   @default("sales_wide") // the client's wide format
-  status       String   @default("pending") // pending|parsed|validated|completed|failed
+  status       String   @default("pending") // pending|parsed|validated|completed|superseded|failed
+  dataYear     Int?     // which year this import's sales belong to (each year = 1 upload)
   rowCount     Int      @default(0)
   skuCount     Int      @default(0)
   saleCount    Int      @default(0)
@@ -192,4 +193,7 @@ model DataImport {
   warnings     String?  // JSON string of warnings
   createdAt    DateTime @default(now())
   completedAt  DateTime?
+
+  @@index([dataYear])
+  @@index([status])
 }

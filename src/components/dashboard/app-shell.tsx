@@ -12,6 +12,7 @@ import { HelpButton } from '@/components/dashboard/help-button';
 import { useAppStore } from '@/stores/app-store';
 import { DashboardView } from '@/components/views/dashboard-view';
 import { UploadView } from '@/components/views/upload-view';
+import { ManageUploadsView } from '@/components/views/manage-uploads-view';
 import { ForecastView } from '@/components/views/forecast-view';
 import { OrdersView } from '@/components/views/orders-view';
 import { FreightView } from '@/components/views/freight-view';
@@ -31,6 +32,7 @@ export function AppShell() {
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {view === 'dashboard' && <DashboardView />}
           {view === 'upload' && <UploadView />}
+          {view === 'manage-uploads' && <ManageUploadsView />}
           {view === 'forecast' && <ForecastView />}
           {view === 'orders' && <OrdersView />}
           {view === 'freight' && <FreightView />}

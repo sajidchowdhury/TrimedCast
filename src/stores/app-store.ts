@@ -9,6 +9,7 @@ import { create } from 'zustand';
 export type ViewKey =
   | 'dashboard'
   | 'upload'
+  | 'manage-uploads'
   | 'forecast'
   | 'orders'
   | 'freight'

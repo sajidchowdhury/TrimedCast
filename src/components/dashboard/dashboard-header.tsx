@@ -22,6 +22,7 @@ import {
   Database,
   Rocket,
   CalendarPlus,
+  FolderOpen,
   Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ import { cn } from '@/lib/utils';
 const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Unified session pilot — all 6 capabilities' },
   upload: { title: 'Upload Excel', subtitle: 'Import your monthly sales workbook' },
+  'manage-uploads': { title: 'Manage Uploads', subtitle: 'Year-wise upload list + delete + replace' },
   forecast: { title: 'Forecast', subtitle: 'Session-wise demand prediction (Eid, Puja, Summer, Winter)' },
   orders: { title: 'Order Recommendations', subtitle: 'How much to order & when to place the PO' },
   freight: { title: 'Air vs Sea Freight', subtitle: 'Shipping-mode decision per SKU' },
@@ -41,6 +43,7 @@ const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
 const MOBILE_NAV = [
   { key: 'dashboard' as ViewKey, label: 'Dashboard', icon: LayoutDashboard },
   { key: 'upload' as ViewKey, label: 'Upload Excel', icon: Upload },
+  { key: 'manage-uploads' as ViewKey, label: 'Manage Uploads', icon: FolderOpen },
   { key: 'forecast' as ViewKey, label: 'Forecast', icon: TrendingUp },
   { key: 'orders' as ViewKey, label: 'Order Recommendations', icon: ShoppingCart },
   { key: 'freight' as ViewKey, label: 'Air vs Sea', icon: Plane },
