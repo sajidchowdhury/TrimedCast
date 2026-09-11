@@ -26,6 +26,8 @@ import {
   ArrowLeft,
   Loader2,
   TableProperties,
+  Download,
+  FileDown,
 } from 'lucide-react';
 import { formatFileSize, isValidFileType, MAX_FILE_SIZE } from '@/lib/etl/excel-parser';
 
@@ -176,12 +178,35 @@ export function UploadView() {
       {step === 'select' && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Upload your sales Excel</CardTitle>
-            <CardDescription>
-              The workbook should have one row per SKU with monthly columns (Jan–Dec).
-              Columns we recognize: Pic No, Item, Color & Details, Order QTY, Ordered On, Send On,
-              Send By Sea/Air, Received On, and Jan, Feb, … Dec.
-            </CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <CardTitle className="text-base">Upload your sales Excel</CardTitle>
+                <CardDescription className="mt-1">
+                  The workbook should have one row per SKU with monthly columns (Jan–Dec).
+                  Columns we recognize: Pic No, Item, Color & Details, Order QTY, Ordered On, Send On,
+                  Send By Sea/Air, Received On, and Jan, Feb, … Dec.
+                </CardDescription>
+              </div>
+            </div>
+            {/* Download template + sample */}
+            <div className="flex flex-wrap gap-2 mt-2">
+              <a href="/trimedcast-template.xlsx" download>
+                <Button variant="outline" size="sm">
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Download template
+                </Button>
+              </a>
+              <a href="/sample_client_sales.xlsx" download>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download sample (21 SKUs)
+                </Button>
+              </a>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              The <strong>template</strong> has empty headers + 2 example rows + an instructions sheet (Bangla + English).
+              The <strong>sample</strong> has 21 realistic SKUs with seasonal data you can test the full pipeline with.
+            </p>
           </CardHeader>
           <CardContent className="space-y-5">
             <div
