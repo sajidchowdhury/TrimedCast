@@ -94,7 +94,7 @@ export function HelpButton() {
               <span>পেজ: {help.title}</span>
               <Badge variant="outline" className="text-[10px]">
                 <TrendingUp className="h-3 w-3 mr-1" />
-                TrimedCast Lean
+                CreativeCast
               </Badge>
             </div>
           </div>

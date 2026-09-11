@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrimedCast Lean — Session-wise Demand & Order Planning",
-  description: "Lean seasonal demand forecasting & inventory planning for Bangladesh motorcycle-parts importers. Excel upload, Eid/Puja/Summer/Winter forecasting, order timing, air vs sea freight, and landed-cost analysis.",
-  keywords: ["TrimedCast", "demand forecasting", "Bangladesh", "motorcycle parts", "inventory", "EOQ", "seasonal"],
-  authors: [{ name: "TrimedCast" }],
+  title: "CreativeCast — Demand Forecasting & Order Planning",
+  description: "Demand forecasting & order planning for your business. Excel upload, session forecasting, order timing, air vs sea freight, and landed-cost analysis.",
+  keywords: ["CreativeCast", "demand forecasting", "inventory", "EOQ", "seasonal", "order planning"],
+  authors: [{ name: "my creative code" }],
   icons: {
     icon: "/logo.svg",
   },

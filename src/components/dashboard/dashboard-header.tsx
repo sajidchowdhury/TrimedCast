@@ -67,9 +67,9 @@ export function DashboardHeader() {
         <SheetContent side="left" className="w-64 p-0">
           <div className="flex items-center gap-2 px-5 h-16 border-b">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-              T
+              C
             </div>
-            <span className="font-semibold text-sm">TrimedCast Lean</span>
+            <span className="font-semibold text-sm">CreativeCast</span>
           </div>
           <nav className="p-3 space-y-1">
             {MOBILE_NAV.map((item) => {

@@ -27,7 +27,7 @@ export default function Home() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl animate-pulse">
-          T
+          C
         </div>
       </div>
     );

@@ -1,9 +1,9 @@
 'use client';
 
 // ============================================
-// TrimedCast LEAN — Login / Signup view
-// The entry point for unauthenticated users.
-// Toggles between login form and signup form.
+// CreativeCast — Login / Signup view
+// Entry point for unauthenticated users.
+// Features an animated forecast graph that draws itself.
 // ============================================
 
 import { useState, useCallback } from 'react';
@@ -12,11 +12,127 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, TrendingUp, Mail, Phone, Building2, Lock, User } from 'lucide-react';
+import { Loader2, Mail, Phone, Building2, Lock, User, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
 
 type Mode = 'login' | 'signup';
+
+/** Animated SVG forecast graph — a line chart that draws itself. */
+function AnimatedForecastGraph() {
+  // Generate a smooth curve that looks like seasonal demand
+  const points = [40, 55, 48, 62, 70, 58, 45, 38, 50, 68, 85, 75, 90, 82, 95];
+  const w = 320;
+  const h = 120;
+  const padX = 10;
+  const padY = 10;
+  const stepX = (w - padX * 2) / (points.length - 1);
+  const maxVal = Math.max(...points);
+
+  const coords = points.map((v, i) => ({
+    x: padX + i * stepX,
+    y: h - padY - (v / maxVal) * (h - padY * 2),
+  }));
+
+  // Build smooth path using cubic bezier
+  const linePath = coords
+    .map((c, i) => {
+      if (i === 0) return `M ${c.x} ${c.y}`;
+      const prev = coords[i - 1];
+      const cpX1 = prev.x + stepX * 0.4;
+      const cpY1 = prev.y;
+      const cpX2 = c.x - stepX * 0.4;
+      const cpY2 = c.y;
+      return `C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${c.x} ${c.y}`;
+    })
+    .join(' ');
+
+  // Confidence band (upper + lower offset by 15px)
+  const upperPath = coords
+    .map((c, i) => (i === 0 ? `M ${c.x} ${c.y - 12}` : `L ${c.x} ${c.y - 12}`))
+    .join(' ');
+  const lowerPath = coords
+    .slice()
+    .reverse()
+    .map((c) => `L ${c.x} ${c.y + 12}`)
+    .join(' ');
+  const bandPath = `${upperPath} ${lowerPath} Z`;
+
+  return (
+    <div className="relative w-full">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" style={{ maxHeight: '140px' }}>
+        <defs>
+          <linearGradient id="bandGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.05" />
+          </linearGradient>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
+            <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {[0.25, 0.5, 0.75].map((p) => (
+          <line
+            key={p}
+            x1={padX}
+            y1={padY + (h - padY * 2) * p}
+            x2={w - padX}
+            y2={padY + (h - padY * 2) * p}
+            stroke="currentColor"
+            className="text-muted-foreground/15"
+            strokeDasharray="2 4"
+            strokeWidth="1"
+          />
+        ))}
+
+        {/* Confidence band */}
+        <path d={bandPath} fill="url(#bandGrad)" className="forecast-band" />
+
+        {/* Forecast line — animated draw */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="url(#lineGrad)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="forecast-line"
+        />
+
+        {/* Data points — appear one by one */}
+        {coords.map((c, i) => (
+          <circle
+            key={i}
+            cx={c.x}
+            cy={c.y}
+            r="3"
+            className="fill-primary forecast-dot"
+            style={{
+              animationDelay: `${0.5 + i * 0.12}s`,
+            }}
+          />
+        ))}
+
+        {/* Trend arrow at the end */}
+        <g className="forecast-arrow" transform={`translate(${coords[coords.length - 1].x + 8}, ${coords[coords.length - 1].y - 8})`}>
+          <path d="M 0 6 L 8 0 L 6 6 L 8 12 Z" className="fill-primary" />
+        </g>
+      </svg>
+
+      {/* Animated labels */}
+      <div className="absolute top-2 left-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+        <TrendingUp className="h-3 w-3 text-emerald-500" />
+        <span className="forecast-label">Demand Forecast</span>
+      </div>
+      <div className="absolute bottom-2 right-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+        <Sparkles className="h-3 w-3 text-amber-500" />
+        <span className="forecast-label">AI-Powered</span>
+      </div>
+    </div>
+  );
+}
 
 export function AuthView() {
   const setUser = useAuthStore((s) => s.setUser);
@@ -89,15 +205,21 @@ export function AuthView() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/30 to-primary/5 p-4">
       <div className="w-full max-w-md space-y-6">
-        {/* Logo + title */}
-        <div className="text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl mb-3">
-            T
+        {/* Logo + title + animated graph */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl">
+            C
           </div>
-          <h1 className="text-2xl font-bold">TrimedCast</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Demand forecasting & order planning for your business
-          </p>
+          <div>
+            <h1 className="text-2xl font-bold">CreativeCast</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Demand forecasting & order planning for your business
+            </p>
+          </div>
+          {/* Animated forecast graph */}
+          <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <AnimatedForecastGraph />
+          </div>
         </div>
 
         {/* Tab toggle */}
@@ -191,9 +313,16 @@ export function AuthView() {
           </Card>
         )}
 
-        {/* Footer note */}
+        {/* Footer */}
         <p className="text-center text-[11px] text-muted-foreground">
-          🔒 Your data is stored securely. One account per email and phone number.
+          CreativeCast developed with{' '}
+          <span className="text-red-500">♥</span>
+          {' '}&{' '}
+          <span className="text-amber-600">☕</span>
+          {' '}by{' '}
+          <a href="https://mycreativecode.com" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+            my creative code
+          </a>
         </p>
       </div>
     </div>

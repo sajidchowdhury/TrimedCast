@@ -40,7 +40,14 @@ export function AppShell() {
           {view === 'data' && <DataView />}
         </main>
         <footer className="border-t bg-background px-6 py-3 text-xs text-muted-foreground">
-          TrimedCast — Demand forecasting & order planning for your business
+          CreativeCast developed with{' '}
+          <span className="text-red-500">♥</span>
+          {' '}&{' '}
+          <span className="text-amber-600">☕</span>
+          {' '}by{' '}
+          <a href="https://mycreativecode.com" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+            my creative code
+          </a>
         </footer>
       </div>
       {/* Floating help button — shows on every page, content changes per view */}

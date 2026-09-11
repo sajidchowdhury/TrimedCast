@@ -69,11 +69,11 @@ export function SidebarNav() {
     <aside className="hidden md:flex w-64 flex-col border-r bg-background shrink-0">
       <div className="flex items-center gap-2 px-5 h-16 border-b">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-          T
+          C
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="font-semibold text-sm">TrimedCast</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Lean Edition</span>
+          <span className="font-semibold text-sm">CreativeCast</span>
+          <span className="text-[10px] text-muted-foreground">my creative code</span>
         </div>
       </div>
 

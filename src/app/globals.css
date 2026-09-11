@@ -120,3 +120,76 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ============================================ */
+/* Animated forecast graph (login page)          */
+/* ============================================ */
+
+/* Line draws itself from left to right */
+.forecast-line {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: drawLine 2s ease-in-out forwards;
+}
+
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Confidence band fades in after the line */
+.forecast-band {
+  opacity: 0;
+  animation: fadeIn 1.5s ease-in-out 0.8s forwards;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Data points pop in one by one */
+.forecast-dot {
+  opacity: 0;
+  transform-origin: center;
+  animation: popIn 0.4s ease-out forwards;
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.4);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Trend arrow at the end */
+.forecast-arrow {
+  opacity: 0;
+  animation: arrowIn 0.5s ease-out 2.2s forwards;
+}
+
+@keyframes arrowIn {
+  from {
+    opacity: 0;
+    transform: translate(-10px, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+/* Labels fade in */
+.forecast-label {
+  opacity: 0;
+  animation: fadeIn 0.8s ease-in-out 1.5s forwards;
+}
