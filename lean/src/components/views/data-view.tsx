@@ -3,17 +3,19 @@
 // ============================================
 // TrimedCast LEAN — Data view
 // Shows the uploaded products with their sales/purchase summaries.
-// Read-only (Phase 1). Editing prices comes in Phase 4 (line cost).
+// Also supports inline editing of unit cost + selling price (needed
+// for the freight + line-cost analysis in Phase 4).
 // ============================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Package, Plane, Ship, Calendar, Upload } from 'lucide-react';
+import { toast } from 'sonner';
+import { Search, Package, Plane, Ship, Upload, Check, Loader2 } from 'lucide-react';
 
 interface ProductRow {
   id: string;
@@ -33,10 +35,12 @@ interface ProductRow {
 
 export function DataView() {
   const dataVersion = useAppStore((s) => s.dataVersion);
+  const bumpData = useAppStore((s) => s.bumpData);
   const setView = useAppStore((s) => s.setView);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +59,32 @@ export function DataView() {
     return () => { cancelled = true; };
   }, [dataVersion]);
 
+  const updatePrice = useCallback(async (sku: string, field: 'unitCostBdt' | 'sellingPrice', value: number) => {
+    setSaving(sku);
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error('Update failed', { description: json.error || 'Unknown error' });
+        return;
+      }
+      // Update local state
+      setProducts((prev) => prev.map((p) =>
+        p.skuCode === sku ? { ...p, [field]: value } : p,
+      ));
+      bumpData();
+      toast.success('Price updated', { description: `${sku}: ${field} = ৳${value}` });
+    } catch (e) {
+      toast.error('Update failed', { description: e instanceof Error ? e.message : 'Unknown error' });
+    } finally {
+      setSaving(null);
+    }
+  }, [bumpData]);
+
   const filtered = products.filter((p) => {
     const q = query.toLowerCase().trim();
     if (!q) return true;
@@ -67,7 +97,7 @@ export function DataView() {
         <div>
           <h2 className="text-base font-semibold">Products & Sales Data</h2>
           <p className="text-xs text-muted-foreground">
-            {products.length} SKUs ingested from your Excel
+            {products.length} SKUs ingested · edit unit cost + selling price to enable line-cost analysis
           </p>
         </div>
         <div className="flex gap-2">
@@ -115,6 +145,8 @@ export function DataView() {
                     <th className="text-left font-medium px-4 py-2.5">SKU (Pic No)</th>
                     <th className="text-left font-medium px-4 py-2.5">Item</th>
                     <th className="text-left font-medium px-4 py-2.5">Color / Details</th>
+                    <th className="text-right font-medium px-4 py-2.5">Unit Cost (৳)</th>
+                    <th className="text-right font-medium px-4 py-2.5">Sell Price (৳)</th>
                     <th className="text-right font-medium px-4 py-2.5">Total Sales</th>
                     <th className="text-right font-medium px-4 py-2.5">Last Order</th>
                     <th className="text-center font-medium px-4 py-2.5">Mode</th>
@@ -130,6 +162,20 @@ export function DataView() {
                       </td>
                       <td className="px-4 py-2.5 max-w-xs">
                         <div className="truncate text-xs text-muted-foreground">{p.colorDetails || '—'}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <PriceInput
+                          value={p.unitCostBdt}
+                          onSave={(v) => updatePrice(p.skuCode, 'unitCostBdt', v)}
+                          disabled={saving === p.skuCode}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <PriceInput
+                          value={p.sellingPrice}
+                          onSave={(v) => updatePrice(p.skuCode, 'sellingPrice', v)}
+                          disabled={saving === p.skuCode}
+                        />
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">
                         {p.totalSales.toLocaleString()}
@@ -168,3 +214,60 @@ export function DataView() {
     </div>
   );
 }
+
+/** Inline editable price input — saves on blur or Enter. */
+function PriceInput({
+  value,
+  onSave,
+  disabled,
+}: {
+  value: number | null;
+  onSave: (v: number) => void;
+  disabled?: boolean;
+}) {
+  // Use the value as a React key to reset state when the external value changes,
+  // avoiding the setState-in-effect anti-pattern.
+  return <PriceInputInner key={value ?? 'empty'} value={value} onSave={onSave} disabled={disabled} />;
+}
+
+function PriceInputInner({
+  value,
+  onSave,
+  disabled,
+}: {
+  value: number | null;
+  onSave: (v: number) => void;
+  disabled?: boolean;
+}) {
+  const [local, setLocal] = useState<string>(value?.toString() ?? '');
+
+  const commit = () => {
+    const n = Number(local);
+    if (!isNaN(n) && n >= 0 && n !== value) {
+      onSave(n);
+    } else {
+      setLocal(value?.toString() ?? '');
+    }
+  };
+
+  return (
+    <div className="relative inline-flex items-center">
+      <span className="text-muted-foreground text-xs mr-1">৳</span>
+      <input
+        type="number"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
+        disabled={disabled}
+        placeholder="—"
+        className="w-20 rounded border border-transparent bg-transparent px-1.5 py-1 text-right tabular-nums text-xs hover:border-border focus:border-primary focus:bg-background focus:outline-none disabled:opacity-50"
+      />
+      {disabled && <Loader2 className="h-3 w-3 animate-spin absolute -right-4 top-1/2 -translate-y-1/2 text-muted-foreground" />}
+      {value !== null && !disabled && local === value.toString() && (
+        <Check className="h-3 w-3 text-green-500 absolute -right-4 top-1/2 -translate-y-1/2" />
+      )}
+    </div>
+  );
+}
+

@@ -13,7 +13,8 @@ import { DashboardView } from '@/components/views/dashboard-view';
 import { UploadView } from '@/components/views/upload-view';
 import { ForecastView } from '@/components/views/forecast-view';
 import { OrdersView } from '@/components/views/orders-view';
-import { FreightView, LineCostView } from '@/components/views/placeholder-views';
+import { FreightView } from '@/components/views/freight-view';
+import { LineCostView } from '@/components/views/line-cost-view';
 import { DataView } from '@/components/views/data-view';
 
 export function AppShell() {
