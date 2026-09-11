@@ -1,3 +1,10 @@
+// ============================================
+// TrimedCast LEAN Schema — client's 6 requirements only
+// (a) Excel upload  (b) session forecast  (c) order qty
+// (d) order timing  (e) air vs sea        (f) line cost
+// No multi-tenancy, no billing, no RBAC, no audit log (deferred).
+// ============================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,805 +12,184 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
-  // For PostgreSQL (production), change to:
-  // provider = "postgresql"
-  // url      = env("DATABASE_URL")
 }
 
-// ============================================
-// TRIMEDCAST - Seasonal Demand & Inventory
-// Forecasting System for Motorcycle Parts (BD)
-// ============================================
-
-// --- Tenant & Users ---
-
-model Tenant {
-  id                String   @id @default(cuid())
-  acId              String   @unique  // Auto-generated: TC-2025-DHK-0001
-  name              String
-  slug              String   @unique
-  domain            String?
-  division          String   @default("dhaka") // dhaka, chittagong, sylhet, rajshahi, khulna, barishal, rangpur, mymensingh
-  plan              String   @default("starter") // starter, professional, enterprise
-  status            String   @default("trial") // trial, active, past_due, suspended, cancelled, deleting
-  isActive          Boolean  @default(true)
-  
-  // Subscription & Billing Fields
-  trialStartsAt     DateTime @default(now())
-  trialEndsAt       DateTime?
-  suspendedAt       DateTime?
-  suspensionReason  String?  // subscription_past_due, admin_action, terms_violation
-  cancelledAt       DateTime?
-  deletionRequestedAt DateTime?
-  deletionScheduledAt DateTime?
-  
-  // Stripe / Payment Integration
-  stripeCustomerId  String?  @unique
-  stripePriceId    String?
-  pmType           String?  // card, bank_transfer, bkash, nagad, etc.
-  pmLastFour       String?  // last 4 digits of payment method
-  
-  // Billing Address
-  billingEmail     String?
-  billingName      String?
-  billingAddress   String?  // JSON: {line1, line2, city, state, postal_code, country}
-  
-  // Shop Info (from signup)
-  shopName         String?  // Display name of the shop
-  phone            String?  // BD phone: +880 1XXX-XXXXXX
-  
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  users            User[]
-  products         Product[]
-  suppliers        Supplier[]
-  motorcycleModels MotorcycleModel[]
-  inventory        Inventory[]
-  salesHistory     SalesHistory[]
-  purchaseHistory  PurchaseHistory[]
-  promoEvents      PromoEvent[]
-  forecastSettings ForecastSetting[]
-  sopCycles        SopCycle[]
-  forecasts        Forecast[]
-  salesOrders      SalesOrder[]
-  purchaseOrders   PurchaseOrder[]
-  recommendedOrders RecommendedOrder[]
-  dataImports      DataImport[]
-  auditLogs        AuditLog[]
-  subscription     Subscription?
-  usageEvents      UsageEvent[]
-  invoices         Invoice[]
-  securityEvents   SecurityEvent[]
-  backups          TenantBackup[]
-  sessions         UserSession[]
-  otpVerifications OtpVerification[]
-  subscriptionPayments SubscriptionPayment[]
-  subscriptionEvents SubscriptionEvent[]
-  seasonalityTypes SeasonalityType[]
-
-  @@index([acId])
-  @@index([division])
-}
-
-model User {
-  id            String   @id @default(cuid())
-  email         String
-  passwordHash  String   // bcrypt hashed password
-  name          String
-  phone         String?  // BD phone: +880 1XXX-XXXXXX
-  role          String   @default("admin") // admin, warehouse_manager, sales_manager, marketing_manager, finance, executive, viewer
-  tenantId      String
-  isActive      Boolean  @default(true)
-  lastLoginAt   DateTime?
-  inviteToken   String?  // For team member invitations
-  inviteExpiresAt DateTime?
-  invitedBy     String?  // User ID who sent the invite
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  dataImports   DataImport[] @relation("ImportCreator")
-  auditLogs     AuditLog[] @relation("AuditUser")
-  sessions      UserSession[]
-
-  @@unique([tenantId, email])
-  @@index([tenantId])
-  @@index([email])
-}
-
-// ============================================
-// Session 1: Authentication & Security Models
-// ============================================
-
-// --- DB-Backed Sessions (replaces in-memory token store) ---
-
-model UserSession {
-  id          String   @id @default(cuid())
-  userId      String
-  tenantId    String
-  token       String   @unique
-  expiresAt   DateTime
-  ipAddress   String?
-  userAgent   String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([tenantId])
-  @@index([token])
-  @@index([expiresAt])
-}
-
-// --- OTP Verification ---
-
-model OtpVerification {
-  id          String   @id @default(cuid())
-  email       String
-  code        String          // 6-digit OTP
-  purpose     String          // "signup" | "login" | "reset_password" | "invite"
-  tenantId    String?
-  phone       String?         // Optional phone for SMS OTP
-  expiresAt   DateTime        // 5 minutes from creation
-  isVerified  Boolean  @default(false)
-  attempts    Int      @default(0)  // max 3 attempts
-  createdAt   DateTime @default(now())
-
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([email, purpose])
-  @@index([code, email])
-  @@index([expiresAt])
-}
-
-// --- BD Payment Records ---
-
-model SubscriptionPayment {
-  id              String   @id @default(cuid())
-  tenantId        String
-  amount          Float    // Amount in BDT
-  currency        String   @default("BDT")
-  method          String   // "bkash" | "nagad" | "card" | "bank_transfer" | "sslcommerz"
-  transactionId   String?  // bKash/Nagad/SSLCommerz transaction ID
-  status          String   @default("pending") // pending | submitted | verified | completed | failed | refunded
-  periodStart     DateTime // Subscription period start
-  periodEnd       DateTime // Subscription period end (1 year from start)
-  verifiedBy      String?  // Admin user ID who verified
-  verifiedAt      DateTime?
-  receiptUrl      String?  // Uploaded payment receipt (bank transfer)
-  notes           String?  // Admin notes
-  metadata        String?  // JSON: additional info (bKash number, etc.)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([method])
-  @@index([createdAt])
-}
-
-// --- Configurable Seasonality Types ---
-
-model SeasonalityType {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String   // "eid_peak", "cny_preparation", etc.
-  label       String   // "Eid Peak Demand" (English)
-  labelBn     String?  // "ঈদের চাহিদা বৃদ্ধি" (Bangla)
-  description String?
-  multiplier  Float    @default(1.0)  // Demand multiplier: 1.5 = 50% more demand
-  months      String   // JSON array of months: "[3,4]" or "[11,12,1,2]"
-  color       String?  // UI color: "#ef4444" for winter, etc.
-  isActive    Boolean  @default(true)
-  isDefault   Boolean  @default(false)  // System default (can't delete)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, name])
-  @@index([tenantId])
-  @@index([isActive])
-}
-
-// --- Master Data ---
-
-model MotorcycleModel {
-  id          String   @id @default(cuid())
-  tenantId    String
-  brand       String
-  model       String
-  yearStart   Int?
-  yearEnd     Int?
-  ccRating    Int?
-  segment     String?  // commuter, premium, scooter
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
-  products    Product[]
-
-  @@unique([tenantId, brand, model])
-  @@index([tenantId])
-}
-
-model Supplier {
-  id            String   @id @default(cuid())
-  tenantId      String
-  name          String
-  code          String?
-  country       String   @default("China")
-  leadTimeDays  Int      @default(90)
-  reliability   Float?   // 0-1 score
-  isCnyAffected Boolean  @default(true)
-  contactEmail  String?
-  contactPhone  String?
-  notes         String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  products  Product[]
-
-  @@unique([tenantId, name])
-  @@index([tenantId])
-}
-
+// --- Product Catalog (from client's Excel: Pic No + Item) ---
 model Product {
-  id                String   @id @default(cuid())
-  tenantId          String
-  sku               String
-  name              String
-  category          String   // piston, gasket, chain, filter, etc.
-  subcategory       String?
-  motorcycleModelId String?
-  supplierId        String?
-  unitCost          Float?
-  sellingPrice      Float?
-  unit              String   @default("piece") // piece, set, pair
-  minOrderQty       Int      @default(1)   // MOQ - supplier minimum order quantity
-  eoq               Int      @default(100) // Economic Order Quantity
-  moq               Int      @default(1)   // Supplier Minimum Order Quantity (alias for minOrderQty)
-  maxStock          Int      @default(500) // Maximum warehouse capacity for this SKU
-  leadTimeDays      Int?     // override supplier lead time
-  isSeasonal        Boolean  @default(false)
-  seasonalityType   String?  // winter_peak, monsoon_dip, eid_peak, etc. (references SeasonalityType.name)
-  seasonWeight      Float?   // Custom seasonal weight override
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id           String   @id @default(cuid())
+  skuCode      String   @unique // "Pic No" column
+  productName  String            // "Item" column
+  colorDetails String?           // "Color & Details" column
+  category     String? @default("General")
+  unitCostBdt  Float?            // optional, can be added later
+  sellingPrice Float?            // optional
+  hsCode       String? @default("8512") // electrical lighting/signalling
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id])
-  motorcycleModel MotorcycleModel? @relation(fields: [motorcycleModelId], references: [id])
-  supplier        Supplier?       @relation(fields: [supplierId], references: [id])
-  inventory       Inventory[]
-  salesHistory    SalesHistory[]
-  purchaseHistory PurchaseHistory[]
-  forecasts       Forecast[]
-  recommendedOrders RecommendedOrder[]
-
-  @@unique([tenantId, sku])
-  @@index([tenantId])
-  @@index([tenantId, category])
+  sales        Sale[]
+  purchases    Purchase[]
+  inventory    Inventory?
+  forecastRecs RecommendedOrder[]
 }
 
-// --- Inventory ---
+// --- Sales History (long format: one row per SKU-month) ---
+// Melted from the client's wide Excel (Jan..Dec columns).
+model Sale {
+  id        String   @id @default(cuid())
+  skuCode   String
+  saleDate  DateTime            // 1st of the month, derived from the column header
+  qtySold   Int                 // monthly sales figure
+  year      Int
+  month     Int                 // 1-12
+  createdAt DateTime @default(now())
 
-model Inventory {
-  id              String   @id @default(cuid())
-  tenantId        String
-  productId       String
-  currentStock    Int      @default(0)
-  reservedStock   Int      @default(0)
-  availableStock  Int      @default(0)
-  reorderPoint    Int?
-  safetyStock     Int?
-  maxStockLevel   Int?
-  lastCountDate   DateTime?
-  warehouseLoc    String?
-  updatedAt       DateTime @updatedAt
-  createdAt       DateTime @default(now())
+  product   Product? @relation(fields: [skuCode], references: [skuCode])
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-
-  @@unique([tenantId, productId])
-  @@index([tenantId])
+  @@index([skuCode, saleDate])
+  @@index([year, month])
 }
 
-// --- Sales & Purchase History ---
-
-model SalesHistory {
-  id            String   @id @default(cuid())
-  tenantId      String
-  productId     String
-  date          DateTime
-  quantity      Int
-  revenue       Float?
-  channel       String?  // retail, wholesale, online
-  region        String?  // dhaka, chittagong, etc.
-  customerId    String?
-  invoiceNo     String?
-  season        String?  // winter, summer, monsoon, pre_winter
-  createdAt     DateTime @default(now())
-
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-
-  @@index([tenantId, productId])
-  @@index([tenantId, date])
-  @@index([date])
-}
-
-model PurchaseHistory {
-  id            String   @id @default(cuid())
-  tenantId      String
-  productId     String
-  date          DateTime
-  quantity      Int
-  unitCost      Float?
-  totalCost     Float?
-  supplierId    String?
-  poNumber      String?
-  leadTimeActual Int?    // actual lead time in days
-  season        String?
-  createdAt     DateTime @default(now())
-
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-
-  @@index([tenantId, productId])
-  @@index([tenantId, date])
-  @@index([date])
-}
-
-// --- Promo & Forecasting ---
-
-model PromoEvent {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String
-  type        String   // eid_discount, seasonal_sale, clearance, flash_sale
-  startDate   DateTime
-  endDate     DateTime
-  discountPct Float?
-  affectedCategories String? // JSON array of category IDs
-  expectedUplift Float?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-}
-
-model ForecastSetting {
+// --- Purchase History (from client's Excel: Order QTY + dates + Send By) ---
+model Purchase {
   id                  String   @id @default(cuid())
-  tenantId            String
-  productId           String?
-  model               String   @default("prophet") // prophet, arima, ets, ensemble
-  horizonDays         Int      @default(90)
-  confidenceLevel     Float    @default(0.95)
-  seasonalityMode     String   @default("multiplicative")
-  includeHolidays     Boolean  @default(true)
-  includePromos       Boolean  @default(true)
-  cnyAdjustment       Boolean  @default(true)
-  autoRecalibration   Boolean  @default(true)
-  recalibrationThreshold Float @default(0.15) // MAPE threshold
-  lastCalibrationDate DateTime?
+  skuCode             String
+  orderQty            Int               // "Order QTY"
+  orderedOn           DateTime          // "Ordered On"
+  sendOn              DateTime?         // "Send on"
+  receivedOn          DateTime?         // "Received On"
+  shipmentMode        String  @default("sea") // "Send By Sea / Air"
+  actualLeadTimeDays  Int?              // computed: receivedOn - orderedOn
   createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product             Product? @relation(fields: [skuCode], references: [skuCode])
 
-  @@index([tenantId])
+  @@index([skuCode])
+  @@index([orderedOn])
 }
 
-model SopCycle {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String
-  periodStart DateTime
-  periodEnd   DateTime
-  stage       String   @default("validation") // validation, approval, operationalization, governance
-  status      String   @default("draft") // draft, active, completed, archived
-  participants String? // JSON array of user IDs
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// --- Current Inventory (starting stock for order-trigger algorithm) ---
+model Inventory {
+  id         String   @id @default(cuid())
+  skuCode    String   @unique
+  qtyOnHand  Int      @default(0)
+  updatedAt  DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
+  product    Product? @relation(fields: [skuCode], references: [skuCode])
 }
 
+// --- Festival / Session Calendar (Eid, Puja, Summer, Winter, CNY) ---
+model FestivalSession {
+  id                 String   @id @default(cuid())
+  name               String            // e.g. "Durga Puja 2026"
+  type               String            // "religious" | "climatic" | "supply"
+  peakDate           DateTime
+  windowStart        DateTime
+  windowEnd          DateTime
+  demandEffect       Float             // multiplier: 1.10 = +10% lift, 0.70 = -30% drop
+  year               Int
+  createdAt          DateTime @default(now())
+
+  @@index([year])
+  @@index([peakDate])
+}
+
+// --- Forecast Settings (single global config for the lean build) ---
+model ForecastSetting {
+  id                      String   @id @default(cuid())
+  // Lead-time decomposition (BD -> China import lane)
+  manufacturingLeadDays   Int      @default(90)
+  shipmentSeaDays         Int      @default(52)
+  shipmentAirDays         Int      @default(8)
+  customsSeaDays          Int      @default(10)
+  customsAirDays          Int      @default(3)
+  internalProcessingDays  Int      @default(3)
+  // EOQ / safety stock defaults
+  orderingCostPerOrder    Float    @default(500)   // BDT per PO
+  holdingCostPct          Float    @default(0.20)   // 20% of unit cost / yr
+  serviceLevel            Float    @default(0.95)   // -> k=1.65
+  reviewPeriodDays        Int      @default(10)
+  bufferDays              Int      @default(7)
+  // CNY window
+  cnyStart                String   @default("2027-01-20")
+  cnyEnd                  String   @default("2027-02-20")
+  updatedAt               DateTime @updatedAt
+}
+
+// --- Forecast results (Phase 2) — per-SKU per-session demand forecast ---
 model Forecast {
-  id              String   @id @default(cuid())
-  tenantId        String
-  productId       String
-  forecastDate    DateTime
-  predictedQty    Float
-  lowerBound      Float?
-  upperBound      Float?
-  model           String
-  confidence      Float
-  mape            Float?   // Mean Absolute Percentage Error
-  isRecalibrated  Boolean  @default(false)
-  seasonDetected  String?
-  cnyRiskFlag     Boolean  @default(false)
-  createdAt       DateTime @default(now())
+  id                String   @id @default(cuid())
+  skuCode           String
+  festivalSessionId String?          // which session this forecast was generated for
+  productName       String           // snapshot of product name at generation time
+  // Monthly forecast points (JSON array of {date, month, year, predicted, lowerBound, upperBound, festivalName, festivalEffect})
+  pointsJson        String           // JSON-serialized ForecastPoint[]
+  // Accuracy metrics
+  mape              Float   @default(0)
+  mae               Float   @default(0)
+  rmse              Float   @default(0)
+  mse               Float   @default(0)
+  bias              Float   @default(0)
+  accuracyRating    String  @default("unusable") // excellent|good|fair|poor|unusable
+  n                 Int     @default(0)
+  // Sum of predicted qty across the horizon (the headline number for "how much to order")
+  totalForecastQty  Int     @default(0)
+  model             String  @default("prophet-ts-lean")
+  historyPoints     Int     @default(0)
+  horizonMonths     Int     @default(6)
+  generatedAt       DateTime @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-
-  @@index([tenantId, productId])
-  @@index([forecastDate])
+  @@index([skuCode])
+  @@index([festivalSessionId])
+  @@index([skuCode, festivalSessionId])
 }
 
-// --- Orders ---
-
-model SalesOrder {
-  id          String   @id @default(cuid())
-  tenantId    String
-  orderNo     String
-  date        DateTime
-  customerId  String?
-  channel     String?
-  region      String?
-  totalAmount Float?
-  status      String   @default("pending") // pending, confirmed, shipped, delivered, cancelled
-  items       String?  // JSON array of {productId, quantity, price}
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-}
-
-model PurchaseOrder {
-  id          String   @id @default(cuid())
-  tenantId    String
-  poNumber    String
-  supplierId  String?
-  orderDate   DateTime
-  expectedDelivery DateTime?
-  status      String   @default("draft") // draft, submitted, confirmed, in_transit, received, cancelled
-  totalAmount Float?
-  items       String?  // JSON array of {productId, quantity, unitCost}
-  cnyRisk     Boolean  @default(false)
-  leadTimeDays Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-}
-
+// --- Recommended Orders (the core output: qty + trigger date + freight mode + landed cost) ---
 model RecommendedOrder {
-  id              String   @id @default(cuid())
-  tenantId        String
-  productId       String
-  orderDate       DateTime
-  quantity        Int
-  suggestedQty    Int      @default(0)  // Suggested order quantity before constraints
-  orderTrigger    String?  // reorder_point, seasonal_uplift, cny_urgency, stockout_risk
-  totalLeadTime   Int?     // days
-  reorderHitDate  DateTime?
-  expectedDeliveryDate DateTime? // When goods will be available for sale
-  urgency         String   @default("normal") // critical, high, normal, low
-  priority        String   @default("normal") // urgent, high, normal, low
-  status          String   @default("pending") // pending, approved, converted, rejected, acknowledged, deferred, skipped
-  cnyRisk         Boolean  @default(false) // Whether this order has CNY risk
-  cnyStrategy     String?  // before_cny, after_cny, partial_order, air_escape, none
-  cnyDelayDays    Int      @default(0)  // Additional days due to CNY
-  shipmentMode    String   @default("sea") // sea, air
-  unitCost        Float?   // Cost per unit at time of calculation
-  totalCost       Float?   // quantity * unitCost
-  justification   String?
-  constraintsApplied String? // JSON: list of applied constraints
-  timeline        String?  // JSON: full OrderTimeline milestones
-  pipelineSessionId String? // ID of the pipeline run that generated this
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(cuid())
+  skuCode           String
+  festivalSessionId String?
+  // Forecast
+  forecastQty       Int?             // per-session forecast units
+  mape              Float?           // accuracy metric
+  // Order quantity (EOQ + safety stock)
+  recommendedQty   Int              // how much to order
+  safetyStock       Int
+  reorderPoint      Int
+  // Order timing
+  orderTriggerDate  DateTime?        // WHEN to place the PO
+  expectedDelivery  DateTime?        // arrives at warehouse
+  urgency           String  @default("normal") // critical|high|normal|low
+  // Freight decision (air vs sea)
+  recommendedMode   String  @default("sea") // "sea" | "air"
+  cnyStrategy       String?           // before_cny|after_cny|partial_order|air_escape
+  // Line cost (landed cost per unit)
+  landedCostSea     Float?           // BDT per unit, sea
+  landedCostAir     Float?           // BDT per unit, air
+  marginSea         Float?           // %
+  marginAir         Float?           // %
+  createdAt         DateTime @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  product           Product? @relation(fields: [skuCode], references: [skuCode])
 
-  @@index([tenantId])
-  @@index([orderDate])
-  @@index([priority])
-  @@index([status])
-  @@index([cnyRisk])
+  @@index([skuCode])
+  @@index([festivalSessionId])
 }
 
-// --- ETL / Data Import ---
-
+// --- Data Import Log (track uploaded Excel files) ---
 model DataImport {
-  id              String   @id @default(cuid())
-  tenantId        String
-  importType      String   // sales_history, purchase_history, inventory, products, suppliers, promo_events, motorcycle_models
-  fileName        String
-  fileSize        Int
-  rowsTotal       Int      @default(0)
-  rowsValid       Int      @default(0)
-  rowsInvalid     Int      @default(0)
-  rowsSkipped     Int      @default(0)
-  rowsInserted    Int      @default(0)
-  rowsDuplicate   Int      @default(0)
-  status          String   @default("uploading") // uploading, parsing, mapping, validating, harmonizing, inserting, completed, failed, cancelled
-  qualityScore    Float?   // 0-100
-  columnMapping   String?  // JSON: {sourceCol: targetField}
-  validationErrors String? // JSON: [{row, field, error, severity}]
-  harmonizationLog String? // JSON: [{step, input, output, changes}]
-  rawPreview      String?  // JSON: first 5 rows for preview
-  mappedPreview   String?  // JSON: first 5 rows after mapping
-  errorDetails    String?  // JSON: detailed error info per row
-  startedAt       DateTime?
-  completedAt     DateTime?
-  durationMs      Int?
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  creator  User?    @relation("ImportCreator", fields: [createdBy], references: [id])
-
-  @@index([tenantId])
-  @@index([importType])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// --- Audit Log ---
-
-model AuditLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  userId      String?
-  action      String   // create, update, delete, import, export, approve, reject
-  entity      String   // product, inventory, forecast, order, import
-  entityId    String?
-  changes     String?  // JSON: {before, after}
-  metadata    String?  // JSON: additional context
-  ipAddress   String?
-  createdAt   DateTime @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  user   User?   @relation("AuditUser", fields: [userId], references: [id])
-
-  @@index([tenantId])
-  @@index([entity, entityId])
-  @@index([createdAt])
-}
-
-// ============================================
-// SaaS Billing & Subscription Models
-// ============================================
-
-// --- Subscription ---
-
-model Subscription {
-  id              String   @id @default(cuid())
-  tenantId        String   @unique
-  tier            String   @default("starter") // starter, professional, enterprise
-  status          String   @default("trial") // trial, active, past_due, cancelled, expired
-  stripeSubscriptionId String? @unique
-  stripePriceId   String?
-  
-  // Billing Cycle
-  billingCycle    String   @default("monthly") // monthly, yearly
-  currentPeriodStart DateTime?
-  currentPeriodEnd   DateTime?
-  trialEndsAt        DateTime?
-  cancelledAt        DateTime?
-  endsAt             DateTime?  // When subscription actually ends (end of billing period)
-  
-  // Pricing (BDT for BD market)
-  unitAmount       Int?     // Price in BDT (12000 for pro)
-  currency        String   @default("BDT")
-  
-  // Renewal
-  autoRenew       Boolean  @default(true)  // Auto-renew on period end
-  lastRenewalAttempt DateTime?  // Last time renewal was attempted
-  renewalReminderSent Boolean @default(false) // Whether renewal reminder was sent
-  
-  // Payment
-  lastPaymentAt  DateTime?
-  nextPaymentAt  DateTime?
-  paymentFailCount Int    @default(0)
-  paymentRetryAt  DateTime?  // Next payment retry time (exponential backoff)
-  gracePeriodEnd  DateTime?  // 7 days after payment failure
-  
-  // Expiry & Downgrade
-  expiredAt       DateTime?  // When subscription expired
-  downgradedAt    DateTime?  // When downgraded to free after expiry
-  dataRetentionEnd DateTime? // Data retained for 30 days after expiry
-  
-  // Cancellation
-  cancellationReason String?  // user_request, payment_failure, admin_action, terms_violation
-  cancellationFeedback String? // User feedback on why they cancelled
-  
-  // Metadata
-  metadata       String?  // JSON: additional info (e.g., upgrade reason, promo code)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([tier])
-  @@index([nextPaymentAt])
-  @@index([gracePeriodEnd])
-}
-
-// --- Subscription Events (Lifecycle Tracking) ---
-
-model SubscriptionEvent {
-  id              String   @id @default(cuid())
-  tenantId        String
-  subscriptionId  String
-  eventType       String   // created, activated, renewed, payment_failed, payment_recovered, cancelled, resumed, expired, downgraded, plan_changed, grace_period_started, grace_period_ended
-  fromStatus      String?  // Previous subscription status
-  toStatus        String?  // New subscription status
-  fromTier        String?  // Previous tier (for plan changes)
-  toTier          String?  // New tier (for plan changes)
-  metadata        String?  // JSON: additional context (reason, payment details, etc.)
-  performedBy     String?  // User ID who triggered the event (null for system)
-  createdAt       DateTime @default(now())
-
-  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([subscriptionId])
-  @@index([eventType])
-  @@index([createdAt])
-}
-
-// --- Usage Events (Metering) ---
-
-model UsageEvent {
-  id          String   @id @default(cuid())
-  tenantId    String
-  eventType   String   // forecast_run, ai_query, sku_created, import_run, report_generated
-  metadata    String?  // JSON: context info (productId, modelType, etc.)
-  createdAt   DateTime @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([eventType])
-  @@index([createdAt])
-  @@index([tenantId, eventType, createdAt])
-}
-
-// --- Invoice ---
-
-model Invoice {
-  id              String   @id @default(cuid())
-  tenantId        String
-  subscriptionId  String?
-  stripeInvoiceId String? @unique
-  
-  // Invoice Details
-  number          String?  // INV-2025-001
-  status          String   @default("draft") // draft, open, paid, void, uncollectible
-  dueDate         DateTime?
-  paidAt          DateTime?
-  
-  // Amounts (BDT)
-  subtotal        Int      @default(0) // in BDT
-  discount        Int      @default(0) // in BDT
-  tax             Int      @default(0) // in BDT
-  total           Int      @default(0) // in BDT
-  currency        String   @default("BDT")
-  
-  // Line Items & Usage Summary
-  lineItems       String?  // JSON: [{description, amount, quantity, unit_amount}]
-  usageSummary    String?  // JSON: {forecast_runs, ai_queries, sku_count, period_start, period_end}
-  
-  // Billing Period
-  periodStart     DateTime?
-  periodEnd       DateTime?
-  
-  // Payment
-  paymentMethod   String?  // bkash, nagad, card, bank_transfer
-  paymentRef      String?  // External payment reference (bKash TrxID, etc.)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([dueDate])
-  @@index([createdAt])
-}
-
-// ============================================
-// Security & Operations Models
-// ============================================
-
-// --- Security Events ---
-
-model SecurityEvent {
-  id              String   @id @default(cuid())
-  type            String   // cross_tenant_access_attempt, admin_impersonation, rate_limit_exceeded, suspicious_query_pattern, permission_escalation_attempt, data_export, login_failure, token_expired
-  userId          String?
-  tenantId        String?
-  tokenTenantId   String?  // The tenant_id in the JWT
-  targetTenantId  String?  // The tenant_id they tried to access
-  ipAddress       String?
-  userAgent       String?
-  url             String?
-  requestMethod   String?
-  details         String?  // JSON: additional context
-  severity        String   @default("medium") // low, medium, high, critical
-  resolved        Boolean  @default(false)
-  resolvedBy      String?
-  resolvedAt      DateTime?
-  occurredAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-  @@index([type, occurredAt])
-  @@index([severity, resolved])
-  @@index([occurredAt])
-}
-
-// --- Tenant Backup ---
-
-model TenantBackup {
-  id          String   @id @default(cuid())
-  tenantId    String
-  path        String   // Storage path: backups/tenant-{id}/{timestamp}
-  sizeBytes   Int      @default(0)
-  tables      String?  // JSON: list of backed-up table names
-  status      String   @default("pending") // pending, in_progress, completed, failed
-  error       String?
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// --- Scheduled Job ---
-
-model ScheduledJob {
-  id          String   @id @default(cuid())
-  tenantId    String?
-  name        String   // auto_recalibration, weekly_backup, subscription_eval, usage_alert
-  type        String   // cron, one_time, recurring
-  schedule    String?  // Cron expression or interval description
-  status      String   @default("scheduled") // scheduled, running, completed, failed, cancelled
-  lastRunAt   DateTime?
-  nextRunAt   DateTime?
-  failCount   Int      @default(0)
-  lastError   String?
-  metadata    String?  // JSON: job-specific config
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([nextRunAt])
-  @@index([name])
+  id           String   @id @default(cuid())
+  fileName     String
+  fileType     String   @default("xlsx")
+  fileSize     Int
+  importType   String   @default("sales_wide") // the client's wide format
+  status       String   @default("pending") // pending|parsed|validated|completed|failed
+  rowCount     Int      @default(0)
+  skuCount     Int      @default(0)
+  saleCount    Int      @default(0)
+  purchaseCount Int     @default(0)
+  errorCount   Int      @default(0)
+  warnings     String?  // JSON string of warnings
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
 }
