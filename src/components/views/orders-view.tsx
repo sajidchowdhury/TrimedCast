@@ -9,6 +9,7 @@
 // ============================================
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
+import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
 import { usePagination } from '@/hooks/use-pagination';
 import { Pagination } from '@/components/dashboard/pagination';
@@ -32,6 +33,7 @@ import {
   Ship,
   Clock,
   Shield,
+  Search,
 } from 'lucide-react';
 
 interface Festival {
@@ -86,7 +88,13 @@ export function OrdersView() {
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [selectedFestivalId, setSelectedFestivalId] = useState<string>('');
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const orderPagination = usePagination(orders, 10);
+  const [orderSearch, setOrderSearch] = useState('');
+  const filteredOrders = orders.filter(o => {
+    const q = orderSearch.toLowerCase().trim();
+    if (!q) return true;
+    return o.skuCode.toLowerCase().includes(q) || o.productName.toLowerCase().includes(q);
+  });
+  const orderPagination = usePagination(filteredOrders, 10);
   const [loadingFestivals, setLoadingFestivals] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -215,12 +223,23 @@ export function OrdersView() {
       {/* Recommendations table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Per-SKU Order Plan</CardTitle>
-          <CardDescription>
-            {orders.length > 0
-              ? `${orders.length} SKUs · 95% service level · generated ${formatDate(orders[0].createdAt)}`
-              : 'No recommendations yet. Generate above.'}
-          </CardDescription>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Per-SKU Order Plan</CardTitle>
+              <CardDescription>
+                {orders.length > 0
+                  ? `${filteredOrders.length} of ${orders.length} SKUs · 95% service level · generated ${formatDate(orders[0].createdAt)}`
+                  : 'No recommendations yet. Generate above.'}
+              </CardDescription>
+            </div>
+            {orders.length > 0 && (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search SKU…" value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)} className="pl-8 w-40 sm:w-56 h-8 text-xs" />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loadingOrders ? (

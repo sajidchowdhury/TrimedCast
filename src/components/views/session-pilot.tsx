@@ -23,7 +23,7 @@ import { formatDate } from '@/lib/sessions/festival-calendar';
 import {
   CalendarClock, Package, ShoppingCart, TrendingUp, Plane, Ship,
   Calculator, AlertCircle, Sparkles, Loader2, CheckCircle2, ArrowRight,
-  Clock, Target, AlertTriangle, DollarSign,
+  Clock, Target, AlertTriangle, DollarSign, Search,
 } from 'lucide-react';
 
 interface SessionInfo {
@@ -113,7 +113,15 @@ export function SessionPilot() {
   const [data, setData] = useState<SessionDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const rowsPagination = usePagination(data?.rows ?? [], 10);
+  const [sessionSearch, setSessionSearch] = useState('');
+  const rowsPagination = usePagination(
+    (data?.rows ?? []).filter(r => {
+      const q = sessionSearch.toLowerCase().trim();
+      if (!q) return true;
+      return r.skuCode.toLowerCase().includes(q) || r.productName.toLowerCase().includes(q);
+    }),
+    10,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -370,10 +378,24 @@ export function SessionPilot() {
           {/* Full per-SKU pilot table */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Per-SKU Session Plan — All 6 Capabilities</CardTitle>
-              <CardDescription>
-                {rows.length} SKUs · forecast + order qty + trigger date + freight mode + landed cost
-              </CardDescription>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Per-SKU Session Plan — All 6 Capabilities</CardTitle>
+                  <CardDescription>
+                    {rowsPagination.total} of {rows.length} SKUs · forecast + order qty + trigger date + freight mode + landed cost
+                  </CardDescription>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search SKU…"
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 h-8 w-40 sm:w-56 text-xs rounded-md border border-input bg-transparent focus:bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">

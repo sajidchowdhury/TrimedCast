@@ -8,6 +8,7 @@
 // ============================================
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
+import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
 import { usePagination } from '@/hooks/use-pagination';
 import { Pagination } from '@/components/dashboard/pagination';
@@ -26,6 +27,7 @@ import {
   Target,
   AlertCircle,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 
 interface Festival {
@@ -86,7 +88,13 @@ export function ForecastView() {
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [selectedFestivalId, setSelectedFestivalId] = useState<string>('');
   const [forecasts, setForecasts] = useState<ForecastRow[]>([]);
-  const forecastPagination = usePagination(forecasts, 10);
+  const [forecastSearch, setForecastSearch] = useState('');
+  const filteredForecasts = forecasts.filter(f => {
+    const q = forecastSearch.toLowerCase().trim();
+    if (!q) return true;
+    return f.skuCode.toLowerCase().includes(q) || f.productName.toLowerCase().includes(q);
+  });
+  const forecastPagination = usePagination(filteredForecasts, 10);
   const [loadingFestivals, setLoadingFestivals] = useState(true);
   const [loadingForecasts, setLoadingForecasts] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -253,12 +261,23 @@ export function ForecastView() {
       {/* Forecast table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Per-SKU Forecast</CardTitle>
-          <CardDescription>
-            {forecasts.length > 0
-              ? `${forecasts.length} SKUs · generated ${formatDate(forecasts[0].generatedAt)}`
-              : 'No forecasts yet. Generate one above.'}
-          </CardDescription>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Per-SKU Forecast</CardTitle>
+              <CardDescription>
+                {forecasts.length > 0
+                  ? `${filteredForecasts.length} of ${forecasts.length} SKUs · generated ${formatDate(forecasts[0].generatedAt)}`
+                  : 'No forecasts yet. Generate one above.'}
+              </CardDescription>
+            </div>
+            {forecasts.length > 0 && (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search SKU…" value={forecastSearch}
+                  onChange={(e) => setForecastSearch(e.target.value)} className="pl-8 w-40 sm:w-56 h-8 text-xs" />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loadingForecasts ? (

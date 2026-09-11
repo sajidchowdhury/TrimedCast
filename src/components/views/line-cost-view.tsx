@@ -9,6 +9,7 @@
 // ============================================
 
 import { useEffect, useState, Fragment } from 'react';
+import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
 import { usePagination } from '@/hooks/use-pagination';
 import { Pagination } from '@/components/dashboard/pagination';
@@ -18,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import {
-  Calculator, ChevronRight, AlertCircle, PieChart, TrendingUp,
+  Calculator, ChevronRight, AlertCircle, PieChart, TrendingUp, Search,
 } from 'lucide-react';
 
 // Re-use the Comparison type from the freight view (same API)
@@ -85,7 +86,13 @@ export function LineCostView() {
   const dataVersion = useAppStore((s) => s.dataVersion);
   const setView = useAppStore((s) => s.setView);
   const [data, setData] = useState<LineCostData | null>(null);
-  const lineCostPagination = usePagination(data?.comparisons ?? [], 10);
+  const [lcSearch, setLcSearch] = useState('');
+  const filteredComparisons = (data?.comparisons ?? []).filter(c => {
+    const q = lcSearch.toLowerCase().trim();
+    if (!q) return true;
+    return c.skuCode.toLowerCase().includes(q) || c.productName.toLowerCase().includes(q);
+  });
+  const lineCostPagination = usePagination(filteredComparisons, 10);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -187,8 +194,17 @@ export function LineCostView() {
       {/* Per-SKU table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Per-SKU Landed Cost & Margin</CardTitle>
-          <CardDescription>{data.count} SKUs · expand any row to see the full cost breakdown donut</CardDescription>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Per-SKU Landed Cost & Margin</CardTitle>
+              <CardDescription>{filteredComparisons.length} of {data.count} SKUs · expand any row to see the full cost breakdown donut</CardDescription>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search SKU…" value={lcSearch}
+                onChange={(e) => setLcSearch(e.target.value)} className="pl-8 w-40 sm:w-56 h-8 text-xs" />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
