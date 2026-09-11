@@ -21,6 +21,7 @@ import {
   Calculator,
   Database,
   Rocket,
+  CalendarPlus,
   Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   freight: { title: 'Air vs Sea Freight', subtitle: 'Shipping-mode decision per SKU' },
   'line-cost': { title: 'Line Cost Analysis', subtitle: 'Landed cost, customs duty & margin' },
   pilot: { title: 'Pilot Review & Handoff', subtitle: 'Results, deferred scope & quick reference guide' },
+  events: { title: 'Custom Events', subtitle: 'Create your own festival or event with custom demand effects' },
   data: { title: 'Data', subtitle: 'Uploaded products, sales & purchases' },
 };
 
@@ -44,6 +46,7 @@ const MOBILE_NAV = [
   { key: 'freight' as ViewKey, label: 'Air vs Sea', icon: Plane },
   { key: 'line-cost' as ViewKey, label: 'Line Cost', icon: Calculator },
   { key: 'pilot' as ViewKey, label: 'Pilot Review', icon: Rocket },
+  { key: 'events' as ViewKey, label: 'Custom Events', icon: CalendarPlus },
   { key: 'data' as ViewKey, label: 'Data', icon: Database },
 ];
 

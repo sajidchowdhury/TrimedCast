@@ -16,6 +16,7 @@ import { OrdersView } from '@/components/views/orders-view';
 import { FreightView } from '@/components/views/freight-view';
 import { LineCostView } from '@/components/views/line-cost-view';
 import { PilotReviewView } from '@/components/views/pilot-review-view';
+import { CustomEventsView } from '@/components/views/custom-events-view';
 import { DataView } from '@/components/views/data-view';
 
 export function AppShell() {
@@ -34,6 +35,7 @@ export function AppShell() {
           {view === 'freight' && <FreightView />}
           {view === 'line-cost' && <LineCostView />}
           {view === 'pilot' && <PilotReviewView />}
+          {view === 'events' && <CustomEventsView />}
           {view === 'data' && <DataView />}
         </main>
         <footer className="border-t bg-background px-6 py-3 text-xs text-muted-foreground">

@@ -15,6 +15,7 @@ import {
   Calculator,
   Database,
   Rocket,
+  CalendarPlus,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
@@ -76,6 +77,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Rocket,
     phase: 'Phase 6',
     description: 'Results, handoff & deferred scope',
+  },
+  {
+    key: 'events',
+    label: 'Custom Events',
+    icon: CalendarPlus,
+    phase: 'Session 1',
+    description: 'Create your own festival/event',
   },
   {
     key: 'data',
