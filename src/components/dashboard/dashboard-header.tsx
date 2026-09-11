@@ -20,7 +20,6 @@ import {
   Plane,
   Calculator,
   Database,
-  Rocket,
   CalendarPlus,
   Settings as SettingsIcon,
   Menu,
@@ -34,7 +33,6 @@ const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   orders: { title: 'Order Recommendations', subtitle: 'How much to order & when to place the PO' },
   freight: { title: 'Air vs Sea Freight', subtitle: 'Shipping-mode decision per SKU' },
   'line-cost': { title: 'Line Cost Analysis', subtitle: 'Landed cost, customs duty & margin' },
-  pilot: { title: 'Pilot Review & Handoff', subtitle: 'Results, deferred scope & quick reference guide' },
   events: { title: 'Custom Events', subtitle: 'Create your own festival or event with custom demand effects' },
   settings: { title: 'Settings', subtitle: 'Lead-time, holidays, EOQ params — all editable & saved to DB' },
   data: { title: 'Products & Sales', subtitle: 'View, edit prices, delete SKUs — server-side paginated' },
@@ -49,7 +47,6 @@ const MOBILE_NAV = [
   { key: 'upload' as ViewKey, label: 'Upload & Manage', icon: Upload },
   { key: 'data' as ViewKey, label: 'Products & Sales', icon: Database },
   { key: 'events' as ViewKey, label: 'Custom Events', icon: CalendarPlus },
-  { key: 'pilot' as ViewKey, label: 'Pilot Review', icon: Rocket },
   { key: 'settings' as ViewKey, label: 'Settings', icon: SettingsIcon },
 ];
 

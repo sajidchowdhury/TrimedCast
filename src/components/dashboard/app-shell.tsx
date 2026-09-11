@@ -16,7 +16,6 @@ import { ForecastView } from '@/components/views/forecast-view';
 import { OrdersView } from '@/components/views/orders-view';
 import { FreightView } from '@/components/views/freight-view';
 import { LineCostView } from '@/components/views/line-cost-view';
-import { PilotReviewView } from '@/components/views/pilot-review-view';
 import { CustomEventsView } from '@/components/views/custom-events-view';
 import { SettingsView } from '@/components/views/settings-view';
 import { DataView } from '@/components/views/data-view';
@@ -36,7 +35,6 @@ export function AppShell() {
           {view === 'orders' && <OrdersView />}
           {view === 'freight' && <FreightView />}
           {view === 'line-cost' && <LineCostView />}
-          {view === 'pilot' && <PilotReviewView />}
           {view === 'events' && <CustomEventsView />}
           {view === 'settings' && <SettingsView />}
           {view === 'data' && <DataView />}

@@ -1,8 +1,8 @@
 // ============================================
-// TrimedCast LEAN Schema — client's 6 requirements only
+// TrimedCast LEAN Schema — SaaS auth + client's 6 requirements
 // (a) Excel upload  (b) session forecast  (c) order qty
 // (d) order timing  (e) air vs sea        (f) line cost
-// No multi-tenancy, no billing, no RBAC, no audit log (deferred).
+// + User auth (email + phone + business name + password)
 // ============================================
 
 generator client {
@@ -12,6 +12,33 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+// --- User (signup with email + phone + business name + password) ---
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String   @unique
+  businessName String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions     Session[]
+}
+
+// --- Session (HTTP-only cookie-based auth) ---
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
 }
 
 // --- Product Catalog (from client's Excel: Pic No + Item) ---

@@ -13,11 +13,12 @@ import {
   Plane,
   Calculator,
   Database,
-  Rocket,
   CalendarPlus,
   Settings as SettingsIcon,
+  LogOut,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -54,7 +55,6 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Admin',
     items: [
       { key: 'events', label: 'Custom Events', icon: CalendarPlus, description: 'Create your own festival/event' },
-      { key: 'pilot', label: 'Pilot Review', icon: Rocket, description: 'Results, handoff & deferred scope' },
       { key: 'settings', label: 'Settings', icon: SettingsIcon, description: 'Lead-time, holidays, EOQ params' },
     ],
   },
@@ -63,6 +63,7 @@ const NAV_SECTIONS: NavSection[] = [
 export function SidebarNav() {
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
+  const { user, logout } = useAuthStore();
 
   return (
     <aside className="hidden md:flex w-64 flex-col border-r bg-background shrink-0">
@@ -113,14 +114,22 @@ export function SidebarNav() {
       </nav>
 
       <div className="border-t p-4">
-        <div className="rounded-lg bg-muted/50 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs font-medium">Single-tenant mode</span>
+        <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+              {user?.businessName?.charAt(0).toUpperCase() ?? 'U'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate">{user?.businessName ?? 'User'}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
+            </div>
           </div>
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Billing, multi-tenancy & RBAC deferred per lean scope.
-          </p>
+          <button
+            onClick={() => logout()}
+            className="flex w-full items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Logout
+          </button>
         </div>
       </div>
     </aside>

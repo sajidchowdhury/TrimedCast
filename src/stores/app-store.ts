@@ -13,7 +13,6 @@ export type ViewKey =
   | 'orders'
   | 'freight'
   | 'line-cost'
-  | 'pilot'
   | 'events'
   | 'settings'
   | 'data';
