@@ -1,9 +1,10 @@
 // ============================================
 // TrimedCast LEAN — /api/products
-// List products with their total sales + last purchase.
+// GET: list products with their total sales + last purchase.
+// DELETE: bulk-delete multiple SKUs (cascade-deletes related records).
 // ============================================
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -47,4 +48,44 @@ export async function GET() {
   );
 
   return NextResponse.json({ products: enriched });
+}
+
+// --- Bulk-delete multiple SKUs ---
+// Body: { "skuCodes": ["Pic 10", "Pic 11", ...] }
+export async function DELETE(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const skuCodes: string[] = Array.isArray(body.skuCodes) ? body.skuCodes : [];
+
+    if (skuCodes.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'skuCodes array is required (e.g. ["Pic 10", "Pic 11"])' },
+        { status: 400 },
+      );
+    }
+
+    // Use a transaction to cascade-delete all related records for every SKU
+    const result = await db.$transaction([
+      db.sale.deleteMany({ where: { skuCode: { in: skuCodes } } }),
+      db.purchase.deleteMany({ where: { skuCode: { in: skuCodes } } }),
+      db.inventory.deleteMany({ where: { skuCode: { in: skuCodes } } }),
+      db.forecast.deleteMany({ where: { skuCode: { in: skuCodes } } }),
+      db.recommendedOrder.deleteMany({ where: { skuCode: { in: skuCodes } } }),
+      db.product.deleteMany({ where: { skuCode: { in: skuCodes } } }),
+    ]);
+
+    // result[5].count is the number of products actually deleted
+    const deletedCount = result[5].count;
+
+    return NextResponse.json({
+      success: true,
+      deletedCount,
+      requestedCount: skuCodes.length,
+      notFound: deletedCount < skuCodes.length ? skuCodes.length - deletedCount : 0,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[products bulk DELETE] error:', err);
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
+  }
 }

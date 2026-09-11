@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Search, Package, Plane, Ship, Upload, Check, Loader2 } from 'lucide-react';
+import { Search, Package, Plane, Ship, Upload, Check, Loader2, Trash2, X } from 'lucide-react';
 
 interface ProductRow {
   id: string;
@@ -41,6 +41,9 @@ export function DataView() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deletingSingle, setDeletingSingle] = useState<string | null>(null);
+  const [deletingBulk, setDeletingBulk] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,12 +52,9 @@ export function DataView() {
       try {
         const res = await fetch('/api/products');
         const json = await res.json();
-        if (!cancelled) setProducts(json.products || []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+        if (!cancelled) { setProducts(json.products || []); setSelected(new Set()); }
+      } catch (e) { console.error(e); }
+      finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
   }, [dataVersion]);
@@ -72,24 +72,81 @@ export function DataView() {
         toast.error('Update failed', { description: json.error || 'Unknown error' });
         return;
       }
-      // Update local state
-      setProducts((prev) => prev.map((p) =>
-        p.skuCode === sku ? { ...p, [field]: value } : p,
-      ));
+      setProducts((prev) => prev.map((p) => p.skuCode === sku ? { ...p, [field]: value } : p));
       bumpData();
       toast.success('Price updated', { description: `${sku}: ${field} = ৳${value}` });
     } catch (e) {
       toast.error('Update failed', { description: e instanceof Error ? e.message : 'Unknown error' });
-    } finally {
-      setSaving(null);
-    }
+    } finally { setSaving(null); }
   }, [bumpData]);
+
+  const deleteSingle = useCallback(async (sku: string, name: string) => {
+    if (!confirm(`Delete "${sku}" (${name})?\n\nThis will also delete ALL its sales, purchases, inventory, forecasts, and order recommendations.\n\nThis cannot be undone.`)) return;
+    setDeletingSingle(sku);
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error('Delete failed', { description: json.error || 'Unknown error' });
+        return;
+      }
+      setProducts((prev) => prev.filter((p) => p.skuCode !== sku));
+      setSelected((prev) => { const n = new Set(prev); n.delete(sku); return n; });
+      bumpData();
+      toast.success('SKU deleted', { description: `${sku} — ${name}` });
+    } catch (e) {
+      toast.error('Delete failed', { description: e instanceof Error ? e.message : 'Unknown error' });
+    } finally { setDeletingSingle(null); }
+  }, [bumpData]);
+
+  const deleteBulk = useCallback(async () => {
+    const count = selected.size;
+    if (count === 0) return;
+    if (!confirm(`Delete ${count} SKU${count > 1 ? 's' : ''}?\n\nThis will also delete ALL their sales, purchases, inventory, forecasts, and order recommendations.\n\nThis cannot be undone.`)) return;
+    setDeletingBulk(true);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skuCodes: Array.from(selected) }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error('Bulk delete failed', { description: json.error || 'Unknown error' });
+        return;
+      }
+      setProducts((prev) => prev.filter((p) => !selected.has(p.skuCode)));
+      setSelected(new Set());
+      bumpData();
+      toast.success('SKUs deleted', { description: `${json.deletedCount} SKU${json.deletedCount > 1 ? 's' : ''} deleted${json.notFound > 0 ? ` (${json.notFound} not found)` : ''}` });
+    } catch (e) {
+      toast.error('Bulk delete failed', { description: e instanceof Error ? e.message : 'Unknown error' });
+    } finally { setDeletingBulk(false); }
+  }, [selected, bumpData]);
+
+  const toggleSelect = (sku: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(sku)) n.delete(sku); else n.add(sku);
+      return n;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      if (prev.size === filtered.length) return new Set();
+      return new Set(filtered.map((p) => p.skuCode));
+    });
+  };
 
   const filtered = products.filter((p) => {
     const q = query.toLowerCase().trim();
     if (!q) return true;
     return p.skuCode.toLowerCase().includes(q) || p.productName.toLowerCase().includes(q);
   });
+
+  const allSelected = filtered.length > 0 && selected.size === filtered.length;
+  const someSelected = selected.size > 0 && !allSelected;
 
   return (
     <div className="space-y-4">
@@ -138,10 +195,37 @@ export function DataView() {
       ) : (
         <Card>
           <CardContent className="p-0">
+            {/* Bulk-action bar — appears when rows are selected */}
+            {selected.size > 0 && (
+              <div className="flex items-center justify-between gap-3 border-b bg-primary/5 px-4 py-2.5">
+                <span className="text-sm font-medium">
+                  {selected.size} SKU{selected.size > 1 ? 's' : ''} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Clear
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={deleteBulk} disabled={deletingBulk}>
+                    {deletingBulk ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                    Delete {selected.size > 1 ? `${selected.size} SKUs` : 'SKU'}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
                   <tr>
+                    <th className="text-left font-medium px-4 py-2.5 w-10">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                        title={allSelected ? 'Deselect all' : 'Select all'}
+                      />
+                    </th>
                     <th className="text-left font-medium px-4 py-2.5">SKU (Pic No)</th>
                     <th className="text-left font-medium px-4 py-2.5">Item</th>
                     <th className="text-left font-medium px-4 py-2.5">Color / Details</th>
@@ -151,55 +235,84 @@ export function DataView() {
                     <th className="text-right font-medium px-4 py-2.5">Last Order</th>
                     <th className="text-center font-medium px-4 py-2.5">Mode</th>
                     <th className="text-right font-medium px-4 py-2.5">Lead (d)</th>
+                    <th className="text-center font-medium px-4 py-2.5 w-12">Delete</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filtered.map((p) => (
-                    <tr key={p.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-2.5 font-mono text-xs font-medium">{p.skuCode}</td>
-                      <td className="px-4 py-2.5 max-w-xs">
-                        <div className="truncate">{p.productName}</div>
-                      </td>
-                      <td className="px-4 py-2.5 max-w-xs">
-                        <div className="truncate text-xs text-muted-foreground">{p.colorDetails || '—'}</div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <PriceInput
-                          value={p.unitCostBdt}
-                          onSave={(v) => updatePrice(p.skuCode, 'unitCostBdt', v)}
-                          disabled={saving === p.skuCode}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <PriceInput
-                          value={p.sellingPrice}
-                          onSave={(v) => updatePrice(p.skuCode, 'sellingPrice', v)}
-                          disabled={saving === p.skuCode}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">
-                        {p.totalSales.toLocaleString()}
-                        <div className="text-[10px] text-muted-foreground">{p.salesRows} mo</div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">
-                        {p.lastOrderQty ?? '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        {p.lastShipmentMode ? (
-                          <Badge variant="outline" className="text-[10px]">
-                            {p.lastShipmentMode === 'air' ? (
-                              <><Plane className="h-3 w-3 mr-1" />Air</>
+                  {filtered.map((p) => {
+                    const isSelected = selected.has(p.skuCode);
+                    return (
+                      <tr key={p.id} className={`hover:bg-muted/30 ${isSelected ? 'bg-primary/5' : ''}`}>
+                        <td className="px-4 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(p.skuCode)}
+                            className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                            title={`Select ${p.skuCode}`}
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs font-medium">{p.skuCode}</td>
+                        <td className="px-4 py-2.5 max-w-xs">
+                          <div className="truncate">{p.productName}</div>
+                        </td>
+                        <td className="px-4 py-2.5 max-w-xs">
+                          <div className="truncate text-xs text-muted-foreground">{p.colorDetails || '—'}</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <PriceInput
+                            value={p.unitCostBdt}
+                            onSave={(v) => updatePrice(p.skuCode, 'unitCostBdt', v)}
+                            disabled={saving === p.skuCode}
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <PriceInput
+                            value={p.sellingPrice}
+                            onSave={(v) => updatePrice(p.skuCode, 'sellingPrice', v)}
+                            disabled={saving === p.skuCode}
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">
+                          {p.totalSales.toLocaleString()}
+                          <div className="text-[10px] text-muted-foreground">{p.salesRows} mo</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">
+                          {p.lastOrderQty ?? '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          {p.lastShipmentMode ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              {p.lastShipmentMode === 'air' ? (
+                                <><Plane className="h-3 w-3 mr-1" />Air</>
+                              ) : (
+                                <><Ship className="h-3 w-3 mr-1" />Sea</>
+                              )}
+                            </Badge>
+                          ) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-xs">
+                          {p.lastLeadTimeDays ?? '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => deleteSingle(p.skuCode, p.productName)}
+                            disabled={deletingSingle === p.skuCode}
+                            title={`Delete ${p.skuCode}`}
+                          >
+                            {deletingSingle === p.skuCode ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <><Ship className="h-3 w-3 mr-1" />Sea</>
+                              <Trash2 className="h-3.5 w-3.5" />
                             )}
-                          </Badge>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-xs">
-                        {p.lastLeadTimeDays ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
