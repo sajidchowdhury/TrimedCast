@@ -23,6 +23,7 @@ import {
   Rocket,
   CalendarPlus,
   FolderOpen,
+  Settings as SettingsIcon,
   Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,20 +38,22 @@ const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   'line-cost': { title: 'Line Cost Analysis', subtitle: 'Landed cost, customs duty & margin' },
   pilot: { title: 'Pilot Review & Handoff', subtitle: 'Results, deferred scope & quick reference guide' },
   events: { title: 'Custom Events', subtitle: 'Create your own festival or event with custom demand effects' },
-  data: { title: 'Data', subtitle: 'Uploaded products, sales & purchases' },
+  settings: { title: 'Settings', subtitle: 'Lead-time, holidays, EOQ params — all editable & saved to DB' },
+  data: { title: 'Products & Sales', subtitle: 'View, edit prices, delete SKUs' },
 };
 
 const MOBILE_NAV = [
   { key: 'dashboard' as ViewKey, label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'upload' as ViewKey, label: 'Upload Excel', icon: Upload },
-  { key: 'manage-uploads' as ViewKey, label: 'Manage Uploads', icon: FolderOpen },
   { key: 'forecast' as ViewKey, label: 'Forecast', icon: TrendingUp },
   { key: 'orders' as ViewKey, label: 'Order Recommendations', icon: ShoppingCart },
   { key: 'freight' as ViewKey, label: 'Air vs Sea', icon: Plane },
   { key: 'line-cost' as ViewKey, label: 'Line Cost', icon: Calculator },
-  { key: 'pilot' as ViewKey, label: 'Pilot Review', icon: Rocket },
+  { key: 'upload' as ViewKey, label: 'Upload Excel', icon: Upload },
+  { key: 'manage-uploads' as ViewKey, label: 'Manage Uploads', icon: FolderOpen },
+  { key: 'data' as ViewKey, label: 'Products & Sales', icon: Database },
   { key: 'events' as ViewKey, label: 'Custom Events', icon: CalendarPlus },
-  { key: 'data' as ViewKey, label: 'Data', icon: Database },
+  { key: 'pilot' as ViewKey, label: 'Pilot Review', icon: Rocket },
+  { key: 'settings' as ViewKey, label: 'Settings', icon: SettingsIcon },
 ];
 
 export function DashboardHeader() {

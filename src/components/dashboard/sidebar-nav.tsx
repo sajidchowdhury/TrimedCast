@@ -1,9 +1,8 @@
 'use client';
 
 // ============================================
-// TrimedCast LEAN — Sidebar navigation
-// Only the 6 core capabilities the client asked for, plus a Data view.
-// NO billing, NO users, NO settings, NO audit log (deferred scope).
+// TrimedCast LEAN — Sidebar navigation (organized into sections)
+// Sections: Planning, Data, Admin
 // ============================================
 
 import {
@@ -17,6 +16,7 @@ import {
   Rocket,
   CalendarPlus,
   FolderOpen,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
@@ -25,80 +25,40 @@ interface NavItem {
   key: ViewKey;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  phase: string;
   description: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
   {
-    key: 'dashboard',
-    label: 'Dashboard',
-    icon: LayoutDashboard,
-    phase: 'Phase 5',
-    description: 'Unified session pilot',
+    title: 'Planning',
+    items: [
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'Unified session pilot' },
+      { key: 'forecast', label: 'Forecast', icon: TrendingUp, description: 'Session-wise demand prediction' },
+      { key: 'orders', label: 'Order Recommendations', icon: ShoppingCart, description: 'How much & when to order' },
+      { key: 'freight', label: 'Air vs Sea', icon: Plane, description: 'Freight mode decision' },
+      { key: 'line-cost', label: 'Line Cost', icon: Calculator, description: 'Landed cost & margin analysis' },
+    ],
   },
   {
-    key: 'upload',
-    label: 'Upload Excel',
-    icon: Upload,
-    phase: 'Phase 1',
-    description: 'Import monthly sales (wide format)',
+    title: 'Data',
+    items: [
+      { key: 'upload', label: 'Upload Excel', icon: Upload, description: 'Import monthly sales (wide format)' },
+      { key: 'manage-uploads', label: 'Manage Uploads', icon: FolderOpen, description: 'Year-wise upload list + delete' },
+      { key: 'data', label: 'Products & Sales', icon: Database, description: 'View + edit + delete products' },
+    ],
   },
   {
-    key: 'manage-uploads',
-    label: 'Manage Uploads',
-    icon: FolderOpen,
-    phase: 'Phase 1',
-    description: 'Year-wise upload list + delete',
-  },
-  {
-    key: 'forecast',
-    label: 'Forecast',
-    icon: TrendingUp,
-    phase: 'Phase 2',
-    description: 'Session-wise demand prediction',
-  },
-  {
-    key: 'orders',
-    label: 'Order Recommendations',
-    icon: ShoppingCart,
-    phase: 'Phase 3',
-    description: 'How much & when to order',
-  },
-  {
-    key: 'freight',
-    label: 'Air vs Sea',
-    icon: Plane,
-    phase: 'Phase 4',
-    description: 'Freight mode decision',
-  },
-  {
-    key: 'line-cost',
-    label: 'Line Cost',
-    icon: Calculator,
-    phase: 'Phase 4',
-    description: 'Landed cost & margin analysis',
-  },
-  {
-    key: 'pilot',
-    label: 'Pilot Review',
-    icon: Rocket,
-    phase: 'Phase 6',
-    description: 'Results, handoff & deferred scope',
-  },
-  {
-    key: 'events',
-    label: 'Custom Events',
-    icon: CalendarPlus,
-    phase: 'Session 1',
-    description: 'Create your own festival/event',
-  },
-  {
-    key: 'data',
-    label: 'Data',
-    icon: Database,
-    phase: 'Phase 1',
-    description: 'Uploaded products & sales',
+    title: 'Admin',
+    items: [
+      { key: 'events', label: 'Custom Events', icon: CalendarPlus, description: 'Create your own festival/event' },
+      { key: 'pilot', label: 'Pilot Review', icon: Rocket, description: 'Results, handoff & deferred scope' },
+      { key: 'settings', label: 'Settings', icon: SettingsIcon, description: 'Lead-time, holidays, EOQ params' },
+    ],
   },
 ];
 
@@ -118,38 +78,40 @@ export function SidebarNav() {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const active = view === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => setView(item.key)}
-              className={cn(
-                'group flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
-                active
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-accent hover:text-accent-foreground text-foreground',
-              )}
-            >
-              <Icon className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{item.label}</span>
-                </div>
-                <span
-                  className={cn(
-                    'text-[11px] leading-tight',
-                    active ? 'text-primary-foreground/70' : 'text-muted-foreground',
-                  )}
-                >
-                  {item.description}
-                </span>
-              </div>
-            </button>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.title}>
+            <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {section.title}
+            </div>
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const active = view === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setView(item.key)}
+                    className={cn(
+                      'group flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                      active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-accent hover:text-accent-foreground text-foreground',
+                    )}
+                  >
+                    <Icon className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-medium">{item.label}</span>
+                      <span className={cn('text-[11px] leading-tight', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                        {item.description}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       <div className="border-t p-4">

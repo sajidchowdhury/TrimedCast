@@ -16,6 +16,7 @@ export type ViewKey =
   | 'line-cost'
   | 'pilot'
   | 'events'
+  | 'settings'
   | 'data';
 
 export interface ImportSummary {

@@ -113,7 +113,33 @@ model ForecastSetting {
   // CNY window
   cnyStart                String   @default("2027-01-20")
   cnyEnd                  String   @default("2027-02-20")
+  // Weekend info (editable — varies per client's suppliers)
+  chinaWorkingDays        String   @default("Mon-Sat")
+  chinaOffDay             String   @default("Sunday")
+  bdWorkingDays           String   @default("Sun-Thu")
+  bdOffDays               String   @default("Friday + Saturday")
+  weeklyAdminDelayDays    Int      @default(2)
+  // Importer recommendations (JSON array of strings)
+  recommendationsJson     String   @default("[]")
   updatedAt               DateTime @updatedAt
+}
+
+// --- Shipping calendar holidays (editable per client) ---
+model Holiday {
+  id            String   @id @default(cuid())
+  name          String
+  country       String   @default("china") // china | bangladesh
+  type          String   @default("factory_shutdown") // factory_shutdown | customs_closure | port_closure | bank_holiday
+  startISO      String   // yyyy-mm-dd
+  endISO        String   // yyyy-mm-dd
+  durationDays  Int
+  impact        String   @default("")
+  affects       String   @default("manufacturing") // manufacturing | shipment | customs | all
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([country])
+  @@index([startISO])
 }
 
 // --- Forecast results (Phase 2) — per-SKU per-session demand forecast ---

@@ -23,24 +23,20 @@ interface HolidayEvent {
   affects: string;
 }
 
-interface Considerations {
-  chinaHolidays: HolidayEvent[];
-  bdHolidays: HolidayEvent[];
-  weekendInfo: {
-    china: { workingDays: string; offDay?: string };
-    bangladesh: { workingDays: string; offDays?: string };
-    overlap: string;
-    weeklyAdminDelayDays: number;
+interface ShippingCalendarData {
+  leadTime: {
+    manufacturing: number; shipmentSea: number; shipmentAir: number;
+    customsSea: number; customsAir: number; internal: number;
+    totalSea: number; totalAir: number;
+  };
+  weekend: {
+    chinaWorkingDays: string; chinaOffDay: string;
+    bdWorkingDays: string; bdOffDays: string;
+    weeklyAdminDelayDays: number; overlap: string;
   };
   recommendations: string[];
-}
-
-interface ShippingCalendarData {
-  considerations: Considerations;
-  leadTimeDecomposition: {
-    sea: { manufacturing: number; shipment: number; customs: number; internal: number; total: number };
-    air: { manufacturing: number; shipment: number; customs: number; internal: number; total: number };
-  };
+  chinaHolidays: HolidayEvent[];
+  bdHolidays: HolidayEvent[];
 }
 
 const COUNTRY_FLAGS: Record<string, string> = { china: '🇨🇳', bangladesh: '🇧🇩' };
@@ -76,9 +72,9 @@ export function ShippingConsiderations() {
     return <Skeleton className="h-64 w-full" />;
   }
 
-  const { considerations: c, leadTimeDecomposition: lt } = data;
-  const sea = lt.sea;
-  const air = lt.air;
+  const { leadTime: lt, weekend: w, recommendations: recs, chinaHolidays, bdHolidays } = data;
+  const sea = { manufacturing: lt.manufacturing, shipment: lt.shipmentSea, customs: lt.customsSea, internal: lt.internal, total: lt.totalSea };
+  const air = { manufacturing: lt.manufacturing, shipment: lt.shipmentAir, customs: lt.customsAir, internal: lt.internal, total: lt.totalAir };
 
   return (
     <div className="space-y-4">
@@ -153,7 +149,7 @@ export function ShippingConsiderations() {
               <Globe className="h-3.5 w-3.5" /> {COUNTRY_FLAGS.china} China Holidays (affect manufacturing)
             </h4>
             <div className="space-y-2">
-              {c.chinaHolidays.map((h, i) => (
+              {chinaHolidays.map((h, i) => (
                 <HolidayRow key={i} h={h} />
               ))}
             </div>
@@ -165,7 +161,7 @@ export function ShippingConsiderations() {
               <Globe className="h-3.5 w-3.5" /> {COUNTRY_FLAGS.bangladesh} Bangladesh Holidays (affect customs + delivery)
             </h4>
             <div className="space-y-2">
-              {c.bdHolidays.map((h, i) => (
+              {bdHolidays.map((h, i) => (
                 <HolidayRow key={i} h={h} />
               ))}
             </div>
@@ -186,25 +182,25 @@ export function ShippingConsiderations() {
             <div className="rounded-lg border p-3 text-center">
               <div className="text-2xl mb-1">🇨🇳</div>
               <div className="text-xs font-medium">China</div>
-              <div className="text-xs text-muted-foreground">Works {c.weekendInfo.china.workingDays}</div>
-              <div className="text-xs text-red-600">Off: {c.weekendInfo.china.offDay}</div>
+              <div className="text-xs text-muted-foreground">Works {w.chinaWorkingDays}</div>
+              <div className="text-xs text-red-600">Off: {w.chinaOffDay}</div>
             </div>
             <div className="rounded-lg border p-3 text-center">
               <div className="text-2xl mb-1">🇧🇩</div>
               <div className="text-xs font-medium">Bangladesh</div>
-              <div className="text-xs text-muted-foreground">Works {c.weekendInfo.bangladesh.workingDays}</div>
-              <div className="text-xs text-red-600">Off: {c.weekendInfo.bangladesh.offDays}</div>
+              <div className="text-xs text-muted-foreground">Works {w.bdWorkingDays}</div>
+              <div className="text-xs text-red-600">Off: {w.bdOffDays}</div>
             </div>
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-center">
               <div className="text-2xl mb-1">📅</div>
               <div className="text-xs font-medium">Overlap</div>
-              <div className="text-xs text-muted-foreground">{c.weekendInfo.overlap}</div>
-              <div className="text-xs text-amber-600">+{c.weekendInfo.weeklyAdminDelayDays}d/week admin delay</div>
+              <div className="text-xs text-muted-foreground">{w.overlap}</div>
+              <div className="text-xs text-amber-600">+{w.weeklyAdminDelayDays}d/week admin delay</div>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Banking (L/C opening), customs paperwork, and supplier communication can only happen on
-            overlapping working days. This adds ~{c.weekendInfo.weeklyAdminDelayDays} days per week of transit
+            overlapping working days. This adds ~{w.weeklyAdminDelayDays} days per week of transit
             for admin tasks.
           </p>
         </CardContent>
@@ -221,7 +217,7 @@ export function ShippingConsiderations() {
         </CardHeader>
         <CardContent>
           <ul className="space-y-2">
-            {c.recommendations.map((rec, i) => (
+            {recs.map((rec, i) => (
               <li key={i} className="flex items-start gap-2 text-sm">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold shrink-0 mt-0.5">
                   {i + 1}
