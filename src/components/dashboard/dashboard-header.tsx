@@ -22,7 +22,6 @@ import {
   Database,
   Rocket,
   CalendarPlus,
-  FolderOpen,
   Settings as SettingsIcon,
   Menu,
 } from 'lucide-react';
@@ -30,8 +29,7 @@ import { cn } from '@/lib/utils';
 
 const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Unified session pilot — all 6 capabilities' },
-  upload: { title: 'Upload Excel', subtitle: 'Import your monthly sales workbook' },
-  'manage-uploads': { title: 'Manage Uploads', subtitle: 'Year-wise upload list + delete + replace' },
+  upload: { title: 'Upload & Manage', subtitle: 'Upload Excel + year-wise upload list with delete' },
   forecast: { title: 'Forecast', subtitle: 'Session-wise demand prediction (Eid, Puja, Summer, Winter)' },
   orders: { title: 'Order Recommendations', subtitle: 'How much to order & when to place the PO' },
   freight: { title: 'Air vs Sea Freight', subtitle: 'Shipping-mode decision per SKU' },
@@ -39,7 +37,7 @@ const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   pilot: { title: 'Pilot Review & Handoff', subtitle: 'Results, deferred scope & quick reference guide' },
   events: { title: 'Custom Events', subtitle: 'Create your own festival or event with custom demand effects' },
   settings: { title: 'Settings', subtitle: 'Lead-time, holidays, EOQ params — all editable & saved to DB' },
-  data: { title: 'Products & Sales', subtitle: 'View, edit prices, delete SKUs' },
+  data: { title: 'Products & Sales', subtitle: 'View, edit prices, delete SKUs — server-side paginated' },
 };
 
 const MOBILE_NAV = [
@@ -48,8 +46,7 @@ const MOBILE_NAV = [
   { key: 'orders' as ViewKey, label: 'Order Recommendations', icon: ShoppingCart },
   { key: 'freight' as ViewKey, label: 'Air vs Sea', icon: Plane },
   { key: 'line-cost' as ViewKey, label: 'Line Cost', icon: Calculator },
-  { key: 'upload' as ViewKey, label: 'Upload Excel', icon: Upload },
-  { key: 'manage-uploads' as ViewKey, label: 'Manage Uploads', icon: FolderOpen },
+  { key: 'upload' as ViewKey, label: 'Upload & Manage', icon: Upload },
   { key: 'data' as ViewKey, label: 'Products & Sales', icon: Database },
   { key: 'events' as ViewKey, label: 'Custom Events', icon: CalendarPlus },
   { key: 'pilot' as ViewKey, label: 'Pilot Review', icon: Rocket },

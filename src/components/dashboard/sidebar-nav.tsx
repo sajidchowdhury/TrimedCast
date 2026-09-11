@@ -15,7 +15,6 @@ import {
   Database,
   Rocket,
   CalendarPlus,
-  FolderOpen,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
@@ -47,8 +46,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Data',
     items: [
-      { key: 'upload', label: 'Upload Excel', icon: Upload, description: 'Import monthly sales (wide format)' },
-      { key: 'manage-uploads', label: 'Manage Uploads', icon: FolderOpen, description: 'Year-wise upload list + delete' },
+      { key: 'upload', label: 'Upload & Manage', icon: Upload, description: 'Upload Excel + year-wise list' },
       { key: 'data', label: 'Products & Sales', icon: Database, description: 'View + edit + delete products' },
     ],
   },

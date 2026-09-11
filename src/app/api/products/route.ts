@@ -10,15 +10,35 @@ import { db } from '@/lib/db';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 20));
+  const q = url.searchParams.get('q')?.trim() || '';
+
+  // Build search filter
+  const where = q
+    ? {
+        OR: [
+          { skuCode: { contains: q } },
+          { productName: { contains: q } },
+        ],
+      }
+    : {};
+
+  // Get total count for pagination
+  const total = await db.product.count({ where });
+
+  // Fetch the page of products
   const products = await db.product.findMany({
-    include: {
-      _count: { select: { sales: true, purchases: true } },
-    },
+    where,
+    include: { _count: { select: { sales: true, purchases: true } } },
     orderBy: { skuCode: 'asc' },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 
-  // aggregate sales qty per SKU
+  // Enrich with sales aggregate + last purchase (only for this page — fast)
   const enriched = await Promise.all(
     products.map(async (p) => {
       const agg = await db.sale.aggregate({
@@ -47,7 +67,15 @@ export async function GET() {
     }),
   );
 
-  return NextResponse.json({ products: enriched });
+  return NextResponse.json({
+    products: enriched,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  });
 }
 
 // --- Bulk-delete multiple SKUs ---
