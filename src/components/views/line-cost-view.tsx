@@ -10,6 +10,8 @@
 
 import { useEffect, useState, Fragment } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/dashboard/pagination';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +85,7 @@ export function LineCostView() {
   const dataVersion = useAppStore((s) => s.dataVersion);
   const setView = useAppStore((s) => s.setView);
   const [data, setData] = useState<LineCostData | null>(null);
+  const lineCostPagination = usePagination(data?.comparisons ?? [], 10);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -204,7 +207,7 @@ export function LineCostView() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.comparisons.map((c) => {
+                {lineCostPagination.paginatedItems.map((c) => {
                   const isOpen = expanded === c.id;
                   return (
                     <Fragment key={c.id}>
@@ -256,6 +259,7 @@ export function LineCostView() {
               </tbody>
             </table>
           </div>
+          <Pagination pagination={lineCostPagination} itemName="SKUs" />
         </CardContent>
       </Card>
     </div>

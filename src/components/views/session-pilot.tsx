@@ -11,6 +11,8 @@
 
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/dashboard/pagination';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,6 +113,7 @@ export function SessionPilot() {
   const [data, setData] = useState<SessionDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const rowsPagination = usePagination(data?.rows ?? [], 10);
 
   useEffect(() => {
     let cancelled = false;
@@ -392,7 +395,7 @@ export function SessionPilot() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {rows.map((r) => (
+                    {rowsPagination.paginatedItems.map((r) => (
                       <tr key={r.skuCode} className="hover:bg-muted/30">
                         <td className="px-4 py-2.5 font-mono text-xs font-medium">{r.skuCode}</td>
                         <td className="px-4 py-2.5 max-w-xs truncate">{r.productName}</td>
@@ -446,6 +449,7 @@ export function SessionPilot() {
                   </tbody>
                 </table>
               </div>
+              <Pagination pagination={rowsPagination} itemName="SKUs" />
             </CardContent>
           </Card>
 

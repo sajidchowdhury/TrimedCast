@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import {
   Settings as SettingsIcon, Save, Loader2, Plus, Trash2, Pencil, X,
-  Clock, Calendar, Globe, AlertTriangle, Calculator,
+  Clock, Calendar, Globe, AlertTriangle, Calculator, SlidersHorizontal,
 } from 'lucide-react';
 
 interface LeadTimeSettings {
@@ -179,8 +179,8 @@ export function SettingsView() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <SettingsIcon className="h-4 w-4 text-primary" />
-            Settings
+            <SlidersHorizontal className="h-4 w-4 text-primary" />
+            Configuration
           </CardTitle>
           <CardDescription>
             All parameters are editable and saved to the database. Changes affect forecasts, order recommendations, and freight analysis.

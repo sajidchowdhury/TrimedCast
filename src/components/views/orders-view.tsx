@@ -10,6 +10,8 @@
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/dashboard/pagination';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -84,6 +86,7 @@ export function OrdersView() {
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [selectedFestivalId, setSelectedFestivalId] = useState<string>('');
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const orderPagination = usePagination(orders, 10);
   const [loadingFestivals, setLoadingFestivals] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -236,6 +239,7 @@ export function OrdersView() {
               </Button>
             </div>
           ) : (
+            <div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
@@ -253,7 +257,7 @@ export function OrdersView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {orders.map((o) => {
+                  {orderPagination.paginatedItems.map((o) => {
                     const expanded = expandedSku === o.id;
                     return (
                       <Fragment key={o.id}>
@@ -313,6 +317,8 @@ export function OrdersView() {
                   })}
                 </tbody>
               </table>
+            </div>
+            <Pagination pagination={orderPagination} itemName="SKUs" />
             </div>
           )}
         </CardContent>

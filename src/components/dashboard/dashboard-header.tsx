@@ -21,7 +21,7 @@ import {
   Calculator,
   Database,
   CalendarPlus,
-  Settings as SettingsIcon,
+  SlidersHorizontal,
   Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,7 +34,7 @@ const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
   freight: { title: 'Air vs Sea Freight', subtitle: 'Shipping-mode decision per SKU' },
   'line-cost': { title: 'Line Cost Analysis', subtitle: 'Landed cost, customs duty & margin' },
   events: { title: 'Custom Events', subtitle: 'Create your own festival or event with custom demand effects' },
-  settings: { title: 'Settings', subtitle: 'Lead-time, holidays, EOQ params — all editable & saved to DB' },
+  settings: { title: 'Configuration', subtitle: 'Lead-time, holidays, EOQ params — all editable & saved to DB' },
   data: { title: 'Products & Sales', subtitle: 'View, edit prices, delete SKUs — server-side paginated' },
 };
 
@@ -47,7 +47,7 @@ const MOBILE_NAV = [
   { key: 'upload' as ViewKey, label: 'Upload & Manage', icon: Upload },
   { key: 'data' as ViewKey, label: 'Products & Sales', icon: Database },
   { key: 'events' as ViewKey, label: 'Custom Events', icon: CalendarPlus },
-  { key: 'settings' as ViewKey, label: 'Settings', icon: SettingsIcon },
+  { key: 'settings' as ViewKey, label: 'Configuration', icon: SlidersHorizontal },
 ];
 
 export function DashboardHeader() {

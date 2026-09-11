@@ -14,7 +14,7 @@ import {
   Calculator,
   Database,
   CalendarPlus,
-  Settings as SettingsIcon,
+  SlidersHorizontal,
   LogOut,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
@@ -55,7 +55,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Admin',
     items: [
       { key: 'events', label: 'Custom Events', icon: CalendarPlus, description: 'Create your own festival/event' },
-      { key: 'settings', label: 'Settings', icon: SettingsIcon, description: 'Lead-time, holidays, EOQ params' },
+      { key: 'settings', label: 'Configuration', icon: SlidersHorizontal, description: 'Lead-time, holidays, EOQ params' },
     ],
   },
 ];

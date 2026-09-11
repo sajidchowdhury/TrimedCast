@@ -96,7 +96,7 @@ export function AuthView() {
           </div>
           <h1 className="text-2xl font-bold">TrimedCast</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Session-wise demand & order planning for BD motorcycle-parts importers
+            Demand forecasting & order planning for your business
           </p>
         </div>
 

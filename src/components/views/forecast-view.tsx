@@ -9,6 +9,8 @@
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useAppStore } from '@/stores/app-store';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/dashboard/pagination';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -84,6 +86,7 @@ export function ForecastView() {
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [selectedFestivalId, setSelectedFestivalId] = useState<string>('');
   const [forecasts, setForecasts] = useState<ForecastRow[]>([]);
+  const forecastPagination = usePagination(forecasts, 10);
   const [loadingFestivals, setLoadingFestivals] = useState(true);
   const [loadingForecasts, setLoadingForecasts] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -274,6 +277,7 @@ export function ForecastView() {
               </Button>
             </div>
           ) : (
+            <div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
@@ -289,7 +293,7 @@ export function ForecastView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {forecasts.map((f) => {
+                  {forecastPagination.paginatedItems.map((f) => {
                     const expanded = expandedSku === f.id;
                     return (
                       <Fragment key={f.id}>
@@ -342,6 +346,8 @@ export function ForecastView() {
                   })}
                 </tbody>
               </table>
+            </div>
+            <Pagination pagination={forecastPagination} itemName="SKUs" />
             </div>
           )}
         </CardContent>
