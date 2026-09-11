@@ -18,6 +18,7 @@ import { formatDate } from '@/lib/sessions/festival-calendar';
 import {
   Plane, Ship, TrendingDown, Clock, Calculator, ChevronRight, AlertCircle,
 } from 'lucide-react';
+import { ShippingConsiderations } from '@/components/views/shipping-considerations';
 
 interface ModeBreakdown {
   mode: 'sea' | 'air';
@@ -265,6 +266,9 @@ export function FreightView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Shipping considerations — lead-time logic + holiday calendar + recommendations */}
+      <ShippingConsiderations />
     </div>
   );
 }
