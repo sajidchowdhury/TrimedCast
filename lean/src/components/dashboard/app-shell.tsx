@@ -8,6 +8,7 @@
 
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/dashboard-header';
+import { HelpButton } from '@/components/dashboard/help-button';
 import { useAppStore } from '@/stores/app-store';
 import { DashboardView } from '@/components/views/dashboard-view';
 import { UploadView } from '@/components/views/upload-view';
@@ -42,6 +43,8 @@ export function AppShell() {
           TrimedCast Lean v1 — Session-wise demand & order planning for BD motorcycle-parts importers
         </footer>
       </div>
+      {/* Floating help button — shows on every page, content changes per view */}
+      <HelpButton />
     </div>
   );
 }
