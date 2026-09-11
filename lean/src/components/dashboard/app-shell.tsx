@@ -12,7 +12,8 @@ import { useAppStore } from '@/stores/app-store';
 import { DashboardView } from '@/components/views/dashboard-view';
 import { UploadView } from '@/components/views/upload-view';
 import { ForecastView } from '@/components/views/forecast-view';
-import { OrdersView, FreightView, LineCostView } from '@/components/views/placeholder-views';
+import { OrdersView } from '@/components/views/orders-view';
+import { FreightView, LineCostView } from '@/components/views/placeholder-views';
 import { DataView } from '@/components/views/data-view';
 
 export function AppShell() {
