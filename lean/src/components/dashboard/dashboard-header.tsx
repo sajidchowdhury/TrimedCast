@@ -20,17 +20,19 @@ import {
   Plane,
   Calculator,
   Database,
+  Rocket,
   Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TITLES: Record<ViewKey, { title: string; subtitle: string }> = {
-  dashboard: { title: 'Dashboard', subtitle: 'Overview of upcoming sessions & inventory health' },
+  dashboard: { title: 'Dashboard', subtitle: 'Unified session pilot — all 6 capabilities' },
   upload: { title: 'Upload Excel', subtitle: 'Import your monthly sales workbook' },
   forecast: { title: 'Forecast', subtitle: 'Session-wise demand prediction (Eid, Puja, Summer, Winter)' },
   orders: { title: 'Order Recommendations', subtitle: 'How much to order & when to place the PO' },
   freight: { title: 'Air vs Sea Freight', subtitle: 'Shipping-mode decision per SKU' },
   'line-cost': { title: 'Line Cost Analysis', subtitle: 'Landed cost, customs duty & margin' },
+  pilot: { title: 'Pilot Review & Handoff', subtitle: 'Results, deferred scope & quick reference guide' },
   data: { title: 'Data', subtitle: 'Uploaded products, sales & purchases' },
 };
 
@@ -41,6 +43,7 @@ const MOBILE_NAV = [
   { key: 'orders' as ViewKey, label: 'Order Recommendations', icon: ShoppingCart },
   { key: 'freight' as ViewKey, label: 'Air vs Sea', icon: Plane },
   { key: 'line-cost' as ViewKey, label: 'Line Cost', icon: Calculator },
+  { key: 'pilot' as ViewKey, label: 'Pilot Review', icon: Rocket },
   { key: 'data' as ViewKey, label: 'Data', icon: Database },
 ];
 

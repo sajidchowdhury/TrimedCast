@@ -14,6 +14,7 @@ import {
   Plane,
   Calculator,
   Database,
+  Rocket,
 } from 'lucide-react';
 import { useAppStore, type ViewKey } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
@@ -31,8 +32,8 @@ const NAV_ITEMS: NavItem[] = [
     key: 'dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    phase: 'Phase 0',
-    description: 'Overview & upcoming sessions',
+    phase: 'Phase 5',
+    description: 'Unified session pilot',
   },
   {
     key: 'upload',
@@ -68,6 +69,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Calculator,
     phase: 'Phase 4',
     description: 'Landed cost & margin analysis',
+  },
+  {
+    key: 'pilot',
+    label: 'Pilot Review',
+    icon: Rocket,
+    phase: 'Phase 6',
+    description: 'Results, handoff & deferred scope',
   },
   {
     key: 'data',

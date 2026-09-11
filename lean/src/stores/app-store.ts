@@ -13,6 +13,7 @@ export type ViewKey =
   | 'orders'
   | 'freight'
   | 'line-cost'
+  | 'pilot'
   | 'data';
 
 export interface ImportSummary {
