@@ -157,6 +157,15 @@ After uploading, go to the **Data** page and click on the **Unit Cost (৳)** an
 - Make sure the dev server is still running (`bun run dev`)
 - Check the terminal for errors
 
+**"Module not found: Can't resolve '@/lib/auth/middleware'"**
+This means a stray `src/middleware.ts` file (from the original TrimedCast codebase) got copied into your `lean/src/` folder. The lean build has NO auth system (deferred per lean scope). Fix:
+```bash
+rm -f src/middleware.ts    # delete the stray file
+rm -rf src/lib/auth        # delete the auth folder if present
+rm -rf .next               # clear the build cache
+bun run dev                # restart
+```
+
 **"Database connection error"**
 - Make sure `db/` folder exists and `DATABASE_URL=file:./db/custom.db` in `.env`
 - Run `bun run db:push` to create the database
