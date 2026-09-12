@@ -155,10 +155,10 @@ export function UploadManageView() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <a href="/trimedcast-template.xlsx" download>
+              <a href="/api/download/template" download>
                 <Button variant="outline" size="sm"><FileDown className="h-4 w-4 mr-2" />Template</Button>
               </a>
-              <a href="/sample_client_sales.xlsx" download>
+              <a href="/api/download/sample" download>
                 <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-2" />Sample</Button>
               </a>
             </div>
