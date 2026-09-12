@@ -87,7 +87,7 @@ export function DashboardView() {
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-4">
             <UploadCloud className="h-7 w-7 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold mb-1">Welcome to TrimedCast Lean</h2>
+          <h2 className="text-lg font-semibold mb-1">Welcome to CreativeCast</h2>
           <p className="text-sm text-muted-foreground max-w-md mb-4">
             Upload your Excel workbook (Pic No, Item, monthly Jan–Dec columns) to get started.
             The system will ingest your sales history and prepare session-wise forecasts,
