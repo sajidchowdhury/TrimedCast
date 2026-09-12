@@ -6,6 +6,7 @@
 // Bottom: year-wise upload list (each year = 1 active upload, delete + replace)
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,7 @@ export function UploadManageView() {
   const loadUploads = useCallback(async () => {
     setLoadingList(true);
     try {
-      const res = await fetch('/api/import?byYear=true');
+      const res = await apiFetch('/api/import?byYear=true');
       const json = await res.json();
       setUploads(json.years || []);
     } catch (e) { console.error(e); }
@@ -88,7 +89,7 @@ export function UploadManageView() {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('dataYear', String(dataYear));
-      const res = await fetch('/api/import', { method: 'POST', body: fd });
+      const res = await apiFetch('/api/import', { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok || !json.success) {
         setImportResult({ success: false, error: json.error || 'Unknown error' });
@@ -129,7 +130,7 @@ export function UploadManageView() {
     if (!confirm(`Delete ALL data for ${year}?\n\nThis will permanently delete all sales records for ${year} and the upload record.\nProducts, purchases, and inventory are NOT deleted.\n\nThis cannot be undone.`)) return;
     setDeleting(year);
     try {
-      const res = await fetch(`/api/import/${year}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/import/${year}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok || !json.success) { toast.error('Delete failed', { description: json.error }); return; }
       toast.success(`${year} data deleted`, { description: `${json.deletedSalesCount} sales records removed` });
@@ -155,10 +156,10 @@ export function UploadManageView() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <a href="/api/download/template" download>
+              <a href="/creativecast/api/download/template" download>
                 <Button variant="outline" size="sm"><FileDown className="h-4 w-4 mr-2" />Template</Button>
               </a>
-              <a href="/api/download/sample" download>
+              <a href="/creativecast/api/download/sample" download>
                 <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-2" />Sample</Button>
               </a>
             </div>

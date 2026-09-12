@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plane, Ship, Calendar, Clock, AlertTriangle, Info, Globe } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface HolidayEvent {
   name: string;
@@ -59,7 +60,7 @@ export function ShippingConsiderations() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/shipping-calendar');
+        const res = await apiFetch('/api/shipping-calendar');
         const json = await res.json();
         if (!cancelled) setData(json);
       } catch (e) { console.error(e); }

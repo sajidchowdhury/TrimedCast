@@ -7,6 +7,7 @@
 // predicted demand curve with festival effects marked.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
@@ -106,7 +107,7 @@ export function ForecastView() {
     (async () => {
       setLoadingFestivals(true);
       try {
-        const res = await fetch('/api/festivals');
+        const res = await apiFetch('/api/festivals');
         const json = await res.json();
         if (cancelled) return;
         const upcoming = (json.festivals || []).filter((f: Festival) => f.isUpcoming);
@@ -131,7 +132,7 @@ export function ForecastView() {
     }
     setLoadingForecasts(true);
     try {
-      const res = await fetch(`/api/forecast?festivalSessionId=${festivalId}`);
+      const res = await apiFetch(`/api/forecast?festivalSessionId=${festivalId}`);
       const json = await res.json();
       setForecasts(json.forecasts || []);
     } catch (e) {
@@ -149,7 +150,7 @@ export function ForecastView() {
     if (!selectedFestivalId) return;
     setGenerating(true);
     try {
-      const res = await fetch('/api/forecast/generate', {
+      const res = await apiFetch('/api/forecast/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ festivalSessionId: selectedFestivalId }),

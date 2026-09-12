@@ -53,3 +53,6 @@ server.log
 
 # uploads (local dev only)
 /upload/
+
+# local Prisma database (never commit)
+/prisma/db/

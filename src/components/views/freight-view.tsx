@@ -7,6 +7,7 @@
 // Expandable detail: full landed-cost breakdown for both modes.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState, Fragment } from 'react';
 import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
@@ -88,7 +89,7 @@ export function FreightView() {
       setLoading(true);
       try {
         // Use the first upcoming festival session
-        const fRes = await fetch('/api/festivals');
+        const fRes = await apiFetch('/api/festivals');
         const fJson = await fRes.json();
         const upcoming = (fJson.festivals || []).filter((f: { isUpcoming: boolean }) => f.isUpcoming);
         if (upcoming.length === 0) {
@@ -96,7 +97,7 @@ export function FreightView() {
           return;
         }
         const festivalId = upcoming[0].id;
-        const res = await fetch(`/api/freight/analyze?festivalSessionId=${festivalId}`);
+        const res = await apiFetch(`/api/freight/analyze?festivalSessionId=${festivalId}`);
         if (!res.ok) {
           if (!cancelled) setData(null);
           return;

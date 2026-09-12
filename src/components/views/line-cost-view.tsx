@@ -8,6 +8,7 @@
 // with a donut chart of the cost components.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState, Fragment } from 'react';
 import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
@@ -101,14 +102,14 @@ export function LineCostView() {
     (async () => {
       setLoading(true);
       try {
-        const fRes = await fetch('/api/festivals');
+        const fRes = await apiFetch('/api/festivals');
         const fJson = await fRes.json();
         const upcoming = (fJson.festivals || []).filter((f: { isUpcoming: boolean }) => f.isUpcoming);
         if (upcoming.length === 0) {
           if (!cancelled) setData(null);
           return;
         }
-        const res = await fetch(`/api/freight/analyze?festivalSessionId=${upcoming[0].id}`);
+        const res = await apiFetch(`/api/freight/analyze?festivalSessionId=${upcoming[0].id}`);
         if (!res.ok) {
           if (!cancelled) setData(null);
           return;

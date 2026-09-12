@@ -6,6 +6,7 @@
 // recommendations, EOQ parameters. All saved to the database.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -70,8 +71,8 @@ export function SettingsView() {
     setLoading(true);
     try {
       const [sRes, hRes] = await Promise.all([
-        fetch('/api/settings'),
-        fetch('/api/settings/holidays'),
+        apiFetch('/api/settings'),
+        apiFetch('/api/settings/holidays'),
       ]);
       const sJson = await sRes.json();
       const hJson = await hRes.json();
@@ -90,7 +91,7 @@ export function SettingsView() {
   const saveSettings = async (section: string, payload: Record<string, unknown>) => {
     setSaving(true);
     try {
-      const res = await fetch('/api/settings', {
+      const res = await apiFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -154,7 +155,7 @@ export function SettingsView() {
   const deleteHoliday = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return;
     try {
-      await fetch(`/api/settings/holidays/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/settings/holidays/${id}`, { method: 'DELETE' });
       toast.success('Holiday deleted', { description: name });
       load();
       bumpData();

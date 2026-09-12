@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
+import { apiFetch } from '@/lib/api';
 import { AppShell } from '@/components/dashboard/app-shell';
 import { AuthView } from '@/components/views/auth-view';
 
@@ -11,7 +12,7 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await apiFetch('/api/auth/me');
         const json = await res.json();
         setUser(json.user ?? null);
       } catch (e) {

@@ -8,6 +8,7 @@
 // Expandable detail: 5-milestone shipment timeline + EOQ breakdown.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { Input } from "@/components/ui/input";
 import { useAppStore } from '@/stores/app-store';
@@ -105,7 +106,7 @@ export function OrdersView() {
     (async () => {
       setLoadingFestivals(true);
       try {
-        const res = await fetch('/api/festivals');
+        const res = await apiFetch('/api/festivals');
         const json = await res.json();
         if (cancelled) return;
         const upcoming = (json.festivals || []).filter((f: Festival) => f.isUpcoming);
@@ -124,7 +125,7 @@ export function OrdersView() {
     if (!festivalId) { setOrders([]); return; }
     setLoadingOrders(true);
     try {
-      const res = await fetch(`/api/orders?festivalSessionId=${festivalId}`);
+      const res = await apiFetch(`/api/orders?festivalSessionId=${festivalId}`);
       const json = await res.json();
       setOrders(json.orders || []);
     } catch (e) { console.error(e); }
@@ -139,7 +140,7 @@ export function OrdersView() {
     if (!selectedFestivalId) return;
     setGenerating(true);
     try {
-      const res = await fetch('/api/orders/generate', {
+      const res = await apiFetch('/api/orders/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ festivalSessionId: selectedFestivalId, serviceLevel: 0.95 }),

@@ -7,6 +7,7 @@
 // Below the pilot: lean build progress + import history.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +52,7 @@ export function DashboardView() {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/import');
+        const res = await apiFetch('/api/import');
         const json = await res.json();
         if (cancelled) return;
         setImports(json.imports || []);

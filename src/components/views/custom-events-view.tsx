@@ -5,6 +5,7 @@
 // Create / edit / delete festival sessions with custom demand effects.
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState, useCallback } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,7 +62,7 @@ export function CustomEventsView() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/festivals');
+      const res = await apiFetch('/api/festivals');
       const json = await res.json();
       setFestivals(json.festivals || []);
     } catch (e) { console.error(e); }
@@ -140,7 +141,7 @@ export function CustomEventsView() {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     setDeleting(id);
     try {
-      const res = await fetch(`/api/festivals/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/festivals/${id}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok || !json.success) {
         toast.error('Delete failed', { description: json.error || 'Unknown error' });

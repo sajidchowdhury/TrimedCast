@@ -9,6 +9,7 @@
 // (d) Order timing  → (e) Air vs sea → (f) Line cost
 // ============================================
 
+import { apiFetch } from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { usePagination } from '@/hooks/use-pagination';
@@ -128,7 +129,7 @@ export function SessionPilot() {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/session-dashboard');
+        const res = await apiFetch('/api/session-dashboard');
         if (!res.ok) { if (!cancelled) setData(null); return; }
         const json = await res.json();
         if (!cancelled) setData(json);
@@ -145,7 +146,7 @@ export function SessionPilot() {
     try {
       // Step 1: Generate forecasts
       toast.info('Generating forecasts…');
-      const fRes = await fetch('/api/forecast/generate', {
+      const fRes = await apiFetch('/api/forecast/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ festivalSessionId: sessionId }),
       });
@@ -158,7 +159,7 @@ export function SessionPilot() {
 
       // Step 2: Generate order recommendations
       toast.info('Generating order recommendations…');
-      const oRes = await fetch('/api/orders/generate', {
+      const oRes = await apiFetch('/api/orders/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ festivalSessionId: sessionId, serviceLevel: 0.95 }),
       });
@@ -170,7 +171,7 @@ export function SessionPilot() {
       toast.success(`Orders: ${oJson.generated} SKUs`);
 
       // Step 3: Reload the session dashboard (freight is computed inline)
-      const res = await fetch('/api/session-dashboard');
+      const res = await apiFetch('/api/session-dashboard');
       if (res.ok) setData(await res.json());
       toast.success('Pipeline complete', { description: 'All 6 capabilities ready for the session pilot.' });
     } catch (e) {

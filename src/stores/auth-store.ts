@@ -4,6 +4,7 @@
 // ============================================
 
 import { create } from 'zustand';
+import { apiFetch } from '@/lib/api';
 
 export interface AuthUser {
   id: string;
@@ -27,7 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setLoading: (loading) => set({ loading }),
   logout: async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch (e) { console.error(e); }
     set({ user: null });
   },

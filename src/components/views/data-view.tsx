@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Search, Package, Plane, Ship, Upload, Check, Loader2, Trash2, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface ProductRow {
   id: string;
@@ -70,7 +71,7 @@ export function DataView() {
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
       if (q) params.set('q', q);
-      const res = await fetch(`/api/products?${params}`);
+      const res = await apiFetch(`/api/products?${params}`);
       const json = await res.json();
       setProducts(json.products || []);
       setPagination(json.pagination || { page, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
@@ -83,7 +84,7 @@ export function DataView() {
   const updatePrice = useCallback(async (sku: string, field: 'unitCostBdt' | 'sellingPrice', value: number) => {
     setSaving(sku);
     try {
-      const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
+      const res = await apiFetch(`/api/products/${encodeURIComponent(sku)}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value }),
       });
@@ -100,7 +101,7 @@ export function DataView() {
     if (!confirm(`Delete "${sku}" (${name})?\n\nThis will also delete ALL its sales, purchases, inventory, forecasts, and orders.\n\nThis cannot be undone.`)) return;
     setDeletingSingle(sku);
     try {
-      const res = await fetch(`/api/products/${encodeURIComponent(sku)}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/products/${encodeURIComponent(sku)}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok || !json.success) { toast.error('Delete failed', { description: json.error }); return; }
       setProducts(prev => prev.filter(p => p.skuCode !== sku));
@@ -118,7 +119,7 @@ export function DataView() {
     if (!confirm(`Delete ${count} SKU${count > 1 ? 's' : ''}?\n\nThis will also delete ALL their sales, purchases, inventory, forecasts, and orders.\n\nThis cannot be undone.`)) return;
     setDeletingBulk(true);
     try {
-      const res = await fetch('/api/products', {
+      const res = await apiFetch('/api/products', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skuCodes: Array.from(selected) }),
       });
